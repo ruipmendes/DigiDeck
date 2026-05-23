@@ -56,26 +56,58 @@ export function ObsPanel() {
     }
   }
 
+  const showInlineRetry =
+    status?.state === 'error' ||
+    status?.state === 'disconnected' ||
+    !!status?.retryStopped;
+
   return (
     <div style={{ background: '#111827', border: '1px solid #1f2937', borderRadius: 10, padding: 14 }}>
-      <button
+      {/* Header: keep the expand toggle as the surrounding click target, but use a div so
+          we can nest an interactive "retry" button inside it without invalid <button>-in-<button>. */}
+      <div
         onClick={() => setExpanded((e) => !e)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setExpanded((p) => !p); }}
         style={{
           display: 'flex', alignItems: 'center', gap: 10,
-          width: '100%', background: 'transparent', border: 0, color: '#fff',
-          padding: 0, cursor: 'pointer', textAlign: 'left',
+          width: '100%', color: '#fff',
+          cursor: 'pointer', userSelect: 'none',
         }}
       >
         {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
         <Video size={18} />
         <strong>OBS Studio</strong>
         <StatusBadge state={status?.state} />
+        {status?.retryStopped && (
+          <span style={{ fontSize: 11, color: '#f59e0b' }}>retries paused</span>
+        )}
+        {showInlineRetry && (
+          <button
+            onClick={(e) => { e.stopPropagation(); void reconnect(); }}
+            disabled={busy}
+            title={status?.retryStopped ? 'auto-retries stopped after 5 min — try now' : 'try connecting now'}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              padding: status?.retryStopped ? '3px 9px' : '3px 7px',
+              background: status?.retryStopped ? '#1d4ed8' : 'transparent',
+              color: '#fff',
+              border: `1px solid ${status?.retryStopped ? '#3b82f6' : '#374151'}`,
+              borderRadius: 6, fontSize: 11, cursor: busy ? 'default' : 'pointer',
+              opacity: busy ? 0.6 : 1,
+            }}
+          >
+            <RefreshCw size={11} />
+            {status?.retryStopped ? 'retry' : ''}
+          </button>
+        )}
         {status?.state === 'connected' && (
           <span style={{ fontSize: 12, color: '#9ca3af', marginLeft: 'auto' }}>
             {status.scenes.length} scenes · {status.inputs.length} inputs
           </span>
         )}
-      </button>
+      </div>
 
       {status?.error && status.state !== 'connected' && (
         <div style={{ fontSize: 12, color: '#f87171', marginTop: 8, marginLeft: 26 }}>{status.error}</div>

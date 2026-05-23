@@ -42,6 +42,7 @@ export type ObsStatus = {
   inputs: string[];
   sceneItems: Record<string, string[]>;
   currentScene?: string;
+  retryStopped: boolean;
 };
 
 export type ObsState_API = { config: ObsConfig; status: ObsStatus };

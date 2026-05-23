@@ -29,7 +29,12 @@ export type ObsStatus = {
   mutedInputs: string[];
   /** Keys are `"<sceneName>::<sourceName>"`. Value is whether that scene item is currently visible. */
   sourceStates: Record<string, boolean>;
+  /** True once the auto-retry budget (5 min) is exhausted. UI should surface a manual retry. */
+  retryStopped: boolean;
 };
+
+const RETRY_INTERVAL_MS = 5000;
+const RETRY_BUDGET_MS = 5 * 60 * 1000;
 
 export type ObsOp =
   | 'toggle-record' | 'start-record' | 'stop-record'
@@ -57,6 +62,8 @@ class ObsClient {
   /** "<sceneName>::<sceneItemId>" → sourceName; populated during snapshot so events can resolve names */
   private sceneItemIdToSource = new Map<string, string>();
   private retryTimer: NodeJS.Timeout | null = null;
+  private firstFailureAt: number | null = null;
+  private retryStopped = false;
   private onChangeCb: (() => void) | null = null;
 
   constructor() {
@@ -139,6 +146,7 @@ class ObsClient {
       virtualCam: this.virtualCam,
       mutedInputs: [...this.mutedInputs],
       sourceStates: Object.fromEntries(this.sourceStates),
+      retryStopped: this.retryStopped,
     };
   }
 
@@ -160,6 +168,8 @@ class ObsClient {
         this.cfg.password || undefined,
       );
       this.state = 'connected';
+      this.firstFailureAt = null;
+      this.retryStopped = false;
       console.log(`[obs] connected to ${this.cfg.host}:${this.cfg.port}`);
       await this.refreshSnapshot();
     } catch (err) {
@@ -185,6 +195,10 @@ class ObsClient {
     this.mutedInputs.clear();
     this.sourceStates.clear();
     this.sceneItemIdToSource.clear();
+    // Manual retry path goes through restart() which calls stop() then start();
+    // resetting these here means a manual retry gets a fresh 5-minute budget.
+    this.firstFailureAt = null;
+    this.retryStopped = false;
     this.emitChange();
   }
 
@@ -296,10 +310,22 @@ class ObsClient {
   private scheduleRetry(): void {
     if (!this.cfg.enabled) return;
     if (this.retryTimer) return;
+    if (this.retryStopped) return;
+
+    const now = Date.now();
+    if (this.firstFailureAt === null) {
+      this.firstFailureAt = now;
+    } else if (now - this.firstFailureAt > RETRY_BUDGET_MS) {
+      console.warn('[obs] retry budget exceeded (5 min) — pausing auto-reconnect; manual retry required');
+      this.retryStopped = true;
+      this.emitChange();
+      return;
+    }
+
     this.retryTimer = setTimeout(() => {
       this.retryTimer = null;
       void this.start();
-    }, 5000);
+    }, RETRY_INTERVAL_MS);
   }
 }
 
