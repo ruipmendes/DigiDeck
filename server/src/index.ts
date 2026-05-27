@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
 import { WebSocketServer, WebSocket } from 'ws';
-import { loadOrInitLayout, reloadLayout, toPublic, watchLayout, findButton, LAYOUT_FILE } from './layout.js';
+import { loadOrInitLayout, reloadLayout, toPublic, watchLayout, findTile, collectStreamerLogins, LAYOUT_FILE } from './layout.js';
 import { executeAction } from './actions/types.js';
 import { handleRequest } from './http.js';
 import { loadOrInitConfig, saveConfig, CONFIG_FILE } from './config.js';
@@ -9,6 +9,8 @@ import { startMdns, stopMdns } from './mdns.js';
 import { migrateAppData } from './migrations.js';
 import { getObs } from './integrations/obs.js';
 import { getTwitch } from './integrations/twitch.js';
+import { getStreamers } from './integrations/twitch-streamers.js';
+import { getMic } from './actions/mic.js';
 import { computeButtonStates, type ButtonState } from './states.js';
 import { startTray, stopTray } from './tray.js';
 import { spawn } from 'node:child_process';
@@ -16,7 +18,10 @@ import type { Layout, PublicLayout } from './layout.js';
 
 const PORT = 8765;
 
-type ClientMsg = { type: 'press'; id: number };
+type ClientMsg =
+  | { type: 'press'; id: number }
+  | { type: 'slider'; id: number; value: number }
+  | { type: 'slider-mute'; id: number };
 type ServerMsg =
   | { type: 'layout'; layout: PublicLayout }
   | { type: 'ack'; id: number }
@@ -39,6 +44,13 @@ twitch.setSaveCallback(async (cfg) => {
   await saveConfig(serverConfig);
 });
 void twitch.start();
+
+const streamers = getStreamers();
+streamers.setLogins(collectStreamerLogins(layout));
+streamers.start();
+
+const mic = getMic();
+mic.start();
 
 const httpServer = createServer((req, res) => {
   handleRequest(req, res, { getLayout: () => layout, getServerConfig: () => serverConfig })
@@ -85,13 +97,20 @@ function scheduleStateBroadcast() {
 }
 
 obs.onChange(scheduleStateBroadcast);
-twitch.onChange(scheduleStateBroadcast);
+twitch.onChange(() => {
+  scheduleStateBroadcast();
+  // Twitch just reconnected — refresh streamer info so thumbnails appear without waiting a minute.
+  if (twitch.status().state === 'connected') streamers.refresh();
+});
+streamers.onChange(scheduleStateBroadcast);
+mic.onChange(scheduleStateBroadcast);
 
 watchLayout(async () => {
   try {
     layout = await reloadLayout();
     const total = layout.pages.reduce((n, p) => n + p.buttons.length, 0);
     console.log(`[layout reloaded] ${layout.pages.length} pages, ${total} buttons`);
+    streamers.setLogins(collectStreamerLogins(layout));
     broadcastLayout();
     scheduleStateBroadcast();
   } catch (err) {
@@ -110,18 +129,47 @@ wss.on('connection', (ws: WebSocket) => {
   ws.on('message', async (data) => {
     let msg: ClientMsg;
     try { msg = JSON.parse(data.toString()); } catch { return; }
-    if (msg.type !== 'press') return;
-    const button = findButton(layout, msg.id);
-    if (!button) {
-      console.warn(`unknown button id: ${msg.id}`);
+
+    const tile = findTile(layout, msg.id);
+    if (!tile) {
+      console.warn(`unknown tile id: ${msg.id}`);
       return;
     }
-    console.log(`    press [${button.id}] "${button.label}" → ${button.action.type}`);
-    try {
-      await executeAction(button.action);
-      ws.send(JSON.stringify({ type: 'ack', id: msg.id } satisfies ServerMsg));
-    } catch (err) {
-      console.error('  action failed:', (err as Error).message);
+
+    if (msg.type === 'press') {
+      if (tile.kind !== 'button') return; // sliders don't accept press
+      const action = tile.action;
+      const actionLabel = Array.isArray(action)
+        ? `[${action.length} steps: ${action.map((s) => s.type).join(' → ')}]`
+        : action.type;
+      console.log(`    press [${tile.id}] "${tile.label}" → ${actionLabel}`);
+      try {
+        await executeAction(action);
+        ws.send(JSON.stringify({ type: 'ack', id: msg.id } satisfies ServerMsg));
+      } catch (err) {
+        console.error('  action failed:', (err as Error).message);
+      }
+      return;
+    }
+
+    if (msg.type === 'slider') {
+      if (tile.kind !== 'slider') return;
+      try {
+        await obs.setInputVolume(tile.inputName, msg.value);
+      } catch (err) {
+        console.error('  slider failed:', (err as Error).message);
+      }
+      return;
+    }
+
+    if (msg.type === 'slider-mute') {
+      if (tile.kind !== 'slider') return;
+      try {
+        await obs.execute('toggle-mute', { inputName: tile.inputName });
+      } catch (err) {
+        console.error('  slider mute failed:', (err as Error).message);
+      }
+      return;
     }
   });
 
@@ -145,6 +193,7 @@ startTray({
     layout = await reloadLayout();
     const total = layout.pages.reduce((n, p) => n + p.buttons.length, 0);
     console.log(`[tray] reloaded layout: ${layout.pages.length} pages, ${total} buttons`);
+    streamers.setLogins(collectStreamerLogins(layout));
     broadcastLayout();
     scheduleStateBroadcast();
   },
@@ -164,6 +213,8 @@ startTray({
 
 async function shutdown() {
   stopTray();
+  streamers.stop();
+  mic.stop();
   await obs.stop();
   await twitch.stop();
   stopMdns();

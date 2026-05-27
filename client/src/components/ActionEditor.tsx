@@ -1,8 +1,152 @@
 import { useEffect, useState } from 'react';
-import type { Action, ActionType, ObsOp } from '../lib/types';
+import { ArrowUp, ArrowDown, X, Plus } from 'lucide-react';
+import type { Action, ActionType, ButtonAction, MicOp, ObsOp } from '../lib/types';
 import { defaultAction } from '../lib/types';
 import * as api from '../lib/api';
 import { HotkeyInput } from './HotkeyInput';
+
+type PageRef = { id: number; name: string };
+type Props = { action: ButtonAction; onChange: (a: ButtonAction) => void; pages?: PageRef[] };
+
+export function ActionEditor({ action, onChange, pages }: Props) {
+  const steps: Action[] = Array.isArray(action) ? action : [action];
+
+  function commit(next: Action[]) {
+    if (next.length === 0) return;            // shouldn't happen — guard
+    if (next.length === 1) onChange(next[0]); // collapse back to single object
+    else onChange(next);
+  }
+
+  function updateStep(i: number, a: Action) {
+    const next = [...steps];
+    next[i] = a;
+    commit(next);
+  }
+
+  function removeStep(i: number) {
+    commit(steps.filter((_, idx) => idx !== i));
+  }
+
+  function moveStep(i: number, dir: -1 | 1) {
+    const j = i + dir;
+    if (j < 0 || j >= steps.length) return;
+    const next = [...steps];
+    [next[i], next[j]] = [next[j], next[i]];
+    commit(next);
+  }
+
+  function addStep() {
+    commit([...steps, defaultAction('hotkey')]);
+  }
+
+  if (steps.length === 1) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <ActionStepEditor action={steps[0]} onChange={(a) => updateStep(0, a)} pages={pages} />
+        <button onClick={addStep} style={addStepBtnStyle} type="button">
+          <Plus size={12} /> add step
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ fontSize: 11, color: '#9ca3af', letterSpacing: 0.3 }}>
+        {steps.length}-STEP SEQUENCE · runs in order, stops on first failure
+      </div>
+      {steps.map((step, i) => (
+        <StepCard
+          key={i}
+          index={i}
+          total={steps.length}
+          step={step}
+          onChange={(a) => updateStep(i, a)}
+          onRemove={() => removeStep(i)}
+          onMoveUp={() => moveStep(i, -1)}
+          onMoveDown={() => moveStep(i, 1)}
+          pages={pages}
+        />
+      ))}
+      <button onClick={addStep} style={addStepBtnStyle} type="button">
+        <Plus size={12} /> add step
+      </button>
+    </div>
+  );
+}
+
+type StepCardProps = {
+  index: number;
+  total: number;
+  step: Action;
+  onChange: (a: Action) => void;
+  onRemove: () => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  pages?: PageRef[];
+};
+
+function StepCard({ index, total, step, onChange, onRemove, onMoveUp, onMoveDown, pages }: StepCardProps) {
+  return (
+    <div
+      style={{
+        background: '#0a0a0a',
+        border: '1px solid #1f2937',
+        borderRadius: 8,
+        padding: 8,
+        display: 'grid',
+        gridTemplateColumns: 'auto 1fr auto',
+        gap: 8,
+        alignItems: 'start',
+      }}
+    >
+      <div
+        style={{
+          fontSize: 11,
+          color: '#6b7280',
+          fontWeight: 600,
+          alignSelf: 'center',
+          minWidth: 24,
+          textAlign: 'center',
+        }}
+      >
+        {index + 1}
+      </div>
+      <ActionStepEditor action={step} onChange={onChange} pages={pages} />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center' }}>
+        <button
+          type="button"
+          onClick={onMoveUp}
+          disabled={index === 0}
+          aria-label="move up"
+          title="move up"
+          style={stepIconBtn(index === 0)}
+        >
+          <ArrowUp size={12} />
+        </button>
+        <button
+          type="button"
+          onClick={onMoveDown}
+          disabled={index === total - 1}
+          aria-label="move down"
+          title="move down"
+          style={stepIconBtn(index === total - 1)}
+        >
+          <ArrowDown size={12} />
+        </button>
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label="remove step"
+          title="remove step"
+          style={stepIconBtn(false)}
+        >
+          <X size={12} />
+        </button>
+      </div>
+    </div>
+  );
+}
 
 const TYPES: { value: ActionType; label: string }[] = [
   { value: 'hotkey', label: 'Hotkey' },
@@ -10,14 +154,23 @@ const TYPES: { value: ActionType; label: string }[] = [
   { value: 'launch', label: 'Launch app' },
   { value: 'url',    label: 'Open URL / file' },
   { value: 'script', label: 'PowerShell script' },
-  { value: 'volume', label: 'Volume' },
+  { value: 'volume', label: 'Volume (speaker)' },
+  { value: 'mic',    label: 'Microphone mute' },
   { value: 'obs',    label: 'OBS Studio' },
   { value: 'twitch', label: 'Twitch chat' },
+  { value: 'twitch-streamer', label: 'Twitch streamer' },
+  { value: 'goto-page', label: 'Go to page (folder)' },
 ];
 
-type Props = { action: Action; onChange: (a: Action) => void };
+const MIC_OPS: { value: MicOp; label: string }[] = [
+  { value: 'toggle-mute', label: 'Toggle mic mute' },
+  { value: 'mute',        label: 'Mute mic' },
+  { value: 'unmute',      label: 'Unmute mic' },
+];
 
-export function ActionEditor({ action, onChange }: Props) {
+type StepEditorProps = { action: Action; onChange: (a: Action) => void; pages?: PageRef[] };
+
+function ActionStepEditor({ action, onChange, pages }: StepEditorProps) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <select
@@ -27,12 +180,12 @@ export function ActionEditor({ action, onChange }: Props) {
       >
         {TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
       </select>
-      <Body action={action} onChange={onChange} />
+      <Body action={action} onChange={onChange} pages={pages} />
     </div>
   );
 }
 
-function Body({ action, onChange }: Props) {
+function Body({ action, onChange, pages }: StepEditorProps) {
   switch (action.type) {
     case 'hotkey':
       return (
@@ -127,6 +280,16 @@ function Body({ action, onChange }: Props) {
         </div>
       );
     }
+    case 'mic':
+      return (
+        <select
+          value={action.op}
+          onChange={(e) => onChange({ type: 'mic', op: e.target.value as MicOp })}
+          style={selectStyle}
+        >
+          {MIC_OPS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      );
     case 'obs':
       return <ObsBody action={action} onChange={onChange} />;
     case 'twitch':
@@ -138,6 +301,49 @@ function Body({ action, onChange }: Props) {
           style={inputStyle}
         />
       );
+    case 'twitch-streamer':
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <input
+            value={action.login}
+            onChange={(e) => onChange({ type: 'twitch-streamer', login: e.target.value.trim().toLowerCase() })}
+            placeholder="streamer login (e.g. skullbizarre)"
+            spellCheck={false}
+            autoCapitalize="none"
+            style={inputStyle}
+          />
+          <span style={{ fontSize: 11, color: '#6b7280' }}>
+            Tap on the phone opens twitch.tv/{action.login || '<login>'}. Thumbnail + live state require Twitch connected.
+          </span>
+        </div>
+      );
+    case 'goto-page': {
+      const opts = pages ?? [];
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {opts.length > 0 ? (
+            <select
+              value={action.pageId}
+              onChange={(e) => onChange({ type: 'goto-page', pageId: Number(e.target.value) })}
+              style={selectStyle}
+            >
+              {opts.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          ) : (
+            <input
+              type="number"
+              value={action.pageId}
+              onChange={(e) => onChange({ type: 'goto-page', pageId: Number(e.target.value) || 0 })}
+              placeholder="page id"
+              style={inputStyle}
+            />
+          )}
+          <span style={{ fontSize: 11, color: '#6b7280' }}>
+            Tap on the phone navigates to that page. Pair with the layout's <em>Folders</em> navigation mode for a back-stack with a Back tile at the top.
+          </span>
+        </div>
+      );
+    }
   }
 }
 
@@ -154,6 +360,8 @@ const OBS_OPS: { value: ObsOp; label: string; needs: ObsNeeds }[] = [
   { value: 'save-replay-buffer',   label: 'Save replay buffer',      needs: null },
   { value: 'set-scene',            label: 'Switch to scene…',        needs: 'scene' },
   { value: 'toggle-mute',          label: 'Toggle input mute…',      needs: 'input' },
+  { value: 'show-source',          label: 'Show source in scene…',   needs: 'scene+source' },
+  { value: 'hide-source',          label: 'Hide source in scene…',   needs: 'scene+source' },
   { value: 'toggle-source',        label: 'Toggle source visibility in scene…', needs: 'scene+source' },
 ];
 
@@ -162,24 +370,40 @@ function ObsBody({ action, onChange }: { action: Extract<Action, { type: 'obs' }
     scenes: string[];
     inputs: string[];
     sceneItems: Record<string, string[]>;
+    sourceStates: Record<string, boolean>;
     connected: boolean;
   } | null>(null);
 
   useEffect(() => {
-    api.getObsState()
-      .then((d) => setSnap({
-        scenes: d.status.scenes,
-        inputs: d.status.inputs,
-        sceneItems: d.status.sceneItems ?? {},
-        connected: d.status.state === 'connected',
-      }))
-      .catch(() => setSnap({ scenes: [], inputs: [], sceneItems: {}, connected: false }));
+    let alive = true;
+    function load() {
+      api.getObsState()
+        .then((d) => { if (alive) setSnap({
+          scenes: d.status.scenes,
+          inputs: d.status.inputs,
+          sceneItems: d.status.sceneItems ?? {},
+          sourceStates: d.status.sourceStates ?? {},
+          connected: d.status.state === 'connected',
+        }); })
+        .catch(() => { if (alive) setSnap({ scenes: [], inputs: [], sceneItems: {}, sourceStates: {}, connected: false }); });
+    }
+    load();
+    // Refresh while the editor is open so visibility hints stay current.
+    const t = setInterval(load, 4000);
+    return () => { alive = false; clearInterval(t); };
   }, []);
 
   const opMeta = OBS_OPS.find((o) => o.value === action.op);
   const needs = opMeta?.needs ?? null;
   const currentSceneName = action.params?.sceneName ?? '';
   const sourcesInScene = currentSceneName ? (snap?.sceneItems[currentSceneName] ?? []) : [];
+
+  const sourceLabel = (sourceName: string): string => {
+    if (!currentSceneName) return sourceName;
+    const visible = snap?.sourceStates?.[`${currentSceneName}::${sourceName}`];
+    if (visible === undefined) return sourceName;
+    return `${sourceName} (${visible ? 'visible' : 'hidden'})`;
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -220,6 +444,7 @@ function ObsBody({ action, onChange }: { action: Extract<Action, { type: 'obs' }
             options={sourcesInScene}
             placeholder={currentSceneName ? 'source in that scene' : 'pick a scene first'}
             onChange={(v) => onChange({ ...action, params: { ...action.params, sourceName: v } })}
+            labelOf={sourceLabel}
           />
         </>
       )}
@@ -233,8 +458,10 @@ function ObsBody({ action, onChange }: { action: Extract<Action, { type: 'obs' }
   );
 }
 
-function PickOrType({ value, options, placeholder, onChange }: {
-  value: string; options: string[]; placeholder: string; onChange: (v: string) => void;
+function PickOrType({ value, options, placeholder, onChange, labelOf }: {
+  value: string; options: string[]; placeholder: string;
+  onChange: (v: string) => void;
+  labelOf?: (v: string) => string;
 }) {
   if (options.length > 0) {
     return (
@@ -244,7 +471,7 @@ function PickOrType({ value, options, placeholder, onChange }: {
         style={selectStyle}
       >
         <option value="">— {placeholder} —</option>
-        {options.map((o) => <option key={o} value={o}>{o}</option>)}
+        {options.map((o) => <option key={o} value={o}>{labelOf ? labelOf(o) : o}</option>)}
       </select>
     );
   }
@@ -272,3 +499,32 @@ const selectStyle: React.CSSProperties = {
   alignSelf: 'flex-start',
   paddingRight: 28,
 };
+
+const addStepBtnStyle: React.CSSProperties = {
+  alignSelf: 'flex-start',
+  padding: '4px 10px',
+  background: 'transparent',
+  border: '1px dashed #4b5563',
+  borderRadius: 6,
+  color: '#9ca3af',
+  fontSize: 11,
+  cursor: 'pointer',
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 4,
+};
+
+function stepIconBtn(disabled: boolean): React.CSSProperties {
+  return {
+    background: 'transparent',
+    border: 0,
+    color: disabled ? '#374151' : '#9ca3af',
+    cursor: disabled ? 'default' : 'pointer',
+    padding: 2,
+    width: 20,
+    height: 20,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  };
+}

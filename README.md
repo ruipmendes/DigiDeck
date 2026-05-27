@@ -24,7 +24,7 @@ If you see no label, assume **PowerShell or cmd** is fine.
 | What | Minimum | Why |
 | ---- | ------- | --- |
 | Windows | 10 or 11 | Tray icon uses .NET `NotifyIcon`; default action shells out to `cmd /c start`; appdata lives in `%APPDATA%`. |
-| Node.js | **22 LTS or newer** | Top-level `await`, built-in `fetch`, stable `fs.cp` (used by the AppData migration). |
+| Node.js | **22 LTS or newer** | Top-level `await` and built-in `fetch`. |
 | Wi-Fi | Same network for PC and phone | The WebSocket runs over LAN. |
 | Windows Firewall | Allow Node.js on Private networks (prompted on first run) | Phone needs to reach the PC's server. |
 | Phone browser | Any modern Chrome / Safari / Edge | Add to Home Screen for a near-native PWA feel. |
@@ -108,7 +108,7 @@ Either double-click the **Digi Deck** desktop shortcut, or:
 C:\Users\<you>\digi-deck\start.ps1
 ```
 
-The launcher idempotently starts both processes (skips whatever's already running on `:8765` and `:5173`), then opens the config UI in Firefox / your default browser if no Ancient-Crown-style tab is already open.
+The launcher idempotently starts both processes (skips whatever's already running on `:8765` and `:5173`), then opens the config UI in Firefox / your default browser if a Digi Deck tab isn't already open.
 
 When the **Windows Firewall prompt** appears for Node.js, tick **Private networks** and click Allow. Without this the phone can't reach the server.
 
@@ -166,9 +166,13 @@ The auth token is stored in `%APPDATA%\digi-deck\config.json` on the PC and in y
 
 **Config UI** ([http://localhost:5173/config](http://localhost:5173/config)): drag the ≡ handle to reorder, click the icon to change it, edit label and action, click **Save**. Connected phones get the new layout within ~200 ms.
 
-**Pages**: group buttons into named tabs (e.g. "Home", "OBS", "Twitch"). Click *+ page* to add one; rename / icon / delete via the bar under the tabs. Each button has a *→ page* dropdown to move it between pages. The phone shows a tab strip at the top of the grid.
+**Pages**: group buttons into named tabs (e.g. "Home", "OBS", "Twitch"). Click *+ page* to add one; rename / icon / delete via the bar under the tabs. Each button has a *→ page* dropdown to move it between pages.
 
-**By hand**: edit `%APPDATA%\digi-deck\layout.json` directly. The server watches the file and hot-reloads on save. Schema: `{ pages: [{ id, name, icon?, buttons: [...] }] }`. Legacy `{ buttons: [...] }` layouts auto-migrate on first load.
+**Navigation mode** (top of the config editor): pick *Tabs at top* or *Folders (back-stack)*.
+- **Tabs at top** (default): phone shows the page strip at the top; tapping a tab jumps directly to that page.
+- **Folders**: tab strip is hidden. Use the *Go to page (folder)* action on a button to navigate into a sub-page. The phone auto-injects a *Back* tile as the first cell of the grid whenever navigation history is non-empty — like Stream Deck folders.
+
+**By hand**: edit `%APPDATA%\digi-deck\layout.json` directly. The server watches the file and hot-reloads on save. Schema: `{ pages: [{ id, name, icon?, buttons: [...] }] }`.
 
 Each button is `{ id, label, icon?, action }`. Action shapes:
 
@@ -189,10 +193,16 @@ Each button is `{ id, label, icon?, action }`. Action shapes:
 // Run a PowerShell one-liner or script string.
 { "type": "script", "script": "Get-Date | Out-File $HOME\\Desktop\\time.txt" }
 
-// System volume.
+// System volume (speakers — sends OS media keys via nut-js).
 { "type": "volume", "delta": 2 }
 { "type": "volume", "delta": -2 }
 { "type": "volume", "mute": true }
+
+// Microphone mute (default capture device — uses Windows Core Audio).
+// Button lights up when the mic is currently muted, same as OBS toggle-mute.
+{ "type": "mic", "op": "toggle-mute" }
+{ "type": "mic", "op": "mute" }
+{ "type": "mic", "op": "unmute" }
 
 // OBS — see the OBS section below for all `op` values.
 { "type": "obs", "op": "toggle-record" }
@@ -200,6 +210,30 @@ Each button is `{ id, label, icon?, action }`. Action shapes:
 
 // Twitch chat.
 { "type": "twitch", "op": "chat", "text": "!website" }
+
+// Twitch streamer thumbnail (requires Twitch connected).
+// Phone shows the streamer's profile photo — color when live, grayscale when offline —
+// and tapping opens twitch.tv/<login> in the PC's default browser
+// (so the streamer's channel shows up on the same machine running OBS).
+{ "type": "twitch-streamer", "login": "skullbizarre" }
+
+// Go to a different page (folder navigation).
+// In Folders mode the phone pushes onto a back-stack; a Back tile appears in the grid.
+{ "type": "goto-page", "pageId": 1 }
+```
+
+**Multi-step sequences.** A button's `action` field also accepts an *array* of steps that run in order. The sequence aborts on the first failing step. In the config UI, click "+ add step" under any action to turn one button into a sequence; remove all extra steps to collapse back to a single action.
+
+```jsonc
+// One button that starts a stream: switch scene, start recording, post to chat.
+{
+  "id": 99, "label": "Go live", "icon": "video",
+  "action": [
+    { "type": "obs",    "op": "set-scene", "params": { "sceneName": "Gameplay" } },
+    { "type": "obs",    "op": "start-record" },
+    { "type": "twitch", "op": "chat", "text": "!live" }
+  ]
+}
 ```
 
 Common `keys` values: `LeftControl`, `RightControl`, `LeftShift`, `LeftAlt`, `LeftSuper` (Windows key), `A`–`Z`, `F1`–`F12`, `Space`, `Enter`, `Escape`, `Tab`, `AudioVolUp`, `AudioVolDown`, `AudioMute`, `AudioPlay`, `AudioNext`, `AudioPrev`. Full list: nut-js [`Key` enum](https://nutjs.dev/api/Key). In the config UI, you can also just click **record** and press the combo — no need to type the names.
@@ -215,6 +249,12 @@ In Digi Deck's config UI: expand the **OBS Studio** card, tick *Enable*, paste t
 Action types you can bind: toggle/start/stop recording, toggle/start/stop streaming, toggle virtual camera, toggle/save replay buffer, switch scene (dropdown of your scenes), toggle input mute (dropdown of your inputs), toggle source visibility in a scene (dropdown of scene → sources in that scene).
 
 Live state on the phone: recording / streaming / virtual cam / scene-active / muted buttons show a blue dot, source-visible buttons show a green dot, and any OBS button is dimmed with an "offline" pip if OBS isn't connected.
+
+> **Note:** this integration speaks the `obs-websocket` v5 protocol bundled with **OBS Studio 28+**. It does **not** work with **Streamlabs Desktop** (formerly Streamlabs OBS), which uses a separate remote-control protocol.
+
+### Audio mixer slider tiles
+
+The config UI's *+ add slider* button creates a slider tile bound to one OBS audio input. The tile renders as a horizontal fader with an integrated mute button — drag to set the volume, tap the speaker icon to toggle mute. The slider colour goes gray when the input is muted, and the percentage display switches to `muted`. Volume changes made from OBS itself (e.g. via the desktop mixer) push back to the phone within ~200 ms.
 
 ---
 
@@ -248,7 +288,6 @@ digi-deck/
 │   │   ├── http.ts                    REST endpoints
 │   │   ├── mdns.ts                    Bonjour service advertisement
 │   │   ├── tray.ts                    spawns hidden PowerShell NotifyIcon
-│   │   ├── migrations.ts              %APPDATA%\ancient-crown → digi-deck (one-time)
 │   │   ├── states.ts                  computes per-button live state for the phone
 │   │   ├── actions/                   one file per action type
 │   │   └── integrations/              obs.ts, twitch.ts
@@ -277,3 +316,15 @@ You can copy this folder to another machine to migrate everything, or delete it 
 ## Possible next steps
 
 Spotify integration, custom themes, export/import layouts, long-press for secondary action.
+
+---
+
+## Support this project
+
+If Digi Deck saves you from alt-tabbing mid-stream and you'd like to keep me caffeinated:
+
+<a href="https://ko-fi.com/skullbizarre" target="_blank">
+  <img width="143" height="36" alt="image" src="https://github.com/user-attachments/assets/0d3dad1e-1ca3-49ce-a780-181b041956a0" />
+</a>
+
+You can also ★ star the repo on [GitHub](https://github.com/ruipmendes/DigiDeck) — it's free and signal-boosts the project. Feedback, bug reports, and feature ideas are welcome via the issues tab.

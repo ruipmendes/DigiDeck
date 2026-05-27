@@ -15,7 +15,7 @@ export function GridApp() {
     () => localStorage.getItem(STORAGE_KEY) ?? defaultUrl(),
   );
   const [draft, setDraft] = useState<string | null>(null);
-  const { status, layout, lastAck, buttonStates, press } = useMacroWS(url, token);
+  const { status, layout, lastAck, buttonStates, press, sliderValue, sliderMute } = useMacroWS(url, token);
 
   useEffect(() => {
     document.title = 'Digi Deck';
@@ -83,7 +83,14 @@ export function GridApp() {
         </button>
       )}
 
-      <ButtonGrid layout={layout} lastAck={lastAck} buttonStates={buttonStates} onPress={press} />
+      <ButtonGrid
+        layout={layout}
+        lastAck={lastAck}
+        buttonStates={buttonStates}
+        onPress={press}
+        onSliderChange={sliderValue}
+        onSliderMute={sliderMute}
+      />
     </div>
   );
 }

@@ -6,8 +6,8 @@ import {
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import { Smartphone, Plus, Trash2 } from 'lucide-react';
 import * as api from './lib/api';
-import type { Button, Layout, Page } from './lib/types';
-import { defaultAction, nextButtonId, nextPageId } from './lib/types';
+import type { Tile, Layout, Page, TileKind } from './lib/types';
+import { defaultTile, nextButtonId, nextPageId } from './lib/types';
 import { ConfigRow } from './components/ConfigRow';
 import { PairingModal } from './components/PairingModal';
 import { IntegrationsPanel } from './components/IntegrationsPanel';
@@ -84,12 +84,12 @@ export function ConfigApp() {
     if (activePageId === id) setActivePageId(remaining[0]?.id ?? null);
   }
 
-  function updateButton(pageId: number, buttonId: number, patch: Partial<Button>) {
+  function updateButton(pageId: number, buttonId: number, patch: Partial<Tile>) {
     if (!layout) return;
     updateLayout({
       pages: layout.pages.map((p) => (p.id === pageId ? {
         ...p,
-        buttons: p.buttons.map((b) => (b.id === buttonId ? ({ ...b, ...patch } as Button) : b)),
+        buttons: p.buttons.map((b) => (b.id === buttonId ? ({ ...b, ...patch } as Tile) : b)),
       } : p)),
     });
   }
@@ -104,14 +104,14 @@ export function ConfigApp() {
     });
   }
 
-  function addButton(pageId: number) {
+  function addButton(pageId: number, kind: TileKind = 'button') {
     if (!layout) return;
     const id = nextButtonId(layout);
-    const newButton: Button = { id, label: 'New', action: defaultAction('hotkey') };
+    const newTile: Tile = defaultTile(kind, id);
     updateLayout({
       pages: layout.pages.map((p) => (p.id === pageId ? {
         ...p,
-        buttons: [...p.buttons, newButton],
+        buttons: [...p.buttons, newTile],
       } : p)),
     });
   }
@@ -216,6 +216,37 @@ export function ConfigApp() {
         <div style={{ opacity: 0.6 }}>Loading layout…</div>
       ) : (
         <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 12, color: '#9ca3af' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              Navigation:
+              <select
+                value={layout.navigation ?? 'tabs'}
+                onChange={(e) =>
+                  updateLayout({
+                    ...layout,
+                    navigation: e.target.value as 'tabs' | 'folders',
+                  })
+                }
+                style={{
+                  padding: '4px 8px',
+                  background: '#0a0a0a',
+                  color: '#fff',
+                  border: '1px solid #374151',
+                  borderRadius: 6,
+                  fontSize: 12,
+                }}
+              >
+                <option value="tabs">Tabs at top</option>
+                <option value="folders">Folders (back-stack)</option>
+              </select>
+            </label>
+            <span style={{ fontSize: 11 }}>
+              {(layout.navigation ?? 'tabs') === 'folders'
+                ? 'Phone hides the tab strip; a Back tile appears as the first grid cell after you tap a "Go to page" button.'
+                : 'Phone shows a tab strip at the top of the grid.'}
+            </span>
+          </div>
+
           <PageTabBar
             pages={layout.pages}
             activePageId={activePageId}
@@ -258,20 +289,21 @@ export function ConfigApp() {
                 </div>
               )}
 
-              <button
-                onClick={() => addButton(activePage.id)}
-                style={{
-                  padding: '10px 16px',
-                  background: '#1f2937',
-                  color: '#fff',
-                  border: '1px dashed #4b5563',
-                  borderRadius: 8,
-                  cursor: 'pointer',
-                  fontSize: 14,
-                }}
-              >
-                + add button
-              </button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  onClick={() => addButton(activePage.id, 'button')}
+                  style={addTileBtnStyle}
+                >
+                  + add button
+                </button>
+                <button
+                  onClick={() => addButton(activePage.id, 'slider')}
+                  style={addTileBtnStyle}
+                  title="Add a slider tile for OBS audio mixer control"
+                >
+                  + add slider
+                </button>
+              </div>
             </>
           )}
         </>
@@ -285,6 +317,16 @@ export function ConfigApp() {
     </div>
   );
 }
+
+const addTileBtnStyle: React.CSSProperties = {
+  padding: '10px 16px',
+  background: '#1f2937',
+  color: '#fff',
+  border: '1px dashed #4b5563',
+  borderRadius: 8,
+  cursor: 'pointer',
+  fontSize: 14,
+};
 
 type TabBarProps = {
   pages: Page[];

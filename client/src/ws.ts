@@ -1,14 +1,36 @@
 import { useEffect, useRef, useState } from 'react';
 
-export type Button = { id: number; label: string; icon?: string };
-export type Page = { id: number; name: string; icon?: string; buttons: Button[] };
-export type Layout = { pages: Page[] };
+export type Button = {
+  kind: 'button';
+  id: number;
+  label: string;
+  icon?: string;
+  /** Set on Twitch streamer buttons. Phone uses it to render a thumbnail. */
+  streamerLogin?: string;
+  /** Set when the button's action contains a goto-page step. Phone navigates locally on press. */
+  gotoPageId?: number;
+};
+export type SliderTile = {
+  kind: 'slider';
+  id: number;
+  label: string;
+  icon?: string;
+  inputName: string;
+};
+export type Tile = Button | SliderTile;
+export type Page = { id: number; name: string; icon?: string; buttons: Tile[] };
+export type NavigationMode = 'tabs' | 'folders';
+export type Layout = { navigation?: NavigationMode; pages: Page[] };
 
 export type ButtonState = {
   id: number;
   active?: boolean;
   kind?: 'source';
   unavailable?: boolean;
+  thumbnail?: string;
+  live?: boolean;
+  sliderValue?: number;
+  sliderMuted?: boolean;
 };
 
 type ServerMsg =
@@ -71,12 +93,16 @@ export function useMacroWS(url: string, token: string | null) {
     };
   }, [url, token]);
 
-  function press(id: number) {
+  function send(msg: object): void {
     const ws = wsRef.current;
     if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: 'press', id }));
+      ws.send(JSON.stringify(msg));
     }
   }
 
-  return { status, layout, lastAck, buttonStates, press };
+  function press(id: number) { send({ type: 'press', id }); }
+  function sliderValue(id: number, value: number) { send({ type: 'slider', id, value }); }
+  function sliderMute(id: number) { send({ type: 'slider-mute', id }); }
+
+  return { status, layout, lastAck, buttonStates, press, sliderValue, sliderMute };
 }

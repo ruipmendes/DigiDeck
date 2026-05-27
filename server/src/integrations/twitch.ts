@@ -191,6 +191,34 @@ class TwitchClient {
     await this.start();
   }
 
+  /** True when we have credentials and a refresh token — enough for Helix calls. IRC state is separate. */
+  isReady(): boolean {
+    return !!(this.cfg.enabled && this.cfg.clientId && this.cfg.clientSecret && this.cfg.refreshToken);
+  }
+
+  /** Authenticated GET to the Helix API. Caller passes the path (e.g. `/users`) and a flat params map. */
+  async helixGet<T>(path: string, params?: Record<string, string | string[]>): Promise<T> {
+    if (!this.isReady()) throw new Error('Twitch not authorized');
+    await this.ensureAccessToken();
+    if (!this.accessToken) throw new Error('Twitch access token missing');
+
+    const url = new URL(`https://api.twitch.tv/helix${path}`);
+    if (params) {
+      for (const [k, v] of Object.entries(params)) {
+        const items = Array.isArray(v) ? v : [v];
+        for (const item of items) url.searchParams.append(k, item);
+      }
+    }
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${this.accessToken}`,
+        'Client-Id': this.cfg.clientId,
+      },
+    });
+    if (!res.ok) throw new Error(`Helix GET ${path}: ${res.status} ${await res.text()}`);
+    return res.json() as Promise<T>;
+  }
+
   async execute(op: TwitchOp, params: TwitchActionParams = {}): Promise<void> {
     if (op !== 'chat') throw new Error(`unknown Twitch op: ${op}`);
     const text = params.text?.trim();

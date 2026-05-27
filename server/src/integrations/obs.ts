@@ -27,6 +27,8 @@ export type ObsStatus = {
   streaming: boolean;
   virtualCam: boolean;
   mutedInputs: string[];
+  /** Per-input volume multiplier (0..1 typically; can be higher for overboost). */
+  inputVolumes: Record<string, number>;
   /** Keys are `"<sceneName>::<sourceName>"`. Value is whether that scene item is currently visible. */
   sourceStates: Record<string, boolean>;
   /** True once the auto-retry budget (5 min) is exhausted. UI should surface a manual retry. */
@@ -40,7 +42,8 @@ export type ObsOp =
   | 'toggle-record' | 'start-record' | 'stop-record'
   | 'toggle-stream' | 'start-stream' | 'stop-stream'
   | 'toggle-virtual-cam' | 'toggle-replay-buffer' | 'save-replay-buffer'
-  | 'set-scene' | 'toggle-mute' | 'toggle-source';
+  | 'set-scene' | 'toggle-mute'
+  | 'toggle-source' | 'show-source' | 'hide-source';
 
 export type ObsActionParams = { sceneName?: string; inputName?: string; sourceName?: string };
 
@@ -57,6 +60,7 @@ class ObsClient {
   private streaming = false;
   private virtualCam = false;
   private mutedInputs = new Set<string>();
+  private inputVolumes = new Map<string, number>();
   /** "<sceneName>::<sourceName>" → enabled */
   private sourceStates = new Map<string, boolean>();
   /** "<sceneName>::<sceneItemId>" → sourceName; populated during snapshot so events can resolve names */
@@ -111,6 +115,13 @@ class ObsClient {
       else this.mutedInputs.delete(data.inputName);
       this.emitChange();
     });
+    this.obs.on('InputVolumeChanged', (data) => {
+      const mul = (data as { inputVolumeMul?: number }).inputVolumeMul;
+      if (typeof mul === 'number') {
+        this.inputVolumes.set(data.inputName, mul);
+        this.emitChange();
+      }
+    });
     this.obs.on('SceneItemEnableStateChanged', (data) => {
       const idKey = `${data.sceneName}::${data.sceneItemId}`;
       const sourceName = this.sceneItemIdToSource.get(idKey);
@@ -145,6 +156,7 @@ class ObsClient {
       streaming: this.streaming,
       virtualCam: this.virtualCam,
       mutedInputs: [...this.mutedInputs],
+      inputVolumes: Object.fromEntries(this.inputVolumes),
       sourceStates: Object.fromEntries(this.sourceStates),
       retryStopped: this.retryStopped,
     };
@@ -193,6 +205,7 @@ class ObsClient {
     this.streaming = false;
     this.virtualCam = false;
     this.mutedInputs.clear();
+    this.inputVolumes.clear();
     this.sourceStates.clear();
     this.sceneItemIdToSource.clear();
     // Manual retry path goes through restart() which calls stop() then start();
@@ -205,6 +218,15 @@ class ObsClient {
   async restart(): Promise<void> {
     await this.stop();
     await this.start();
+  }
+
+  /** Set the volume multiplier (0..1; OBS accepts higher for overboost, we clamp for safety). */
+  async setInputVolume(inputName: string, mul: number): Promise<void> {
+    if (this.state !== 'connected') throw new Error(`OBS not connected (state: ${this.state})`);
+    const clamped = Math.max(0, Math.min(1, mul));
+    await this.obs.call('SetInputVolume', { inputName, inputVolumeMul: clamped });
+    // Optimistic local update — InputVolumeChanged arrives shortly anyway.
+    this.inputVolumes.set(inputName, clamped);
   }
 
   async execute(op: ObsOp, params: ObsActionParams = {}): Promise<void> {
@@ -248,7 +270,20 @@ class ObsClient {
         });
         break;
       }
+      case 'show-source':
+      case 'hide-source': {
+        if (!params.sceneName || !params.sourceName) {
+          throw new Error(`${op} requires sceneName and sourceName`);
+        }
+        await this.setSourceVisibility(params.sceneName, params.sourceName, op === 'show-source');
+        break;
+      }
     }
+  }
+
+  private async setSourceVisibility(sceneName: string, sourceName: string, enabled: boolean): Promise<void> {
+    const { sceneItemId } = await this.obs.call('GetSceneItemId', { sceneName, sourceName });
+    await this.obs.call('SetSceneItemEnabled', { sceneName, sceneItemId, sceneItemEnabled: enabled });
   }
 
   private async refreshSnapshot(): Promise<void> {
@@ -292,12 +327,16 @@ class ObsClient {
       } catch { /* virtual cam not available */ }
 
       this.mutedInputs.clear();
+      this.inputVolumes.clear();
       for (const inputName of this.inputs) {
         try {
           const { inputMuted } = await this.obs.call('GetInputMute', { inputName });
           if (inputMuted) this.mutedInputs.add(inputName);
+          const vol = await this.obs.call('GetInputVolume', { inputName });
+          const mul = (vol as { inputVolumeMul?: number }).inputVolumeMul;
+          if (typeof mul === 'number') this.inputVolumes.set(inputName, mul);
         } catch {
-          // non-mutable input — skip
+          // non-audio input — skip
         }
       }
     } catch (err) {

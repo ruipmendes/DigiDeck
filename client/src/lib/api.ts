@@ -41,6 +41,8 @@ export type ObsStatus = {
   scenes: string[];
   inputs: string[];
   sceneItems: Record<string, string[]>;
+  /** "<sceneName>::<sourceName>" → visible. Use for at-a-glance state in pickers. */
+  sourceStates: Record<string, boolean>;
   currentScene?: string;
   retryStopped: boolean;
 };

@@ -1,15 +1,18 @@
+import { useEffect, useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, Trash2 } from 'lucide-react';
-import type { Button, Page } from '../lib/types';
+import { GripVertical, Trash2, Sliders } from 'lucide-react';
+import type { Tile, Page, TileKind } from '../lib/types';
+import { defaultTile } from '../lib/types';
 import { ActionEditor } from './ActionEditor';
 import { IconPicker } from './IconPicker';
+import * as api from '../lib/api';
 
 type Props = {
-  button: Button;
+  button: Tile;
   pages: Page[];
   currentPageId: number;
-  onChange: (patch: Partial<Button>) => void;
+  onChange: (patch: Partial<Tile>) => void;
   onDelete: () => void;
   onMove: (toPageId: number) => void;
 };
@@ -21,6 +24,15 @@ export function ConfigRow({ button, pages, currentPageId, onChange, onDelete, on
     transition,
     opacity: isDragging ? 0.5 : 1,
   };
+
+  function changeKind(newKind: TileKind) {
+    if (newKind === button.kind) return;
+    // Reset action/inputName when switching kinds — fields differ between types.
+    const replacement = defaultTile(newKind, button.id);
+    replacement.label = button.label;
+    replacement.icon = button.icon;
+    onChange(replacement);
+  }
 
   return (
     <div
@@ -52,13 +64,35 @@ export function ConfigRow({ button, pages, currentPageId, onChange, onDelete, on
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <input
-          value={button.label}
-          onChange={(e) => onChange({ label: e.target.value })}
-          placeholder="Label"
-          style={inputStyle}
-        />
-        <ActionEditor action={button.action} onChange={(action) => onChange({ action })} />
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <input
+            value={button.label}
+            onChange={(e) => onChange({ label: e.target.value })}
+            placeholder="Label"
+            style={{ ...inputStyle, flex: 1 }}
+          />
+          <select
+            value={button.kind}
+            onChange={(e) => changeKind(e.target.value as TileKind)}
+            title="tile kind"
+            style={{ ...inputStyle, padding: '6px 8px', fontSize: 12, maxWidth: 100 }}
+          >
+            <option value="button">Button</option>
+            <option value="slider">Slider</option>
+          </select>
+        </div>
+        {button.kind === 'slider' ? (
+          <SliderEditor
+            inputName={button.inputName}
+            onChange={(inputName) => onChange({ inputName })}
+          />
+        ) : (
+          <ActionEditor
+            action={button.action}
+            onChange={(action) => onChange({ action })}
+            pages={pages.map((p) => ({ id: p.id, name: p.name }))}
+          />
+        )}
       </div>
 
       {pages.length > 1 ? (
@@ -90,11 +124,71 @@ export function ConfigRow({ button, pages, currentPageId, onChange, onDelete, on
       <button
         onClick={onDelete}
         style={{ background: 'transparent', border: 0, color: '#9ca3af', cursor: 'pointer', padding: 4, alignSelf: 'center' }}
-        aria-label="delete button"
+        aria-label="delete tile"
         title="delete"
       >
         <Trash2 size={18} />
       </button>
+    </div>
+  );
+}
+
+function SliderEditor({
+  inputName,
+  onChange,
+}: {
+  inputName: string;
+  onChange: (v: string) => void;
+}) {
+  const [inputs, setInputs] = useState<string[]>([]);
+  const [connected, setConnected] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    function load() {
+      api.getObsState()
+        .then((d) => {
+          if (!alive) return;
+          setInputs(d.status.inputs ?? []);
+          setConnected(d.status.state === 'connected');
+        })
+        .catch(() => { if (alive) { setInputs([]); setConnected(false); } });
+    }
+    load();
+    const t = setInterval(load, 4000);
+    return () => { alive = false; clearInterval(t); };
+  }, []);
+
+  const hasOptions = inputs.length > 0;
+  const usingOptionList = hasOptions && (inputName === '' || inputs.includes(inputName));
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#9ca3af' }}>
+        <Sliders size={12} /> OBS audio mixer slider — drag-to-set-volume + tap-to-mute
+      </div>
+      {usingOptionList ? (
+        <select
+          value={inputName}
+          onChange={(e) => onChange(e.target.value)}
+          style={selectStyle}
+        >
+          <option value="">— pick an OBS audio input —</option>
+          {inputs.map((i) => <option key={i} value={i}>{i}</option>)}
+        </select>
+      ) : (
+        <input
+          value={inputName}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="OBS input name (e.g. Mic/Aux)"
+          style={inputStyle}
+        />
+      )}
+      {!connected && (
+        <span style={{ fontSize: 11, color: '#9ca3af' }}>
+          OBS not connected — type the input name manually, or connect OBS to pick from a list.
+        </span>
+      )}
     </div>
   );
 }
@@ -106,4 +200,10 @@ const inputStyle: React.CSSProperties = {
   border: '1px solid #374151',
   borderRadius: 6,
   fontSize: 14,
+};
+
+const selectStyle: React.CSSProperties = {
+  ...inputStyle,
+  alignSelf: 'flex-start',
+  paddingRight: 28,
 };
