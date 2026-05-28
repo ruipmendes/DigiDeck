@@ -7,7 +7,11 @@ export type Button = {
   id: number;
   label: string;
   icon?: string;
+  /** Uploaded image filename (stored under %APPDATA%/digi-deck/images/). Wins over `icon` when set. */
+  image?: string;
   action: ButtonAction;
+  /** Optional secondary action triggered when the user holds the button (~500ms). */
+  longPressAction?: ButtonAction;
 };
 
 export type SliderTile = {
@@ -15,12 +19,21 @@ export type SliderTile = {
   id: number;
   label: string;
   icon?: string;
+  image?: string;
   /** OBS input/source name whose volume + mute this slider drives. */
   inputName: string;
 };
 
 export type Tile = Button | SliderTile;
-export type Page = { id: number; name: string; icon?: string; buttons: Tile[] };
+export type Page = {
+  id: number;
+  name: string;
+  icon?: string;
+  image?: string;
+  /** Phone grid column count for this page. Default 2 when omitted. Valid range: 1-4. */
+  cols?: number;
+  buttons: Tile[];
+};
 export type NavigationMode = 'tabs' | 'folders';
 export type Layout = { navigation?: NavigationMode; pages: Page[] };
 
@@ -29,6 +42,10 @@ export type PublicButton = {
   id: number;
   label: string;
   icon?: string;
+  image?: string;
+  /** True when the button has a configured long-press action.
+   *  Phone uses this to opt into press-hold detection (otherwise it fires instantly on touch). */
+  hasLongPress?: boolean;
   /** Set when the button's action targets a Twitch streamer.
    *  Phone uses this to render a thumbnail. */
   streamerLogin?: string;
@@ -41,11 +58,12 @@ export type PublicSlider = {
   id: number;
   label: string;
   icon?: string;
+  image?: string;
   inputName: string;
 };
 
 export type PublicTile = PublicButton | PublicSlider;
-export type PublicPage = { id: number; name: string; icon?: string; buttons: PublicTile[] };
+export type PublicPage = { id: number; name: string; icon?: string; image?: string; cols?: number; buttons: PublicTile[] };
 export type PublicLayout = { navigation?: NavigationMode; pages: PublicPage[] };
 
 const APP_DIR = join(
@@ -138,11 +156,14 @@ export function toPublic(layout: Layout): PublicLayout {
       id: p.id,
       name: p.name,
       icon: p.icon,
+      image: p.image,
+      cols: p.cols,
       buttons: p.buttons.map((t): PublicTile => {
         if (t.kind === 'slider') {
-          return { kind: 'slider', id: t.id, label: t.label, icon: t.icon, inputName: t.inputName };
+          return { kind: 'slider', id: t.id, label: t.label, icon: t.icon, image: t.image, inputName: t.inputName };
         }
-        const out: PublicButton = { kind: 'button', id: t.id, label: t.label, icon: t.icon };
+        const out: PublicButton = { kind: 'button', id: t.id, label: t.label, icon: t.icon, image: t.image };
+        if (t.longPressAction !== undefined) out.hasLongPress = true;
         const steps = Array.isArray(t.action) ? t.action : [t.action];
         const streamer = steps.find((a) => a.type === 'twitch-streamer');
         if (streamer && streamer.type === 'twitch-streamer' && streamer.login) {
@@ -194,7 +215,7 @@ export function watchLayout(onChange: () => void): () => void {
   return () => w.close();
 }
 
-const VALID_ACTION_TYPES = new Set(['hotkey', 'text', 'launch', 'url', 'script', 'volume', 'mic', 'obs', 'twitch', 'twitch-streamer', 'goto-page']);
+const VALID_ACTION_TYPES = new Set(['hotkey', 'text', 'launch', 'url', 'script', 'volume', 'mic', 'obs', 'twitch', 'twitch-streamer', 'goto-page', 'wait']);
 
 export function validateLayout(input: unknown): Layout {
   if (!input || typeof input !== 'object') throw new Error('layout must be an object');
@@ -223,14 +244,19 @@ export function validateLayout(input: unknown): Layout {
     pageIds.add(pg.id);
     if (typeof pg.name !== 'string') throw new Error(`page ${pg.id}: name must be a string`);
     if (pg.icon !== undefined && typeof pg.icon !== 'string') throw new Error(`page ${pg.id}: icon must be a string`);
+    validateImageField(pg.image, `page ${pg.id}`);
+    const cols = parseCols(pg.cols, pg.id);
     if (!Array.isArray(pg.buttons)) throw new Error(`page ${pg.id}: buttons must be an array`);
     const buttons = validateButtons(pg.buttons, buttonIds);
-    pages.push({
+    const pageOut: Page = {
       id: pg.id,
       name: pg.name,
       icon: pg.icon as string | undefined,
+      image: pg.image as string | undefined,
       buttons,
-    });
+    };
+    if (cols !== undefined) pageOut.cols = cols;
+    pages.push(pageOut);
   }
 
   const result: Layout = { pages };
@@ -244,6 +270,22 @@ function parseNavigation(value: unknown): NavigationMode | undefined {
   throw new Error(`layout.navigation must be "tabs" or "folders" (got: ${JSON.stringify(value)})`);
 }
 
+function parseCols(value: unknown, pageId: number): number | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 1 || value > 4) {
+    throw new Error(`page ${pageId}: cols must be an integer in 1..4 (got: ${JSON.stringify(value)})`);
+  }
+  return value;
+}
+
+function validateImageField(value: unknown, where: string): void {
+  if (value === undefined || value === null || value === '') return;
+  if (typeof value !== 'string') throw new Error(`${where}: image must be a string`);
+  if (value.includes('\0') || /[\\/]/.test(value) || value.includes('..')) {
+    throw new Error(`${where}: image filename has illegal characters`);
+  }
+}
+
 function validateButtons(input: unknown[], seenIds: Set<number>): Tile[] {
   const result: Tile[] = [];
   for (const t of input) {
@@ -254,6 +296,7 @@ function validateButtons(input: unknown[], seenIds: Set<number>): Tile[] {
     seenIds.add(tile.id);
     if (typeof tile.label !== 'string') throw new Error(`tile ${tile.id}: label must be a string`);
     if (tile.icon !== undefined && typeof tile.icon !== 'string') throw new Error(`tile ${tile.id}: icon must be a string`);
+    validateImageField(tile.image, `tile ${tile.id}`);
 
     const kind = (tile.kind as string | undefined) ?? 'button';
     if (kind === 'slider') {
@@ -262,6 +305,12 @@ function validateButtons(input: unknown[], seenIds: Set<number>): Tile[] {
       }
     } else if (kind === 'button') {
       validateButtonAction(tile.action, tile.id);
+      if (tile.longPressAction !== undefined && tile.longPressAction !== null) {
+        validateButtonAction(tile.longPressAction, tile.id, 'long-press');
+      } else {
+        // Drop nulls so the persisted shape is clean.
+        delete (tile as Record<string, unknown>).longPressAction;
+      }
     } else {
       throw new Error(`tile ${tile.id}: unknown kind "${kind}"`);
     }
@@ -272,19 +321,21 @@ function validateButtons(input: unknown[], seenIds: Set<number>): Tile[] {
   return result;
 }
 
-function validateButtonAction(input: unknown, buttonId: number): void {
+function validateButtonAction(input: unknown, buttonId: number, label?: string): void {
+  const prefix = label ? ` (${label})` : '';
   if (Array.isArray(input)) {
-    if (input.length === 0) throw new Error(`button ${buttonId}: action sequence is empty`);
-    input.forEach((step, i) => validateActionStep(step, buttonId, i));
+    if (input.length === 0) throw new Error(`button ${buttonId}${prefix}: action sequence is empty`);
+    input.forEach((step, i) => validateActionStep(step, buttonId, i, label));
     return;
   }
-  validateActionStep(input, buttonId);
+  validateActionStep(input, buttonId, undefined, label);
 }
 
-function validateActionStep(input: unknown, buttonId: number, stepIndex?: number): void {
+function validateActionStep(input: unknown, buttonId: number, stepIndex?: number, label?: string): void {
+  const prefix = label ? ` (${label})` : '';
   const where = stepIndex !== undefined
-    ? `button ${buttonId} step ${stepIndex + 1}`
-    : `button ${buttonId}`;
+    ? `button ${buttonId}${prefix} step ${stepIndex + 1}`
+    : `button ${buttonId}${prefix}`;
   if (!input || typeof input !== 'object') {
     throw new Error(`${where}: action must be an object`);
   }

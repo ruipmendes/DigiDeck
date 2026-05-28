@@ -5,6 +5,9 @@ export type Button = {
   id: number;
   label: string;
   icon?: string;
+  image?: string;
+  /** Server tells us the button has a long-press action; opt into hold detection. */
+  hasLongPress?: boolean;
   /** Set on Twitch streamer buttons. Phone uses it to render a thumbnail. */
   streamerLogin?: string;
   /** Set when the button's action contains a goto-page step. Phone navigates locally on press. */
@@ -15,10 +18,11 @@ export type SliderTile = {
   id: number;
   label: string;
   icon?: string;
+  image?: string;
   inputName: string;
 };
 export type Tile = Button | SliderTile;
-export type Page = { id: number; name: string; icon?: string; buttons: Tile[] };
+export type Page = { id: number; name: string; icon?: string; image?: string; cols?: number; buttons: Tile[] };
 export type NavigationMode = 'tabs' | 'folders';
 export type Layout = { navigation?: NavigationMode; pages: Page[] };
 
@@ -33,8 +37,10 @@ export type ButtonState = {
   sliderMuted?: boolean;
 };
 
+export type PreviewInfo = { name: string; title: string };
+
 type ServerMsg =
-  | { type: 'layout'; layout: Layout }
+  | { type: 'layout'; layout: Layout; preview?: PreviewInfo }
   | { type: 'ack'; id: number }
   | { type: 'states'; states: ButtonState[] };
 
@@ -49,6 +55,7 @@ function buildUrl(base: string, token: string | null): string {
 export function useMacroWS(url: string, token: string | null) {
   const [status, setStatus] = useState<WSStatus>('connecting');
   const [layout, setLayout] = useState<Layout | null>(null);
+  const [preview, setPreview] = useState<PreviewInfo | null>(null);
   const [lastAck, setLastAck] = useState<{ id: number; at: number } | null>(null);
   const [buttonStates, setButtonStates] = useState<Map<number, ButtonState>>(new Map());
   const wsRef = useRef<WebSocket | null>(null);
@@ -72,7 +79,10 @@ export function useMacroWS(url: string, token: string | null) {
       ws.onmessage = (e) => {
         try {
           const msg = JSON.parse(e.data) as ServerMsg;
-          if (msg.type === 'layout') setLayout(msg.layout);
+          if (msg.type === 'layout') {
+            setLayout(msg.layout);
+            setPreview(msg.preview ?? null);
+          }
           else if (msg.type === 'ack') setLastAck({ id: msg.id, at: Date.now() });
           else if (msg.type === 'states') {
             const m = new Map<number, ButtonState>();
@@ -100,9 +110,11 @@ export function useMacroWS(url: string, token: string | null) {
     }
   }
 
-  function press(id: number) { send({ type: 'press', id }); }
+  function press(id: number, longPress?: boolean) {
+    send(longPress ? { type: 'press', id, longPress: true } : { type: 'press', id });
+  }
   function sliderValue(id: number, value: number) { send({ type: 'slider', id, value }); }
   function sliderMute(id: number) { send({ type: 'slider-mute', id }); }
 
-  return { status, layout, lastAck, buttonStates, press, sliderValue, sliderMute };
+  return { status, layout, preview, lastAck, buttonStates, press, sliderValue, sliderMute };
 }

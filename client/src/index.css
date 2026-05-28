@@ -12,3 +12,14 @@ button {
   font: inherit;
   color: inherit;
 }
+.tile-press {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.tile-press img {
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+.tile-press:active { transform: scale(0.96); }

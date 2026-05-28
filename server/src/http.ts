@@ -6,10 +6,22 @@ import { authorize, isLocalhost } from './auth.js';
 import { saveConfig, type ServerConfig } from './config.js';
 import { getObs, DEFAULT_OBS_CONFIG, type ObsConfig } from './integrations/obs.js';
 import { getTwitch, type TwitchConfig } from './integrations/twitch.js';
+import {
+  saveImage, imagePath, imageExists, deleteImage, imageMime, MAX_IMAGE_BYTES,
+} from './images.js';
+import { exportBundle, importBundle } from './layout-bundle.js';
+import {
+  listTemplates, loadTemplate, materializeTemplate,
+  startPreview, clearPreview, consumePreview, heartbeatPreview, previewInfo,
+} from './templates.js';
+import { createReadStream } from 'node:fs';
+import { stat } from 'node:fs/promises';
 
 type Ctx = {
   getLayout: () => Layout;
   getServerConfig: () => ServerConfig;
+  /** Called when the layout file has been updated — re-broadcasts and refreshes state. */
+  onLayoutChanged: () => Promise<void>;
 };
 
 export async function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: Ctx): Promise<void> {
@@ -34,10 +46,165 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse, c
     }
     return;
   }
+  if (pathname === '/api/layout/export' && req.method === 'GET') {
+    if (!authorize(req, token())) return unauthorized(res);
+    try {
+      const bundle = await exportBundle(ctx.getLayout());
+      const stamp = new Date().toISOString().slice(0, 10);
+      res.writeHead(200, {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Content-Disposition': `attachment; filename="digi-deck-layout-${stamp}.json"`,
+      });
+      res.end(JSON.stringify(bundle));
+    } catch (err) {
+      json(res, 500, { error: (err as Error).message });
+    }
+    return;
+  }
+  if (pathname === '/api/layout/import' && req.method === 'POST') {
+    if (!authorize(req, token())) return unauthorized(res);
+    try {
+      const body = await readJsonBody(req);
+      const layout = await importBundle(body);
+      await saveLayout(layout);
+      json(res, 200, { layout });
+    } catch (err) {
+      json(res, 400, { error: (err as Error).message });
+    }
+    return;
+  }
+
+  // ─── Templates ────────────────────────────────────────────────
+  if (pathname === '/api/templates' && req.method === 'GET') {
+    if (!authorize(req, token())) return unauthorized(res);
+    try {
+      const items = await listTemplates();
+      json(res, 200, { templates: items, preview: previewInfo() });
+    } catch (err) {
+      json(res, 500, { error: (err as Error).message });
+    }
+    return;
+  }
+  if (pathname.startsWith('/api/templates/') && req.method === 'GET') {
+    if (!authorize(req, token())) return unauthorized(res);
+    const name = pathname.slice('/api/templates/'.length);
+    try {
+      const bundle = await loadTemplate(name);
+      json(res, 200, bundle);
+    } catch (err) {
+      json(res, 404, { error: (err as Error).message });
+    }
+    return;
+  }
+  if (pathname === '/api/templates/preview' && req.method === 'POST') {
+    if (!authorize(req, token())) return unauthorized(res);
+    try {
+      const body = await readJsonBody(req) as { name?: string; title?: string; bundle?: unknown };
+      if (!body || typeof body !== 'object') throw new Error('body must include {name, title, bundle}');
+      const name = typeof body.name === 'string' ? body.name : 'preview';
+      const title = typeof body.title === 'string' ? body.title : name;
+      const layout = await materializeTemplate(body.bundle);
+      startPreview(name, title, layout);
+      await ctx.onLayoutChanged();
+      json(res, 200, { preview: previewInfo() });
+    } catch (err) {
+      json(res, 400, { error: (err as Error).message });
+    }
+    return;
+  }
+  if (pathname === '/api/templates/preview/heartbeat' && req.method === 'POST') {
+    if (!authorize(req, token())) return unauthorized(res);
+    const alive = heartbeatPreview();
+    json(res, alive ? 200 : 410, { alive });
+    return;
+  }
+  if (pathname === '/api/templates/preview' && req.method === 'DELETE') {
+    if (!authorize(req, token())) return unauthorized(res);
+    const had = clearPreview();
+    if (had) await ctx.onLayoutChanged();
+    res.writeHead(204);
+    res.end();
+    return;
+  }
+  if (pathname === '/api/templates/apply' && req.method === 'POST') {
+    if (!authorize(req, token())) return unauthorized(res);
+    const layout = consumePreview();
+    if (!layout) {
+      json(res, 400, { error: 'no preview active' });
+      return;
+    }
+    try {
+      await saveLayout(layout);
+      // File watcher will re-broadcast, but trigger immediately too for low latency.
+      await ctx.onLayoutChanged();
+      json(res, 200, { layout });
+    } catch (err) {
+      json(res, 500, { error: (err as Error).message });
+    }
+    return;
+  }
   if (pathname === '/api/pairing' && req.method === 'GET') {
     if (!isLocalhost(req)) return unauthorized(res);
     json(res, 200, buildPairing(token()));
     return;
+  }
+
+  // ─── Images ───────────────────────────────────────────────────
+  if (pathname === '/api/images' && req.method === 'POST') {
+    if (!authorize(req, token())) return unauthorized(res);
+    try {
+      const buf = await readBinaryBody(req, MAX_IMAGE_BYTES);
+      const filename = await saveImage(buf);
+      json(res, 200, { filename });
+    } catch (err) {
+      json(res, 400, { error: (err as Error).message });
+    }
+    return;
+  }
+  if (pathname.startsWith('/api/images/file/')) {
+    if (!authorize(req, token())) return unauthorized(res);
+    const filename = decodeURIComponent(pathname.slice('/api/images/file/'.length));
+    const abs = imagePath(filename);
+    if (!abs) {
+      res.writeHead(400, { 'Content-Type': 'text/plain' });
+      res.end('bad filename');
+      return;
+    }
+    if (req.method === 'DELETE') {
+      try {
+        const removed = await deleteImage(filename);
+        if (!removed) {
+          res.writeHead(404);
+          res.end();
+          return;
+        }
+        res.writeHead(204);
+        res.end();
+      } catch (err) {
+        json(res, 500, { error: (err as Error).message });
+      }
+      return;
+    }
+    if (req.method === 'GET') {
+      if (!(await imageExists(filename))) {
+        res.writeHead(404);
+        res.end();
+        return;
+      }
+      try {
+        const s = await stat(abs);
+        res.writeHead(200, {
+          'Content-Type': imageMime(filename),
+          'Content-Length': String(s.size),
+          // Content-addressed filename — safe to cache aggressively.
+          'Cache-Control': 'public, max-age=31536000, immutable',
+        });
+        createReadStream(abs).pipe(res);
+      } catch (err) {
+        json(res, 500, { error: (err as Error).message });
+      }
+      return;
+    }
   }
 
   // ─── OBS ──────────────────────────────────────────────────────
@@ -257,4 +424,16 @@ async function readJsonBody(req: IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = [];
   for await (const chunk of req) chunks.push(chunk as Buffer);
   return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+}
+
+async function readBinaryBody(req: IncomingMessage, maxBytes: number): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  let total = 0;
+  for await (const chunk of req) {
+    const b = chunk as Buffer;
+    total += b.length;
+    if (total > maxBytes) throw new Error(`payload too large (max ${maxBytes} bytes)`);
+    chunks.push(b);
+  }
+  return Buffer.concat(chunks);
 }

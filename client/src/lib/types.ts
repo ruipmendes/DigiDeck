@@ -22,7 +22,8 @@ export type Action =
   | { type: 'obs'; op: ObsOp; params?: ObsActionParams }
   | { type: 'twitch'; op: TwitchOp; text: string }
   | { type: 'twitch-streamer'; login: string }
-  | { type: 'goto-page'; pageId: number };
+  | { type: 'goto-page'; pageId: number }
+  | { type: 'wait'; ms: number };
 
 export type ActionType = Action['type'];
 
@@ -34,7 +35,11 @@ export type Button = {
   id: number;
   label: string;
   icon?: string;
+  /** Uploaded image filename (server-side, under %APPDATA%/digi-deck/images/). Wins over `icon`. */
+  image?: string;
   action: ButtonAction;
+  /** Optional action fired on hold (~500ms). When absent, holding still triggers the primary action. */
+  longPressAction?: ButtonAction;
 };
 
 export type SliderTile = {
@@ -42,12 +47,13 @@ export type SliderTile = {
   id: number;
   label: string;
   icon?: string;
+  image?: string;
   /** OBS input name this slider drives (volume + mute). */
   inputName: string;
 };
 
 export type Tile = Button | SliderTile;
-export type Page = { id: number; name: string; icon?: string; buttons: Tile[] };
+export type Page = { id: number; name: string; icon?: string; image?: string; cols?: number; buttons: Tile[] };
 export type NavigationMode = 'tabs' | 'folders';
 export type Layout = { navigation?: NavigationMode; pages: Page[] };
 
@@ -90,5 +96,6 @@ export function defaultAction(type: ActionType): Action {
     case 'twitch': return { type: 'twitch', op: 'chat', text: '' };
     case 'twitch-streamer': return { type: 'twitch-streamer', login: '' };
     case 'goto-page': return { type: 'goto-page', pageId: 0 };
+    case 'wait': return { type: 'wait', ms: 200 };
   }
 }

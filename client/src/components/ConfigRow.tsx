@@ -1,23 +1,25 @@
 import { useEffect, useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, Trash2, Sliders } from 'lucide-react';
-import type { Tile, Page, TileKind } from '../lib/types';
-import { defaultTile } from '../lib/types';
+import { GripVertical, Trash2, Sliders, Hand } from 'lucide-react';
+import type { Tile, Page, TileKind, Layout, ButtonAction } from '../lib/types';
+import { defaultTile, defaultAction } from '../lib/types';
 import { ActionEditor } from './ActionEditor';
 import { IconPicker } from './IconPicker';
+import { ImagePicker } from './ImagePicker';
 import * as api from '../lib/api';
 
 type Props = {
   button: Tile;
   pages: Page[];
   currentPageId: number;
+  layout: Layout;
   onChange: (patch: Partial<Tile>) => void;
   onDelete: () => void;
   onMove: (toPageId: number) => void;
 };
 
-export function ConfigRow({ button, pages, currentPageId, onChange, onDelete, onMove }: Props) {
+export function ConfigRow({ button, pages, currentPageId, layout, onChange, onDelete, onMove }: Props) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: button.id });
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
@@ -58,8 +60,17 @@ export function ConfigRow({ button, pages, currentPageId, onChange, onDelete, on
         <GripVertical size={18} />
       </button>
 
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
         <IconPicker value={button.icon} onChange={(icon) => onChange({ icon })} />
+        <ImagePicker
+          value={button.image}
+          onChange={(image) => onChange({ image })}
+          referencedElsewhere={
+            button.image
+              ? api.imageReferenceCount(layout, button.image, { tileId: button.id }) > 0
+              : false
+          }
+        />
         <div style={{ fontSize: 10, color: '#6b7280' }}>id: {button.id}</div>
       </div>
 
@@ -87,11 +98,18 @@ export function ConfigRow({ button, pages, currentPageId, onChange, onDelete, on
             onChange={(inputName) => onChange({ inputName })}
           />
         ) : (
-          <ActionEditor
-            action={button.action}
-            onChange={(action) => onChange({ action })}
-            pages={pages.map((p) => ({ id: p.id, name: p.name }))}
-          />
+          <>
+            <ActionEditor
+              action={button.action}
+              onChange={(action) => onChange({ action })}
+              pages={pages.map((p) => ({ id: p.id, name: p.name }))}
+            />
+            <LongPressEditor
+              value={button.longPressAction}
+              onChange={(longPressAction) => onChange({ longPressAction })}
+              pages={pages.map((p) => ({ id: p.id, name: p.name }))}
+            />
+          </>
         )}
       </div>
 
@@ -189,6 +207,80 @@ function SliderEditor({
           OBS not connected — type the input name manually, or connect OBS to pick from a list.
         </span>
       )}
+    </div>
+  );
+}
+
+type LongPressProps = {
+  value: ButtonAction | undefined;
+  onChange: (next: ButtonAction | undefined) => void;
+  pages: { id: number; name: string }[];
+};
+
+function LongPressEditor({ value, onChange, pages }: LongPressProps) {
+  const [open, setOpen] = useState(value !== undefined);
+
+  if (!open && value === undefined) {
+    return (
+      <button
+        type="button"
+        onClick={() => { setOpen(true); onChange(defaultAction('hotkey')); }}
+        style={{
+          alignSelf: 'flex-start',
+          padding: '4px 10px',
+          background: 'transparent',
+          border: '1px dashed #4b5563',
+          borderRadius: 6,
+          color: '#9ca3af',
+          fontSize: 11,
+          cursor: 'pointer',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 4,
+        }}
+        title="run a different action when the button is held (~500ms)"
+      >
+        <Hand size={12} /> add long-press action
+      </button>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        background: '#0a0a0a',
+        border: '1px solid #1f2937',
+        borderRadius: 8,
+        padding: 8,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#9ca3af', letterSpacing: 0.3 }}>
+        <Hand size={12} /> LONG-PRESS ACTION · fires after ~500ms hold
+        <button
+          type="button"
+          onClick={() => { setOpen(false); onChange(undefined); }}
+          style={{
+            marginLeft: 'auto',
+            background: 'transparent',
+            border: 0,
+            color: '#9ca3af',
+            cursor: 'pointer',
+            fontSize: 11,
+            padding: 0,
+            textDecoration: 'underline',
+          }}
+        >
+          remove
+        </button>
+      </div>
+      <ActionEditor
+        action={value ?? defaultAction('hotkey')}
+        onChange={onChange}
+        pages={pages}
+      />
     </div>
   );
 }

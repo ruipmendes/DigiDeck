@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   DndContext, PointerSensor, KeyboardSensor, closestCenter, useSensor, useSensors,
   type DragEndEvent,
 } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
-import { Smartphone, Plus, Trash2 } from 'lucide-react';
+import { Smartphone, Plus, Trash2, Download, Upload, LayoutGrid } from 'lucide-react';
 import * as api from './lib/api';
 import type { Tile, Layout, Page, TileKind } from './lib/types';
 import { defaultTile, nextButtonId, nextPageId } from './lib/types';
@@ -12,6 +12,9 @@ import { ConfigRow } from './components/ConfigRow';
 import { PairingModal } from './components/PairingModal';
 import { IntegrationsPanel } from './components/IntegrationsPanel';
 import { IconPicker } from './components/IconPicker';
+import { ImagePicker } from './components/ImagePicker';
+import { TemplatesPanel } from './components/TemplatesPanel';
+import { PreviewBanner, usePreviewHeartbeat } from './components/PreviewBanner';
 import { getIcon } from './lib/icons';
 
 export function ConfigApp() {
@@ -22,6 +25,75 @@ export function ConfigApp() {
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [pairingOpen, setPairingOpen] = useState(false);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [preview, setPreview] = useState<api.PreviewInfo | null>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
+
+  // Pick up any preview that's already active when this tab opens.
+  useEffect(() => {
+    let alive = true;
+    api.listTemplates()
+      .then((d) => { if (alive) setPreview(d.preview); })
+      .catch(() => { /* harmless */ });
+    return () => { alive = false; };
+  }, []);
+
+  usePreviewHeartbeat(!!preview);
+
+  async function refreshLayoutFromServer() {
+    const next = await api.getLayout();
+    setLayout(next);
+    setActivePageId(next.pages[0]?.id ?? null);
+    setDirty(false);
+    setSavedAt(new Date());
+  }
+
+  async function handleExitPreview() {
+    setError(null);
+    try {
+      await api.exitPreview();
+      setPreview(null);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  async function handleApplyPreview() {
+    setError(null);
+    try {
+      await api.applyPreview();
+      setPreview(null);
+      await refreshLayoutFromServer();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  async function handleExport() {
+    setError(null);
+    try {
+      await api.exportLayoutBundle();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  async function handleImportFile(file: File) {
+    setError(null);
+    if (dirty && !confirm('You have unsaved changes. Importing will replace the current layout. Continue?')) return;
+    if (!confirm(`Replace the entire layout with the contents of "${file.name}"?`)) return;
+    try {
+      const next = await api.importLayoutBundle(file);
+      setLayout(next);
+      setActivePageId(next.pages[0]?.id ?? null);
+      setDirty(false);
+      setSavedAt(new Date());
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      if (importInputRef.current) importInputRef.current.value = '';
+    }
+  }
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -166,18 +238,40 @@ export function ConfigApp() {
           <a href="/" style={{ fontSize: 12, color: '#9ca3af', textDecoration: 'none' }}>← back to grid</a>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept="application/json,.json"
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void handleImportFile(f);
+            }}
+          />
+          <button
+            onClick={() => setTemplatesOpen(true)}
+            title="browse template layouts"
+            style={headerBtnStyle}
+          >
+            <LayoutGrid size={16} /> Templates
+          </button>
+          <button
+            onClick={() => importInputRef.current?.click()}
+            title="import a layout bundle"
+            style={headerBtnStyle}
+          >
+            <Upload size={16} /> Import
+          </button>
+          <button
+            onClick={handleExport}
+            title="export the current layout"
+            style={headerBtnStyle}
+          >
+            <Download size={16} /> Export
+          </button>
           <button
             onClick={() => setPairingOpen(true)}
-            style={{
-              padding: '8px 12px',
-              background: '#1f2937',
-              color: '#fff',
-              border: '1px solid #374151',
-              borderRadius: 6,
-              fontSize: 14,
-              cursor: 'pointer',
-              display: 'flex', alignItems: 'center', gap: 6,
-            }}
+            style={headerBtnStyle}
           >
             <Smartphone size={16} /> Pair phone
           </button>
@@ -187,7 +281,7 @@ export function ConfigApp() {
           {dirty && <span style={{ fontSize: 12, color: '#eab308' }}>unsaved changes</span>}
           <button
             onClick={save}
-            disabled={!dirty || saving || !layout}
+            disabled={!dirty || saving || !layout || !!preview}
             style={{
               padding: '8px 16px',
               background: dirty ? '#3b82f6' : '#374151',
@@ -210,10 +304,36 @@ export function ConfigApp() {
         </div>
       )}
 
+      {preview && (
+        <PreviewBanner
+          title={preview.title}
+          onExit={handleExitPreview}
+          onApply={handleApplyPreview}
+          subtitle="your saved layout is untouched until you click Apply"
+        />
+      )}
+
       <IntegrationsPanel />
 
       {!layout ? (
         <div style={{ opacity: 0.6 }}>Loading layout…</div>
+      ) : preview ? (
+        <div
+          style={{
+            background: '#111827',
+            border: '1px dashed #4b5563',
+            borderRadius: 8,
+            padding: 20,
+            color: '#9ca3af',
+            fontSize: 13,
+            lineHeight: 1.5,
+            textAlign: 'center',
+          }}
+        >
+          Editing is paused while a template preview is active.<br />
+          Click <strong style={{ color: '#22c55e' }}>Apply</strong> to make it permanent,
+          or <strong style={{ color: '#fff' }}>Exit</strong> to return to your saved layout.
+        </div>
       ) : (
         <>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 12, color: '#9ca3af' }}>
@@ -257,6 +377,7 @@ export function ConfigApp() {
           {activePage && (
             <PageBar
               page={activePage}
+              layout={layout}
               canDelete={layout.pages.length > 1}
               onChange={(patch) => updatePage(activePage.id, patch)}
               onDelete={() => deletePage(activePage.id)}
@@ -274,6 +395,7 @@ export function ConfigApp() {
                         button={b}
                         pages={layout.pages}
                         currentPageId={activePage.id}
+                        layout={layout}
                         onChange={(patch) => updateButton(activePage.id, b.id, patch)}
                         onDelete={() => deleteButton(activePage.id, b.id)}
                         onMove={(to) => moveButton(b.id, activePage.id, to)}
@@ -314,6 +436,13 @@ export function ConfigApp() {
       </footer>
 
       <PairingModal open={pairingOpen} onClose={() => setPairingOpen(false)} />
+      <TemplatesPanel
+        open={templatesOpen}
+        onClose={() => setTemplatesOpen(false)}
+        onPreviewStarted={() => {
+          api.listTemplates().then((d) => setPreview(d.preview)).catch(() => undefined);
+        }}
+      />
     </div>
   );
 }
@@ -326,6 +455,19 @@ const addTileBtnStyle: React.CSSProperties = {
   borderRadius: 8,
   cursor: 'pointer',
   fontSize: 14,
+};
+
+const headerBtnStyle: React.CSSProperties = {
+  padding: '8px 12px',
+  background: '#1f2937',
+  color: '#fff',
+  border: '1px solid #374151',
+  borderRadius: 6,
+  fontSize: 14,
+  cursor: 'pointer',
+  display: 'flex',
+  alignItems: 'center',
+  gap: 6,
 };
 
 type TabBarProps = {
@@ -390,12 +532,13 @@ function PageTabBar({ pages, activePageId, onSelect, onAdd }: TabBarProps) {
 
 type PageBarProps = {
   page: Page;
+  layout: Layout;
   canDelete: boolean;
   onChange: (patch: Partial<Page>) => void;
   onDelete: () => void;
 };
 
-function PageBar({ page, canDelete, onChange, onDelete }: PageBarProps) {
+function PageBar({ page, layout, canDelete, onChange, onDelete }: PageBarProps) {
   return (
     <div style={{
       display: 'flex', gap: 8, alignItems: 'center',
@@ -403,6 +546,15 @@ function PageBar({ page, canDelete, onChange, onDelete }: PageBarProps) {
       borderRadius: 8, padding: 8,
     }}>
       <IconPicker value={page.icon} onChange={(icon) => onChange({ icon })} />
+      <ImagePicker
+        value={page.image}
+        onChange={(image) => onChange({ image })}
+        referencedElsewhere={
+          page.image
+            ? api.imageReferenceCount(layout, page.image, { pageId: page.id }) > 0
+            : false
+        }
+      />
       <input
         value={page.name}
         onChange={(e) => onChange({ name: e.target.value })}
@@ -417,6 +569,26 @@ function PageBar({ page, canDelete, onChange, onDelete }: PageBarProps) {
           fontSize: 14,
         }}
       />
+      <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#9ca3af' }} title="phone grid columns">
+        cols:
+        <select
+          value={page.cols ?? 2}
+          onChange={(e) => onChange({ cols: Number(e.target.value) })}
+          style={{
+            padding: '6px 6px',
+            background: '#0a0a0a',
+            color: '#fff',
+            border: '1px solid #374151',
+            borderRadius: 6,
+            fontSize: 13,
+          }}
+        >
+          <option value={1}>1</option>
+          <option value={2}>2</option>
+          <option value={3}>3</option>
+          <option value={4}>4</option>
+        </select>
+      </label>
       {canDelete && (
         <button
           onClick={onDelete}

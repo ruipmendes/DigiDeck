@@ -148,18 +148,42 @@ function StepCard({ index, total, step, onChange, onRemove, onMoveUp, onMoveDown
   );
 }
 
-const TYPES: { value: ActionType; label: string }[] = [
-  { value: 'hotkey', label: 'Hotkey' },
-  { value: 'text',   label: 'Type text' },
-  { value: 'launch', label: 'Launch app' },
-  { value: 'url',    label: 'Open URL / file' },
-  { value: 'script', label: 'PowerShell script' },
-  { value: 'volume', label: 'Volume (speaker)' },
-  { value: 'mic',    label: 'Microphone mute' },
-  { value: 'obs',    label: 'OBS Studio' },
-  { value: 'twitch', label: 'Twitch chat' },
-  { value: 'twitch-streamer', label: 'Twitch streamer' },
-  { value: 'goto-page', label: 'Go to page (folder)' },
+type ActionOption = { value: ActionType; label: string };
+type ActionGroup = { label: string; options: ActionOption[] };
+
+const ACTION_GROUPS: ActionGroup[] = [
+  {
+    label: 'Desktop input',
+    options: [
+      { value: 'hotkey', label: 'Hotkey' },
+      { value: 'text',   label: 'Type text' },
+      { value: 'url',    label: 'Open URL / file' },
+      { value: 'launch', label: 'Launch app' },
+      { value: 'script', label: 'Run PowerShell' },
+    ],
+  },
+  {
+    label: 'Audio',
+    options: [
+      { value: 'volume', label: 'Volume (speaker)' },
+      { value: 'mic',    label: 'Microphone mute' },
+    ],
+  },
+  {
+    label: 'Streaming',
+    options: [
+      { value: 'obs',             label: 'OBS Studio' },
+      { value: 'twitch',          label: 'Twitch chat' },
+      { value: 'twitch-streamer', label: 'Twitch streamer' },
+    ],
+  },
+  {
+    label: 'Flow',
+    options: [
+      { value: 'goto-page', label: 'Go to page (folder)' },
+      { value: 'wait',      label: 'Wait (delay)' },
+    ],
+  },
 ];
 
 const MIC_OPS: { value: MicOp; label: string }[] = [
@@ -178,7 +202,11 @@ function ActionStepEditor({ action, onChange, pages }: StepEditorProps) {
         onChange={(e) => onChange(defaultAction(e.target.value as ActionType))}
         style={selectStyle}
       >
-        {TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+        {ACTION_GROUPS.map((g) => (
+          <optgroup key={g.label} label={g.label}>
+            {g.options.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+          </optgroup>
+        ))}
       </select>
       <Body action={action} onChange={onChange} pages={pages} />
     </div>
@@ -317,6 +345,20 @@ function Body({ action, onChange, pages }: StepEditorProps) {
           </span>
         </div>
       );
+    case 'wait':
+      return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <input
+            type="number"
+            min={0}
+            step={50}
+            value={action.ms}
+            onChange={(e) => onChange({ type: 'wait', ms: Math.max(0, Number(e.target.value) || 0) })}
+            style={{ ...inputStyle, width: 100 }}
+          />
+          <span style={{ fontSize: 12, color: '#9ca3af' }}>ms (pause between steps)</span>
+        </div>
+      );
     case 'goto-page': {
       const opts = pages ?? [];
       return (
@@ -348,22 +390,57 @@ function Body({ action, onChange, pages }: StepEditorProps) {
 }
 
 type ObsNeeds = 'scene' | 'input' | 'scene+source' | null;
-const OBS_OPS: { value: ObsOp; label: string; needs: ObsNeeds }[] = [
-  { value: 'toggle-record',        label: 'Toggle recording',        needs: null },
-  { value: 'start-record',         label: 'Start recording',         needs: null },
-  { value: 'stop-record',          label: 'Stop recording',          needs: null },
-  { value: 'toggle-stream',        label: 'Toggle stream',           needs: null },
-  { value: 'start-stream',         label: 'Start stream',            needs: null },
-  { value: 'stop-stream',          label: 'Stop stream',             needs: null },
-  { value: 'toggle-virtual-cam',   label: 'Toggle virtual camera',   needs: null },
-  { value: 'toggle-replay-buffer', label: 'Toggle replay buffer',    needs: null },
-  { value: 'save-replay-buffer',   label: 'Save replay buffer',      needs: null },
-  { value: 'set-scene',            label: 'Switch to scene…',        needs: 'scene' },
-  { value: 'toggle-mute',          label: 'Toggle input mute…',      needs: 'input' },
-  { value: 'show-source',          label: 'Show source in scene…',   needs: 'scene+source' },
-  { value: 'hide-source',          label: 'Hide source in scene…',   needs: 'scene+source' },
-  { value: 'toggle-source',        label: 'Toggle source visibility in scene…', needs: 'scene+source' },
+type ObsOpDef = { value: ObsOp; label: string; needs: ObsNeeds };
+type ObsOpGroup = { label: string; options: ObsOpDef[] };
+
+const OBS_OP_GROUPS: ObsOpGroup[] = [
+  {
+    label: 'Recording',
+    options: [
+      { value: 'toggle-record', label: 'Toggle recording', needs: null },
+      { value: 'start-record',  label: 'Start recording',  needs: null },
+      { value: 'stop-record',   label: 'Stop recording',   needs: null },
+    ],
+  },
+  {
+    label: 'Streaming',
+    options: [
+      { value: 'toggle-stream', label: 'Toggle stream', needs: null },
+      { value: 'start-stream',  label: 'Start stream',  needs: null },
+      { value: 'stop-stream',   label: 'Stop stream',   needs: null },
+    ],
+  },
+  {
+    label: 'Capture',
+    options: [
+      { value: 'toggle-virtual-cam',   label: 'Toggle virtual camera', needs: null },
+      { value: 'toggle-replay-buffer', label: 'Toggle replay buffer',  needs: null },
+      { value: 'save-replay-buffer',   label: 'Save replay buffer',    needs: null },
+    ],
+  },
+  {
+    label: 'Scenes',
+    options: [
+      { value: 'set-scene', label: 'Switch to scene…', needs: 'scene' },
+    ],
+  },
+  {
+    label: 'Audio',
+    options: [
+      { value: 'toggle-mute', label: 'Toggle mute…', needs: 'input' },
+    ],
+  },
+  {
+    label: 'Sources',
+    options: [
+      { value: 'show-source',   label: 'Show source…',       needs: 'scene+source' },
+      { value: 'hide-source',   label: 'Hide source…',       needs: 'scene+source' },
+      { value: 'toggle-source', label: 'Toggle visibility…', needs: 'scene+source' },
+    ],
+  },
 ];
+
+const OBS_OPS: ObsOpDef[] = OBS_OP_GROUPS.flatMap((g) => g.options);
 
 function ObsBody({ action, onChange }: { action: Extract<Action, { type: 'obs' }>; onChange: (a: Action) => void }) {
   const [snap, setSnap] = useState<{
@@ -412,7 +489,11 @@ function ObsBody({ action, onChange }: { action: Extract<Action, { type: 'obs' }
         onChange={(e) => onChange({ type: 'obs', op: e.target.value as ObsOp, params: action.params })}
         style={selectStyle}
       >
-        {OBS_OPS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        {OBS_OP_GROUPS.map((g) => (
+          <optgroup key={g.label} label={g.label}>
+            {g.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </optgroup>
+        ))}
       </select>
 
       {needs === 'scene' && (

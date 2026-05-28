@@ -1,4 +1,5 @@
-import type { Layout } from './types';
+import type { Layout, Tile, Page } from './types';
+import { getStoredToken } from './token';
 
 export async function getLayout(): Promise<Layout> {
   const res = await fetch('/api/layout');
@@ -16,6 +17,154 @@ export async function putLayout(layout: Layout): Promise<void> {
     const body = await res.text();
     throw new Error(body || `PUT /api/layout failed: ${res.status}`);
   }
+}
+
+// ─── Templates / Preview ────────────────────────────────────────
+
+export type TemplateMeta = { name: string; title: string; description: string };
+export type PreviewInfo = { name: string; title: string };
+
+export async function listTemplates(): Promise<{ templates: TemplateMeta[]; preview: PreviewInfo | null }> {
+  const res = await fetch('/api/templates');
+  if (!res.ok) throw new Error(`templates list failed: ${res.status}`);
+  return res.json();
+}
+
+export async function getTemplate(name: string): Promise<unknown> {
+  const res = await fetch(`/api/templates/${encodeURIComponent(name)}`);
+  if (!res.ok) {
+    let msg = `template fetch failed: ${res.status}`;
+    try { msg = (await res.json()).error ?? msg; } catch { /* keep default */ }
+    throw new Error(msg);
+  }
+  return res.json();
+}
+
+export async function startTemplatePreview(name: string, title: string, bundle: unknown): Promise<void> {
+  const res = await fetch('/api/templates/preview', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, title, bundle }),
+  });
+  if (!res.ok) {
+    let msg = `preview start failed: ${res.status}`;
+    try { msg = (await res.json()).error ?? msg; } catch { /* keep default */ }
+    throw new Error(msg);
+  }
+}
+
+export async function heartbeatPreview(): Promise<boolean> {
+  const res = await fetch('/api/templates/preview/heartbeat', { method: 'POST' });
+  return res.ok;
+}
+
+export async function exitPreview(): Promise<void> {
+  await fetch('/api/templates/preview', { method: 'DELETE' });
+}
+
+/** Best-effort cleanup when the tab closes — uses fetch with keepalive so it can ship after unload. */
+export function exitPreviewBeacon(): void {
+  void fetch('/api/templates/preview', { method: 'DELETE', keepalive: true });
+}
+
+export async function applyPreview(): Promise<Layout> {
+  const res = await fetch('/api/templates/apply', { method: 'POST' });
+  if (!res.ok) {
+    let msg = `apply failed: ${res.status}`;
+    try { msg = (await res.json()).error ?? msg; } catch { /* keep default */ }
+    throw new Error(msg);
+  }
+  const out = await res.json();
+  return out.layout as Layout;
+}
+
+/** Download the current layout (with embedded images) as a JSON file. */
+export async function exportLayoutBundle(): Promise<void> {
+  const res = await fetch('/api/layout/export');
+  if (!res.ok) throw new Error(`export failed: ${res.status}`);
+  const blob = await res.blob();
+  const stamp = new Date().toISOString().slice(0, 10);
+  const a = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  a.href = url;
+  a.download = `digi-deck-layout-${stamp}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+/** Read a bundle file and replace the current layout with its contents. Returns the new layout. */
+export async function importLayoutBundle(file: File): Promise<Layout> {
+  const text = await file.text();
+  let body: unknown;
+  try { body = JSON.parse(text); } catch { throw new Error('not a valid JSON file'); }
+  const res = await fetch('/api/layout/import', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    let msg = `import failed: ${res.status}`;
+    try { msg = (await res.json()).error ?? msg; } catch { /* keep default */ }
+    throw new Error(msg);
+  }
+  const out = await res.json();
+  return out.layout as Layout;
+}
+
+export async function uploadImage(file: File): Promise<{ filename: string }> {
+  const buf = await file.arrayBuffer();
+  const res = await fetch('/api/images', {
+    method: 'POST',
+    headers: { 'Content-Type': file.type || 'application/octet-stream' },
+    body: buf,
+  });
+  if (!res.ok) {
+    let msg = `upload failed: ${res.status}`;
+    try { msg = (await res.json()).error ?? msg; } catch { /* keep default */ }
+    throw new Error(msg);
+  }
+  return res.json();
+}
+
+export async function deleteImage(filename: string): Promise<void> {
+  const res = await fetch(`/api/images/file/${encodeURIComponent(filename)}`, { method: 'DELETE' });
+  if (!res.ok && res.status !== 404) {
+    throw new Error(`delete failed: ${res.status}`);
+  }
+}
+
+/** Build a fetchable URL for a stored image. Appends token if one is stored. */
+export function imageUrl(filename: string): string {
+  const base = `/api/images/file/${encodeURIComponent(filename)}`;
+  const token = getStoredToken();
+  return token ? `${base}?token=${encodeURIComponent(token)}` : base;
+}
+
+/** Count references to `filename` in the layout, optionally excluding a specific tile or page. */
+export function imageReferenceCount(
+  layout: Layout,
+  filename: string,
+  exclude?: { tileId?: number; pageId?: number },
+): number {
+  let n = 0;
+  for (const p of layout.pages) {
+    if (p.image === filename && exclude?.pageId !== p.id) n++;
+    for (const t of p.buttons) {
+      if ((t as Tile).image === filename && exclude?.tileId !== t.id) n++;
+    }
+  }
+  return n;
+}
+
+export function pageImages(page: Page): string[] {
+  const out: string[] = [];
+  if (page.image) out.push(page.image);
+  for (const t of page.buttons) {
+    if (t.image) out.push(t.image);
+  }
+  return out;
 }
 
 export type Pairing = { token: string; urls: string[] };

@@ -2,15 +2,18 @@ import { useEffect, useRef, useState } from 'react';
 import { Volume2, VolumeX, ArrowLeft, Home } from 'lucide-react';
 import type { ButtonState, Layout, Tile } from '../ws';
 import { getIcon } from '../lib/icons';
+import { imageUrl } from '../lib/api';
 
 type Props = {
   layout: Layout | null;
   lastAck: { id: number; at: number } | null;
   buttonStates: Map<number, ButtonState>;
-  onPress: (id: number) => void;
+  onPress: (id: number, longPress?: boolean) => void;
   onSliderChange: (id: number, value: number) => void;
   onSliderMute: (id: number) => void;
 };
+
+const LONG_PRESS_MS = 500;
 
 const PAGE_KEY = 'digi-deck:active_page';
 const BACK_TILE_ID = -1; // synthetic id; never collides with real tile ids (which are >= 0)
@@ -80,14 +83,13 @@ export function ButtonGrid({ layout, lastAck, buttonStates, onPress, onSliderCha
     setActivePageId(homePageId);
   }
 
-  function handlePress(t: Tile) {
-    // Intercept goto-page actions client-side — server has no work to do for them.
-    // (The action itself stays server-side; toPublic exposes the target page id on the tile.)
-    if (t.kind === 'button' && t.gotoPageId !== undefined) {
+  function handlePress(t: Tile, longPress: boolean) {
+    // Goto-page only fires on a *short* press — the long-press action could be anything.
+    if (!longPress && t.kind === 'button' && t.gotoPageId !== undefined) {
       gotoPage(t.gotoPageId);
     }
     // Send to server too: any other steps in a sequence still execute server-side.
-    onPress(t.id);
+    onPress(t.id, longPress);
   }
 
   return (
@@ -102,7 +104,7 @@ export function ButtonGrid({ layout, lastAck, buttonStates, onPress, onSliderCha
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(2, 1fr)',
+          gridTemplateColumns: `repeat(${activePage.cols ?? 2}, 1fr)`,
           gap: 12,
           flex: 1,
           alignContent: 'start',
@@ -134,7 +136,7 @@ export function ButtonGrid({ layout, lastAck, buttonStates, onPress, onSliderCha
               tile={t}
               state={state}
               flash={flash === t.id}
-              onPress={() => handlePress(t)}
+              onPress={(longPress) => handlePress(t, longPress)}
             />
           );
         })}
@@ -157,7 +159,9 @@ function BackTileView({ flash, isHome, onPress }: { flash: boolean; isHome: bool
   const Icon = isHome ? Home : ArrowLeft;
   return (
     <button
+      className="tile-press"
       onPointerDown={handle}
+      onContextMenu={(e) => e.preventDefault()}
       aria-label={label.toLowerCase()}
       title={label.toLowerCase()}
       style={{
@@ -177,7 +181,7 @@ function BackTileView({ flash, isHome, onPress }: { flash: boolean; isHome: bool
         gap: 8,
         color: '#9ca3af',
         minHeight: 96,
-        transition: 'background 0.15s ease-out, color 0.15s',
+        transition: 'background 0.15s ease-out, color 0.15s, transform 80ms ease-out',
       }}
     >
       <Icon size={32} strokeWidth={1.75} />
@@ -195,7 +199,7 @@ function ButtonTileView({
   tile: Extract<Tile, { kind: 'button' }>;
   state: ButtonState | undefined;
   flash: boolean;
-  onPress: () => void;
+  onPress: (longPress: boolean) => void;
 }) {
   const Icon = getIcon(tile.icon);
   const active = !!state?.active;
@@ -206,15 +210,58 @@ function ButtonTileView({
   const isStreamer = !!tile.streamerLogin;
   const thumbnail = state?.thumbnail;
   const live = state?.live;
+  const hasImage = !!tile.image && !isStreamer;
+  const longPressEnabled = !!tile.hasLongPress;
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressFired = useRef(false);
 
-  function handlePress() {
+  function clearLongPressTimer() {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  }
+
+  function onPointerDown() {
     navigator.vibrate?.(15);
-    onPress();
+    if (!longPressEnabled) {
+      // Instant fire — no latency penalty for buttons without a long-press action.
+      onPress(false);
+      return;
+    }
+    longPressFired.current = false;
+    longPressTimer.current = setTimeout(() => {
+      longPressTimer.current = null;
+      longPressFired.current = true;
+      navigator.vibrate?.(40);
+      onPress(true);
+    }, LONG_PRESS_MS);
+  }
+
+  function onPointerUp() {
+    if (!longPressEnabled) return;
+    if (longPressFired.current) {
+      // Long press already dispatched on timer fire.
+      longPressFired.current = false;
+      return;
+    }
+    clearLongPressTimer();
+    onPress(false);
+  }
+
+  function onPointerCancel() {
+    clearLongPressTimer();
+    longPressFired.current = false;
   }
 
   return (
     <button
-      onPointerDown={handlePress}
+      className="tile-press"
+      onPointerDown={onPointerDown}
+      onPointerUp={onPointerUp}
+      onPointerLeave={onPointerCancel}
+      onPointerCancel={onPointerCancel}
+      onContextMenu={(e) => e.preventDefault()}
       style={{
         position: 'relative',
         background: flash ? '#3b82f6' : active ? activeBg : '#1f1f1f',
@@ -222,9 +269,9 @@ function ButtonTileView({
         borderRadius: 16,
         fontSize: 15,
         fontWeight: 500,
-        padding: active ? 15 : 16,
+        padding: hasImage ? 0 : active ? 15 : 16,
         whiteSpace: 'pre-line',
-        transition: 'background 0.15s ease-out, border-color 0.15s, opacity 0.15s',
+        transition: 'background 0.15s ease-out, border-color 0.15s, opacity 0.15s, transform 80ms ease-out',
         cursor: 'pointer',
         touchAction: 'manipulation',
         display: 'flex',
@@ -235,49 +282,86 @@ function ButtonTileView({
         color: '#fff',
         minHeight: 96,
         opacity: unavailable ? 0.4 : 1,
+        overflow: 'hidden',
       }}
     >
-      {isStreamer && thumbnail ? (
-        <div style={{ position: 'relative' }}>
+      {hasImage && tile.image && (
+        <>
           <img
-            src={thumbnail}
+            src={imageUrl(tile.image)}
             alt=""
             draggable={false}
             style={{
-              width: 56, height: 56, borderRadius: '50%', objectFit: 'cover',
-              filter: live ? 'none' : 'grayscale(100%) brightness(0.7)',
-              border: live ? '2px solid #a855f7' : '2px solid #374151',
-              transition: 'filter 0.2s, border-color 0.2s',
+              position: 'absolute', inset: 0,
+              width: '100%', height: '100%',
+              objectFit: 'cover',
+              pointerEvents: 'none',
             }}
           />
-          {live && (
+          {tile.label && (
             <span
-              aria-hidden
               style={{
-                position: 'absolute', bottom: -2, left: '50%', transform: 'translateX(-50%)',
-                background: '#ef4444', color: '#fff', fontSize: 9, lineHeight: 1,
-                padding: '2px 6px', borderRadius: 4, fontWeight: 700, letterSpacing: 0.3,
+                position: 'absolute', left: 0, right: 0, bottom: 0,
+                padding: '6px 8px',
+                background: 'linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.65) 100%)',
+                color: '#fff',
+                fontSize: 13,
+                fontWeight: 600,
+                textAlign: 'center',
+                textShadow: '0 1px 2px rgba(0,0,0,0.9)',
+                pointerEvents: 'none',
               }}
             >
-              LIVE
+              {tile.label}
             </span>
           )}
-        </div>
-      ) : isStreamer ? (
-        <div
-          style={{
-            width: 56, height: 56, borderRadius: '50%',
-            background: '#1f1f1f', border: '2px solid #374151',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: '#9ca3af', fontSize: 18, fontWeight: 700,
-          }}
-        >
-          {(tile.label[0] ?? '?').toUpperCase()}
-        </div>
-      ) : Icon ? (
-        <Icon size={32} strokeWidth={1.75} />
-      ) : null}
-      <span>{tile.label}</span>
+        </>
+      )}
+      {!hasImage && (
+        <>
+          {isStreamer && thumbnail ? (
+            <div style={{ position: 'relative' }}>
+              <img
+                src={thumbnail}
+                alt=""
+                draggable={false}
+                style={{
+                  width: 56, height: 56, borderRadius: '50%', objectFit: 'cover',
+                  filter: live ? 'none' : 'grayscale(100%) brightness(0.7)',
+                  border: live ? '2px solid #a855f7' : '2px solid #374151',
+                  transition: 'filter 0.2s, border-color 0.2s',
+                }}
+              />
+              {live && (
+                <span
+                  aria-hidden
+                  style={{
+                    position: 'absolute', bottom: -2, left: '50%', transform: 'translateX(-50%)',
+                    background: '#ef4444', color: '#fff', fontSize: 9, lineHeight: 1,
+                    padding: '2px 6px', borderRadius: 4, fontWeight: 700, letterSpacing: 0.3,
+                  }}
+                >
+                  LIVE
+                </span>
+              )}
+            </div>
+          ) : isStreamer ? (
+            <div
+              style={{
+                width: 56, height: 56, borderRadius: '50%',
+                background: '#1f1f1f', border: '2px solid #374151',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: '#9ca3af', fontSize: 18, fontWeight: 700,
+              }}
+            >
+              {(tile.label[0] ?? '?').toUpperCase()}
+            </div>
+          ) : Icon ? (
+            <Icon size={32} strokeWidth={1.75} />
+          ) : null}
+          <span>{tile.label}</span>
+        </>
+      )}
       {active && !isStreamer && (
         <span
           aria-hidden
@@ -396,6 +480,7 @@ function SliderTileView({
           {muted ? 'muted' : `${percent}%`}
         </span>
         <button
+          className="tile-press"
           onPointerDown={handleMute}
           aria-label={muted ? 'unmute' : 'mute'}
           title={muted ? 'unmute' : 'mute'}
@@ -409,6 +494,7 @@ function SliderTileView({
             display: 'flex',
             alignItems: 'center',
             touchAction: 'manipulation',
+            transition: 'transform 80ms ease-out',
           }}
         >
           {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
@@ -481,7 +567,7 @@ function SliderTileView({
 }
 
 type TabsProps = {
-  pages: { id: number; name: string; icon?: string }[];
+  pages: { id: number; name: string; icon?: string; image?: string }[];
   activePageId: number;
   onSelect: (id: number) => void;
 };
@@ -521,7 +607,16 @@ function PageTabs({ pages, activePageId, onSelect }: TabsProps) {
               touchAction: 'manipulation',
             }}
           >
-            {Icon ? <Icon size={14} strokeWidth={2} /> : null}
+            {p.image ? (
+              <img
+                src={imageUrl(p.image)}
+                alt=""
+                draggable={false}
+                style={{ width: 18, height: 18, borderRadius: 4, objectFit: 'cover' }}
+              />
+            ) : Icon ? (
+              <Icon size={14} strokeWidth={2} />
+            ) : null}
             {p.name}
           </button>
         );

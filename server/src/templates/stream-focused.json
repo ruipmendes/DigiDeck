@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "exportedAt": "2026-05-28T00:00:00.000Z",
+  "title": "Stream Focused",
+  "description": "OBS controls, scene switching, audio mixer, and chat shortcuts — built for live streamers.",
+  "layout": {
+    "navigation": "tabs",
+    "pages": [
+      {
+        "id": 0,
+        "name": "Stream",
+        "icon": "video",
+        "cols": 3,
+        "buttons": [
+          { "kind": "button", "id": 0, "label": "Start\nStream",  "icon": "play",          "action": { "type": "obs", "op": "start-stream" } },
+          { "kind": "button", "id": 1, "label": "Stop\nStream",   "icon": "square",        "action": { "type": "obs", "op": "stop-stream" } },
+          { "kind": "button", "id": 2, "label": "Record",         "icon": "circle",        "action": { "type": "obs", "op": "toggle-record" } },
+          { "kind": "button", "id": 3, "label": "Replay\nBuffer", "icon": "rotate-ccw",    "action": { "type": "obs", "op": "toggle-replay-buffer" } },
+          { "kind": "button", "id": 4, "label": "Save\nReplay",   "icon": "save",          "action": { "type": "obs", "op": "save-replay-buffer" } },
+          { "kind": "button", "id": 5, "label": "Virtual\nCam",   "icon": "camera",        "action": { "type": "obs", "op": "toggle-virtual-cam" } },
+          { "kind": "button", "id": 6, "label": "Mic\nMute",      "icon": "mic-off",       "action": { "type": "mic", "op": "toggle-mute" } },
+          { "kind": "button", "id": 7, "label": "Vol\nDown",      "icon": "volume-1",      "action": { "type": "volume", "delta": -2 } },
+          { "kind": "button", "id": 8, "label": "Vol\nUp",        "icon": "volume-2",      "action": { "type": "volume", "delta": 2 } }
+        ]
+      },
+      {
+        "id": 1,
+        "name": "Scenes",
+        "icon": "layers",
+        "cols": 2,
+        "buttons": [
+          { "kind": "button", "id": 10, "label": "Main",          "icon": "monitor",       "action": { "type": "obs", "op": "set-scene", "params": { "sceneName": "Main" } } },
+          { "kind": "button", "id": 11, "label": "BRB",           "icon": "coffee",        "action": { "type": "obs", "op": "set-scene", "params": { "sceneName": "BRB" } } },
+          { "kind": "button", "id": 12, "label": "Game",          "icon": "gamepad-2",     "action": { "type": "obs", "op": "set-scene", "params": { "sceneName": "Game" } } },
+          { "kind": "button", "id": 13, "label": "Just\nChatting","icon": "message-square","action": { "type": "obs", "op": "set-scene", "params": { "sceneName": "Just Chatting" } } },
+          { "kind": "button", "id": 14, "label": "Starting\nSoon","icon": "clock",         "action": { "type": "obs", "op": "set-scene", "params": { "sceneName": "Starting Soon" } } },
+          { "kind": "button", "id": 15, "label": "Outro",         "icon": "log-out",       "action": { "type": "obs", "op": "set-scene", "params": { "sceneName": "Outro" } } }
+        ]
+      },
+      {
+        "id": 2,
+        "name": "Audio",
+        "icon": "sliders-horizontal",
+        "cols": 1,
+        "buttons": [
+          { "kind": "slider", "id": 20, "label": "Mic",      "icon": "mic",     "inputName": "Mic/Aux" },
+          { "kind": "slider", "id": 21, "label": "Desktop",  "icon": "monitor", "inputName": "Desktop Audio" },
+          { "kind": "slider", "id": 22, "label": "Music",    "icon": "music",   "inputName": "Music" }
+        ]
+      },
+      {
+        "id": 3,
+        "name": "Commands",
+        "icon": "message-circle",
+        "cols": 2,
+        "buttons": [
+          { "kind": "button", "id": 30, "label": "!website",  "icon": "globe",         "action": { "type": "twitch", "op": "chat", "text": "!website" } },
+          { "kind": "button", "id": 31, "label": "!discord",  "icon": "users",         "action": { "type": "twitch", "op": "chat", "text": "!discord" } },
+          { "kind": "button", "id": 32, "label": "!kofi",     "icon": "coffee",        "action": { "type": "twitch", "op": "chat", "text": "!kofi" } },
+          { "kind": "button", "id": 33, "label": "!lurk",     "icon": "eye-off",       "action": { "type": "twitch", "op": "chat", "text": "!lurk" } },
+          { "kind": "button", "id": 34, "label": "!socials",  "icon": "share-2",       "action": { "type": "twitch", "op": "chat", "text": "!socials" } },
+          { "kind": "button", "id": 35, "label": "!specs",    "icon": "cpu",           "action": { "type": "twitch", "op": "chat", "text": "!specs" } },
+          { "kind": "button", "id": 36, "label": "!commands", "icon": "list",          "action": { "type": "twitch", "op": "chat", "text": "!commands" } },
+          { "kind": "button", "id": 37, "label": "!uptime",   "icon": "timer",         "action": { "type": "twitch", "op": "chat", "text": "!uptime" } }
+        ]
+      }
+    ]
+  },
+  "images": {}
+}

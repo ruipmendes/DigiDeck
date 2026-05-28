@@ -1,10 +1,17 @@
 import { useEffect, useState } from 'react';
 import { useMacroWS } from './ws';
 import { ButtonGrid } from './components/ButtonGrid';
+import { PreviewBanner, usePreviewHeartbeat } from './components/PreviewBanner';
 import { readUrlTokenAndStore, getStoredToken, clearToken } from './lib/token';
+import * as api from './lib/api';
 
 const STORAGE_KEY = 'digi-deck:ws_url';
 const defaultUrl = () => `ws://${window.location.hostname}:8765`;
+
+function isLocalHostBrowser(): boolean {
+  const h = window.location.hostname;
+  return h === 'localhost' || h === '127.0.0.1' || h === '::1';
+}
 
 export function GridApp() {
   const [token, setToken] = useState<string | null>(() => {
@@ -15,13 +22,31 @@ export function GridApp() {
     () => localStorage.getItem(STORAGE_KEY) ?? defaultUrl(),
   );
   const [draft, setDraft] = useState<string | null>(null);
-  const { status, layout, lastAck, buttonStates, press, sliderValue, sliderMute } = useMacroWS(url, token);
+  const { status, layout, preview, lastAck, buttonStates, press, sliderValue, sliderMute } = useMacroWS(url, token);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   useEffect(() => {
     document.title = 'Digi Deck';
   }, []);
 
-  if (!token) return <NotPaired />;
+  usePreviewHeartbeat(!!preview);
+
+  async function handleExitPreview() {
+    setPreviewError(null);
+    try { await api.exitPreview(); }
+    catch (e) { setPreviewError((e as Error).message); }
+  }
+
+  async function handleApplyPreview() {
+    setPreviewError(null);
+    try { await api.applyPreview(); }
+    catch (e) { setPreviewError((e as Error).message); }
+  }
+
+  // On localhost the server bypasses token auth, so we can preview the grid
+  // straight from the PC without scanning a QR code.
+  const localPreview = !token && isLocalHostBrowser();
+  if (!token && !localPreview) return <NotPaired />;
 
   const statusLabel =
     status === 'open' ? '● connected'
@@ -48,15 +73,20 @@ export function GridApp() {
   return (
     <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12, height: '100%' }}>
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <strong style={{ fontSize: 16 }}>Digi Deck</strong>
+        <strong style={{ fontSize: 16 }}>
+          Digi Deck
+          {localPreview && <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 8, fontWeight: 400 }}>preview</span>}
+        </strong>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-          <button
-            onClick={unpair}
-            style={{ fontSize: 12, color: '#9ca3af', background: 'transparent', border: 0, padding: 0, cursor: 'pointer' }}
-            title="forget auth token"
-          >
-            unpair
-          </button>
+          {token && (
+            <button
+              onClick={unpair}
+              style={{ fontSize: 12, color: '#9ca3af', background: 'transparent', border: 0, padding: 0, cursor: 'pointer' }}
+              title="forget auth token"
+            >
+              unpair
+            </button>
+          )}
           <a href="/config" style={{ fontSize: 12, color: '#9ca3af', textDecoration: 'none' }}>⚙ config</a>
           <span style={{ fontSize: 12, color: statusColor }}>{statusLabel}</span>
         </div>
@@ -81,6 +111,19 @@ export function GridApp() {
         >
           {url} ✎
         </button>
+      )}
+
+      {preview && (
+        <PreviewBanner
+          title={preview.title}
+          onExit={handleExitPreview}
+          onApply={handleApplyPreview}
+        />
+      )}
+      {previewError && (
+        <div style={{ background: '#7f1d1d', color: '#fee2e2', padding: 10, borderRadius: 6, fontSize: 12 }}>
+          {previewError}
+        </div>
       )}
 
       <ButtonGrid

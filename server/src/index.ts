@@ -15,15 +15,18 @@ import { computeButtonStates, type ButtonState } from './states.js';
 import { startTray, stopTray } from './tray.js';
 import { spawn } from 'node:child_process';
 import type { Layout, PublicLayout } from './layout.js';
+import {
+  getPreview, previewInfo, setPreviewListener, startPreviewWatchdog,
+} from './templates.js';
 
 const PORT = 8765;
 
 type ClientMsg =
-  | { type: 'press'; id: number }
+  | { type: 'press'; id: number; longPress?: boolean }
   | { type: 'slider'; id: number; value: number }
   | { type: 'slider-mute'; id: number };
 type ServerMsg =
-  | { type: 'layout'; layout: PublicLayout }
+  | { type: 'layout'; layout: PublicLayout; preview?: { name: string; title: string } }
   | { type: 'ack'; id: number }
   | { type: 'states'; states: ButtonState[] };
 
@@ -52,8 +55,17 @@ streamers.start();
 const mic = getMic();
 mic.start();
 
+function activeLayout(): Layout { return getPreview()?.layout ?? layout; }
+
 const httpServer = createServer((req, res) => {
-  handleRequest(req, res, { getLayout: () => layout, getServerConfig: () => serverConfig })
+  handleRequest(req, res, {
+    getLayout: () => layout,
+    getServerConfig: () => serverConfig,
+    onLayoutChanged: async () => {
+      broadcastLayout();
+      scheduleStateBroadcast();
+    },
+  })
     .catch((err) => {
       console.error('http handler error:', err);
       if (!res.headersSent) {
@@ -76,14 +88,18 @@ const wss = new WebSocketServer({
 });
 
 function broadcastLayout() {
-  const data = JSON.stringify({ type: 'layout', layout: toPublic(layout) } satisfies ServerMsg);
+  const info = previewInfo();
+  const msg: ServerMsg = info
+    ? { type: 'layout', layout: toPublic(activeLayout()), preview: info }
+    : { type: 'layout', layout: toPublic(activeLayout()) };
+  const data = JSON.stringify(msg);
   for (const ws of wss.clients) {
     if (ws.readyState === ws.OPEN) ws.send(data);
   }
 }
 
 function broadcastStates() {
-  const states = computeButtonStates(layout, obs.status(), twitch.status());
+  const states = computeButtonStates(activeLayout(), obs.status(), twitch.status());
   const data = JSON.stringify({ type: 'states', states } satisfies ServerMsg);
   for (const ws of wss.clients) {
     if (ws.readyState === ws.OPEN) ws.send(data);
@@ -120,29 +136,41 @@ watchLayout(async () => {
 
 wss.on('connection', (ws: WebSocket) => {
   console.log('[+] client connected');
-  ws.send(JSON.stringify({ type: 'layout', layout: toPublic(layout) } satisfies ServerMsg));
+  const info = previewInfo();
+  ws.send(JSON.stringify(info
+    ? { type: 'layout', layout: toPublic(activeLayout()), preview: info }
+    : { type: 'layout', layout: toPublic(activeLayout()) }
+  ));
   ws.send(JSON.stringify({
     type: 'states',
-    states: computeButtonStates(layout, obs.status(), twitch.status()),
+    states: computeButtonStates(activeLayout(), obs.status(), twitch.status()),
   } satisfies ServerMsg));
 
   ws.on('message', async (data) => {
     let msg: ClientMsg;
     try { msg = JSON.parse(data.toString()); } catch { return; }
 
-    const tile = findTile(layout, msg.id);
+    const tile = findTile(activeLayout(), msg.id);
     if (!tile) {
       console.warn(`unknown tile id: ${msg.id}`);
       return;
     }
 
+    const previewing = !!getPreview();
+
     if (msg.type === 'press') {
       if (tile.kind !== 'button') return; // sliders don't accept press
-      const action = tile.action;
+      if (previewing) {
+        console.log(`    [preview] press [${tile.id}] "${tile.label}" (no-op)`);
+        ws.send(JSON.stringify({ type: 'ack', id: msg.id } satisfies ServerMsg));
+        return;
+      }
+      const action = msg.longPress && tile.longPressAction ? tile.longPressAction : tile.action;
       const actionLabel = Array.isArray(action)
         ? `[${action.length} steps: ${action.map((s) => s.type).join(' → ')}]`
         : action.type;
-      console.log(`    press [${tile.id}] "${tile.label}" → ${actionLabel}`);
+      const which = msg.longPress && tile.longPressAction ? 'long-press' : 'press';
+      console.log(`    ${which} [${tile.id}] "${tile.label}" → ${actionLabel}`);
       try {
         await executeAction(action);
         ws.send(JSON.stringify({ type: 'ack', id: msg.id } satisfies ServerMsg));
@@ -154,6 +182,7 @@ wss.on('connection', (ws: WebSocket) => {
 
     if (msg.type === 'slider') {
       if (tile.kind !== 'slider') return;
+      if (previewing) return; // no-op during preview
       try {
         await obs.setInputVolume(tile.inputName, msg.value);
       } catch (err) {
@@ -164,6 +193,7 @@ wss.on('connection', (ws: WebSocket) => {
 
     if (msg.type === 'slider-mute') {
       if (tile.kind !== 'slider') return;
+      if (previewing) return; // no-op during preview
       try {
         await obs.execute('toggle-mute', { inputName: tile.inputName });
       } catch (err) {
@@ -175,6 +205,12 @@ wss.on('connection', (ws: WebSocket) => {
 
   ws.on('close', () => console.log('[-] client disconnected'));
 });
+
+setPreviewListener(() => {
+  broadcastLayout();
+  scheduleStateBroadcast();
+});
+startPreviewWatchdog();
 
 httpServer.listen(PORT, () => {
   console.log(`digi-deck server listening on :${PORT}`);

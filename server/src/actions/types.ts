@@ -22,7 +22,8 @@ export type Action =
   | { type: 'obs'; op: ObsOp; params?: ObsActionParams }
   | { type: 'twitch'; op: TwitchOp; text: string }
   | { type: 'twitch-streamer'; login: string }
-  | { type: 'goto-page'; pageId: number };
+  | { type: 'goto-page'; pageId: number }
+  | { type: 'wait'; ms: number };
 
 /** A button's action is either a single step or an ordered sequence. */
 export type ButtonAction = Action | Action[];
@@ -46,6 +47,8 @@ async function executeStep(step: Action): Promise<void> {
     case 'goto-page':
       // Navigation is handled entirely on the phone — server has nothing to do.
       return;
+    case 'wait':
+      return new Promise((resolve) => setTimeout(resolve, Math.max(0, step.ms)));
   }
 }
 
