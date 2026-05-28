@@ -208,6 +208,10 @@ Each button is `{ id, label, icon?, action }`. Action shapes:
 { "type": "obs", "op": "toggle-record" }
 { "type": "obs", "op": "set-scene", "params": { "sceneName": "Gameplay" } }
 
+// Streamlabs Desktop — see the Streamlabs section below for all `op` values.
+{ "type": "streamlabs", "op": "toggle-record" }
+{ "type": "streamlabs", "op": "set-scene", "params": { "sceneName": "Gameplay" } }
+
 // Twitch chat.
 { "type": "twitch", "op": "chat", "text": "!website" }
 
@@ -268,11 +272,27 @@ Action types you can bind: toggle/start/stop recording, toggle/start/stop stream
 
 Live state on the phone: recording / streaming / virtual cam / scene-active / muted buttons show a blue dot, source-visible buttons show a green dot, and any OBS button is dimmed with an "offline" pip if OBS isn't connected.
 
-> **Note:** this integration speaks the `obs-websocket` v5 protocol bundled with **OBS Studio 28+**. It does **not** work with **Streamlabs Desktop** (formerly Streamlabs OBS), which uses a separate remote-control protocol.
+> **Note:** this integration speaks the `obs-websocket` v5 protocol bundled with **OBS Studio 28+**. If you run **Streamlabs Desktop** instead, use the *Streamlabs Desktop* integration below — it speaks Streamlabs' own JSON-RPC protocol and lives entirely separately from OBS.
 
 ### Audio mixer slider tiles
 
 The config UI's *+ add slider* button creates a slider tile bound to one OBS audio input. The tile renders as a horizontal fader with an integrated mute button — drag to set the volume, tap the speaker icon to toggle mute. The slider colour goes gray when the input is muted, and the percentage display switches to `muted`. Volume changes made from OBS itself (e.g. via the desktop mixer) push back to the phone within ~200 ms.
+
+---
+
+## Streamlabs Desktop integration
+
+A separate integration for Streamlabs Desktop users — OBS Studio and Streamlabs are completely isolated from each other; you can use one, the other, or neither. Status badged **EXPERIMENTAL** in the config UI until it gets more mileage; please file an issue if any op misbehaves on your Streamlabs build.
+
+In Streamlabs Desktop: *Settings → Remote Control → click QR Code → show details*. Copy the API token.
+
+In Digi Deck's config UI: expand the **Streamlabs Desktop** card, tick *Enable*, paste the token (host/port default to `127.0.0.1:59650`), click *Save & reconnect*.
+
+Action types you can bind: toggle/start/stop recording, toggle/start/stop streaming, switch scene (dropdown of your scenes), toggle audio source mute (dropdown of your audio sources).
+
+Live state on the phone: recording / streaming / scene-active / muted buttons light up with a blue dot, and any Streamlabs button is dimmed with an "offline" pip if Streamlabs isn't connected. The integration auto-reconnects every 5 seconds for up to 5 minutes, then surfaces a manual *retry* button in the card.
+
+What's intentionally not exposed yet (vs OBS): virtual camera toggle, replay buffer, per-scene source visibility, audio mixer sliders. Add them as needed — the protocol supports each of these on most Streamlabs builds.
 
 ---
 
@@ -311,16 +331,18 @@ digi-deck/
 │   │   ├── mdns.ts                    Bonjour service advertisement
 │   │   ├── tray.ts                    spawns hidden PowerShell NotifyIcon
 │   │   ├── states.ts                  computes per-button live state for the phone
+│   │   ├── updates.ts                 GitHub-based "check for updates" comparator
 │   │   ├── actions/                   one file per action type
-│   │   └── integrations/              obs.ts, twitch.ts
+│   │   └── integrations/              obs.ts, streamlabs.ts, twitch.ts
 │   └── package.json
 ├── client/                            ← Vite + React PWA (port 5173)
 │   ├── src/
 │   │   ├── GridApp.tsx                phone grid view
 │   │   ├── ConfigApp.tsx              PC config view
 │   │   ├── ws.ts                      WebSocket hook
-│   │   ├── components/                ButtonGrid, ConfigRow, ActionEditor,
-│   │   │                              ImagePicker, TemplatesPanel, PreviewBanner, etc.
+│   │   ├── components/                ButtonGrid, ConfigRow, ActionEditor, ObsPanel,
+│   │   │                              StreamlabsPanel, TwitchPanel, ImagePicker,
+│   │   │                              TemplatesPanel, PreviewBanner, etc.
 │   │   └── lib/                       icons, api, types, token
 │   └── package.json
 ├── start.ps1                          launcher used by the desktop shortcut
