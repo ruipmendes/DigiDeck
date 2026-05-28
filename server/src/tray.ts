@@ -5,6 +5,7 @@ export type TrayActions = {
   onReload: () => Promise<void> | void;
   onRestartObs: () => Promise<void> | void;
   onRestartTwitch: () => Promise<void> | void;
+  onCheckForUpdates: () => Promise<void> | void;
   onQuit: () => Promise<void> | void;
 };
 
@@ -37,6 +38,11 @@ $obsItem.Add_Click({ Send-Cmd 'RESTART_OBS' })
 
 $twitchItem = $menu.Items.Add('Restart Twitch connection')
 $twitchItem.Add_Click({ Send-Cmd 'RESTART_TWITCH' })
+
+[void]$menu.Items.Add('-')
+
+$updateItem = $menu.Items.Add('Check for updates')
+$updateItem.Add_Click({ Send-Cmd 'CHECK_UPDATES' })
 
 [void]$menu.Items.Add('-')
 
@@ -113,6 +119,7 @@ async function dispatch(cmd: string, actions: TrayActions): Promise<void> {
       case 'RELOAD':         await actions.onReload(); break;
       case 'RESTART_OBS':    await actions.onRestartObs(); break;
       case 'RESTART_TWITCH': await actions.onRestartTwitch(); break;
+      case 'CHECK_UPDATES':  await actions.onCheckForUpdates(); break;
       case 'QUIT':           await actions.onQuit(); break;
       default:               console.warn(`[tray] unknown command: ${cmd}`);
     }

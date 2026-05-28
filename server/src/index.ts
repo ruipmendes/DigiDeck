@@ -18,6 +18,7 @@ import type { Layout, PublicLayout } from './layout.js';
 import {
   getPreview, previewInfo, setPreviewListener, startPreviewWatchdog,
 } from './templates.js';
+import { checkForUpdate, type UpdateCheck } from './updates.js';
 
 const PORT = 8765;
 
@@ -241,11 +242,77 @@ startTray({
     console.log('[tray] restarting Twitch connection');
     await twitch.restart();
   },
+  onCheckForUpdates: async () => {
+    console.log('[tray] checking for updates');
+    const result = await checkForUpdate();
+    showUpdateDialog(result);
+  },
   onQuit: async () => {
     console.log('[tray] quit requested');
     await shutdown();
   },
 });
+
+function showUpdateDialog(result: UpdateCheck): void {
+  const { title, body, openRepo, icon } = renderUpdateDialog(result);
+  const psLines: string[] = [
+    "Add-Type -AssemblyName System.Windows.Forms",
+    `$buttons = [System.Windows.Forms.MessageBoxButtons]::${openRepo ? 'YesNo' : 'OK'}`,
+    `$icon = [System.Windows.Forms.MessageBoxIcon]::${icon}`,
+    `$result = [System.Windows.Forms.MessageBox]::Show(${psString(body)}, ${psString(title)}, $buttons, $icon)`,
+  ];
+  if (openRepo) {
+    psLines.push(`if ($result -eq [System.Windows.Forms.DialogResult]::Yes) { Start-Process ${psString(result.repoUrl)} }`);
+  }
+  const script = psLines.join('\n');
+  const encoded = Buffer.from(script, 'utf16le').toString('base64');
+  spawn('powershell.exe', ['-NoProfile', '-WindowStyle', 'Hidden', '-EncodedCommand', encoded], {
+    stdio: 'ignore',
+    windowsHide: true,
+    detached: true,
+  }).unref();
+}
+
+function renderUpdateDialog(r: UpdateCheck): { title: string; body: string; openRepo: boolean; icon: 'Information' | 'Warning' | 'Error' } {
+  switch (r.status) {
+    case 'up-to-date':
+      return {
+        title: 'Digi Deck — Up to date',
+        body: `You're on the latest version.\n\nCommit: ${r.localSha.slice(0, 7)}`,
+        openRepo: false,
+        icon: 'Information',
+      };
+    case 'update-available': {
+      const aheadLine = r.ahead != null ? `${r.ahead} new commit${r.ahead === 1 ? '' : 's'} available.\n\n` : 'A new commit is available.\n\n';
+      const localLine = r.localSha ? `Local:  ${r.localSha.slice(0, 7)}\n` : '';
+      return {
+        title: 'Digi Deck — Update available',
+        body: `${aheadLine}${localLine}Remote: ${r.remoteSha.slice(0, 7)}\n\nOpen GitHub to download the update?`,
+        openRepo: true,
+        icon: 'Information',
+      };
+    }
+    case 'unknown-local':
+      return {
+        title: 'Digi Deck — Update check',
+        body: `Couldn't determine the local version. The remote latest is ${r.remoteSha.slice(0, 7)}.\n\nOpen GitHub to see what's new?`,
+        openRepo: true,
+        icon: 'Warning',
+      };
+    case 'error':
+      return {
+        title: 'Digi Deck — Update check failed',
+        body: `Couldn't reach GitHub:\n${r.message}`,
+        openRepo: false,
+        icon: 'Error',
+      };
+  }
+}
+
+function psString(s: string): string {
+  // Single-quoted PowerShell string with `'` doubled per PS escaping rules.
+  return `'${s.replace(/'/g, "''")}'`;
+}
 
 async function shutdown() {
   stopTray();

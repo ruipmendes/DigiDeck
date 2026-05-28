@@ -82,7 +82,32 @@ try {
   try { npm install --no-audit --no-fund } finally { Pop-Location }
   Write-Ok 'Client deps installed'
 
-  # ─── 5. Desktop shortcut ────────────────────────────────────────
+  # ─── 5. Version stamp (best effort) ─────────────────────────────
+  Write-Step 'Recording installed version'
+  $sha = $null
+  try {
+    Push-Location $root
+    $gitSha = git rev-parse HEAD 2>$null
+    Pop-Location
+    if ($LASTEXITCODE -eq 0 -and $gitSha -match '^[a-f0-9]{40}$') {
+      $sha = $gitSha
+    }
+  } catch { Pop-Location -ErrorAction SilentlyContinue }
+  if (-not $sha) {
+    try {
+      $headers = @{ 'Accept' = 'application/vnd.github+json'; 'User-Agent' = 'digi-deck-installer' }
+      $resp = Invoke-RestMethod -Uri 'https://api.github.com/repos/ruipmendes/DigiDeck/commits/main' -Headers $headers -ErrorAction Stop
+      if ($resp.sha -match '^[a-f0-9]{40}$') { $sha = $resp.sha }
+    } catch { }
+  }
+  if ($sha) {
+    Set-Content -Path (Join-Path $root '.digi-deck-version') -Value $sha -Encoding ASCII -NoNewline
+    Write-Ok "Recorded SHA: $($sha.Substring(0,7))"
+  } else {
+    Write-Warn 'Could not determine current commit (no git, GitHub unreachable, or repo private). Update check will say "unknown local version".'
+  }
+
+  # ─── 6. Desktop shortcut ────────────────────────────────────────
   Write-Step 'Creating desktop shortcut'
   $desktop  = [Environment]::GetFolderPath('Desktop')
   $lnkPath  = Join-Path $desktop 'Digi Deck.lnk'
@@ -98,7 +123,7 @@ try {
   $shortcut.Save()
   Write-Ok "Shortcut: $lnkPath"
 
-  # ─── 6. Optional launch ─────────────────────────────────────────
+  # ─── 7. Optional launch ─────────────────────────────────────────
   Write-Host ''
   Write-Host 'Install complete.' -ForegroundColor Green
   Write-Host ''
