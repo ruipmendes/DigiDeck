@@ -288,11 +288,11 @@ In Streamlabs Desktop: *Settings → Remote Control → click QR Code → show d
 
 In Digi Deck's config UI: expand the **Streamlabs Desktop** card, tick *Enable*, paste the token (host/port default to `127.0.0.1:59650`), click *Save & reconnect*.
 
-Action types you can bind: toggle/start/stop recording, toggle/start/stop streaming, switch scene (dropdown of your scenes), toggle audio source mute (dropdown of your audio sources).
+Action types you can bind: toggle/start/stop recording, toggle/start/stop streaming, toggle virtual camera, toggle/save replay buffer, switch scene (dropdown of your scenes), toggle audio source mute (dropdown of your audio sources), toggle source visibility in a scene (dropdown of scene → sources in that scene).
 
-Live state on the phone: recording / streaming / scene-active / muted buttons light up with a blue dot, and any Streamlabs button is dimmed with an "offline" pip if Streamlabs isn't connected. The integration auto-reconnects every 5 seconds for up to 5 minutes, then surfaces a manual *retry* button in the card.
+Live state on the phone: recording / streaming / virtual cam / replay buffer / scene-active / muted buttons light up with a blue dot, source-visible buttons show a green dot, and any Streamlabs button is dimmed with an "offline" pip if Streamlabs isn't connected. The integration auto-reconnects every 5 seconds for up to 5 minutes, then surfaces a manual *retry* button in the card.
 
-What's intentionally not exposed yet (vs OBS): virtual camera toggle, replay buffer, per-scene source visibility, audio mixer sliders. Add them as needed — the protocol supports each of these on most Streamlabs builds.
+The only OBS feature not yet on Streamlabs is the **audio mixer slider tile** — slider tiles currently target OBS exclusively. Adding Streamlabs sliders needs a small schema change (a `provider` field on slider tiles) so they're held back for a separate decision.
 
 ---
 

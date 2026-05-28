@@ -232,9 +232,13 @@ export type StreamlabsStatus = {
   error?: string;
   scenes: string[];
   inputs: string[];
+  sceneItems: Record<string, string[]>;
+  sourceStates: Record<string, boolean>;
   currentScene?: string;
   recording: boolean;
   streaming: boolean;
+  virtualCam: boolean;
+  replayBuffer: boolean;
   mutedInputs: string[];
   retryStopped: boolean;
 };

@@ -14,10 +14,13 @@ export type MicOp = 'toggle-mute' | 'mute' | 'unmute';
 export type StreamlabsOp =
   | 'toggle-record' | 'start-record' | 'stop-record'
   | 'toggle-stream' | 'start-stream' | 'stop-stream'
+  | 'toggle-virtual-cam'
+  | 'toggle-replay-buffer' | 'save-replay-buffer'
   | 'set-scene'
-  | 'toggle-mute';
+  | 'toggle-mute'
+  | 'toggle-source' | 'show-source' | 'hide-source';
 
-export type StreamlabsActionParams = { sceneName?: string; inputName?: string };
+export type StreamlabsActionParams = { sceneName?: string; inputName?: string; sourceName?: string };
 
 export type Action =
   | { type: 'hotkey'; keys: string[] }

@@ -132,6 +132,7 @@ function computeStepState(a: Action, obs: ObsStatus, twitch: TwitchStatus, strea
   if (a.type === 'streamlabs') {
     const unavailable = streamlabs.state !== 'connected';
     let active: boolean | undefined;
+    let kind: ButtonState['kind'];
     switch (a.op) {
       case 'toggle-record':
       case 'start-record':
@@ -143,14 +144,33 @@ function computeStepState(a: Action, obs: ObsStatus, twitch: TwitchStatus, strea
       case 'stop-stream':
         active = streamlabs.streaming;
         break;
+      case 'toggle-virtual-cam':
+        active = streamlabs.virtualCam;
+        break;
+      case 'toggle-replay-buffer':
+      case 'save-replay-buffer':
+        active = streamlabs.replayBuffer;
+        break;
       case 'set-scene':
         active = !!a.params?.sceneName && a.params.sceneName === streamlabs.currentScene;
         break;
       case 'toggle-mute':
         active = !!a.params?.inputName && streamlabs.mutedInputs.includes(a.params.inputName);
         break;
+      case 'toggle-source':
+      case 'show-source':
+      case 'hide-source':
+        if (a.params?.sceneName && a.params?.sourceName) {
+          const key = `${a.params.sceneName}::${a.params.sourceName}`;
+          const visible = streamlabs.sourceStates[key];
+          if (visible !== undefined) {
+            active = a.op === 'hide-source' ? !visible : visible;
+          }
+        }
+        kind = 'source';
+        break;
     }
-    return { active, unavailable };
+    return { active, kind, unavailable };
   }
 
   if (a.type === 'twitch') {
