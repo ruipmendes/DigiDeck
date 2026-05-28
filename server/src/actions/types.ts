@@ -6,6 +6,8 @@ import { execScript } from './script.js';
 import { execVolume } from './volume.js';
 import { getObs } from '../integrations/obs.js';
 import type { ObsOp, ObsActionParams } from '../integrations/obs.js';
+import { getStreamlabs } from '../integrations/streamlabs.js';
+import type { StreamlabsOp, StreamlabsActionParams } from '../integrations/streamlabs.js';
 import { getTwitch } from '../integrations/twitch.js';
 import type { TwitchOp } from '../integrations/twitch.js';
 import { getMic } from './mic.js';
@@ -20,6 +22,7 @@ export type Action =
   | { type: 'volume'; delta?: number; mute?: boolean }
   | { type: 'mic'; op: MicOp }
   | { type: 'obs'; op: ObsOp; params?: ObsActionParams }
+  | { type: 'streamlabs'; op: StreamlabsOp; params?: StreamlabsActionParams }
   | { type: 'twitch'; op: TwitchOp; text: string }
   | { type: 'twitch-streamer'; login: string }
   | { type: 'goto-page'; pageId: number }
@@ -39,6 +42,7 @@ async function executeStep(step: Action): Promise<void> {
     case 'volume': return execVolume({ delta: step.delta, mute: step.mute });
     case 'mic':    return getMic().execute(step.op);
     case 'obs':    return getObs().execute(step.op, step.params);
+    case 'streamlabs': return getStreamlabs().execute(step.op, step.params);
     case 'twitch': return getTwitch().execute(step.op, { text: step.text });
     case 'twitch-streamer':
       // Open the channel in the PC's default browser — same machine that's

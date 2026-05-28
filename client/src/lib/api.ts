@@ -223,6 +223,56 @@ export async function reconnectObs(): Promise<ObsState_API> {
   return res.json();
 }
 
+// ─── Streamlabs Desktop ─────────────────────────────────────────
+
+export type StreamlabsState = 'disabled' | 'connecting' | 'connected' | 'disconnected' | 'error';
+
+export type StreamlabsStatus = {
+  state: StreamlabsState;
+  error?: string;
+  scenes: string[];
+  inputs: string[];
+  currentScene?: string;
+  recording: boolean;
+  streaming: boolean;
+  mutedInputs: string[];
+  retryStopped: boolean;
+};
+
+export type StreamlabsPublicConfig = {
+  enabled: boolean;
+  host: string;
+  port: number;
+  hasToken: boolean;
+};
+
+export type StreamlabsState_API = { config: StreamlabsPublicConfig; status: StreamlabsStatus };
+
+export async function getStreamlabsState(): Promise<StreamlabsState_API> {
+  const res = await fetch('/api/integrations/streamlabs');
+  if (!res.ok) throw new Error(`GET /api/integrations/streamlabs failed: ${res.status}`);
+  return res.json();
+}
+
+export async function putStreamlabsConfig(c: { enabled: boolean; host: string; port: number; token?: string }): Promise<StreamlabsState_API> {
+  const res = await fetch('/api/integrations/streamlabs/config', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(c),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(body || `PUT streamlabs config failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function reconnectStreamlabs(): Promise<StreamlabsState_API> {
+  const res = await fetch('/api/integrations/streamlabs/reconnect', { method: 'POST' });
+  if (!res.ok) throw new Error(`reconnect failed: ${res.status}`);
+  return res.json();
+}
+
 export type TwitchState =
   | 'disabled' | 'not-configured' | 'needs-auth'
   | 'connecting' | 'connected' | 'disconnected' | 'error';

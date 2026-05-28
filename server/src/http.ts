@@ -5,6 +5,7 @@ import { saveLayout, validateLayout } from './layout.js';
 import { authorize, isLocalhost } from './auth.js';
 import { saveConfig, type ServerConfig } from './config.js';
 import { getObs, DEFAULT_OBS_CONFIG, type ObsConfig } from './integrations/obs.js';
+import { getStreamlabs, DEFAULT_STREAMLABS_CONFIG, type StreamlabsConfig } from './integrations/streamlabs.js';
 import { getTwitch, type TwitchConfig } from './integrations/twitch.js';
 import {
   saveImage, imagePath, imageExists, deleteImage, imageMime, MAX_IMAGE_BYTES,
@@ -236,6 +237,44 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse, c
     return;
   }
 
+  // ─── Streamlabs Desktop ───────────────────────────────────────
+  if (pathname === '/api/integrations/streamlabs' && req.method === 'GET') {
+    if (!authorize(req, token())) return unauthorized(res);
+    json(res, 200, {
+      config: publicStreamlabsConfig(ctx.getServerConfig().integrations.streamlabs),
+      status: getStreamlabs().status(),
+    });
+    return;
+  }
+  if (pathname === '/api/integrations/streamlabs/config' && req.method === 'PUT') {
+    if (!isLocalhost(req)) return unauthorized(res);
+    try {
+      const body = await readJsonBody(req);
+      const slCfg = validateStreamlabsConfig(body, ctx.getServerConfig().integrations.streamlabs);
+      const cfg = ctx.getServerConfig();
+      cfg.integrations.streamlabs = slCfg;
+      await saveConfig(cfg);
+      getStreamlabs().setConfig(slCfg);
+      await getStreamlabs().restart();
+      json(res, 200, {
+        config: publicStreamlabsConfig(cfg.integrations.streamlabs),
+        status: getStreamlabs().status(),
+      });
+    } catch (err) {
+      json(res, 400, { error: (err as Error).message });
+    }
+    return;
+  }
+  if (pathname === '/api/integrations/streamlabs/reconnect' && req.method === 'POST') {
+    if (!isLocalhost(req)) return unauthorized(res);
+    await getStreamlabs().restart();
+    json(res, 200, {
+      config: publicStreamlabsConfig(ctx.getServerConfig().integrations.streamlabs),
+      status: getStreamlabs().status(),
+    });
+    return;
+  }
+
   // ─── Twitch ───────────────────────────────────────────────────
   if (pathname === '/api/integrations/twitch' && req.method === 'GET') {
     if (!authorize(req, token())) return unauthorized(res);
@@ -353,6 +392,29 @@ function validateObsConfig(input: unknown): ObsConfig {
     host: typeof o.host === 'string' && o.host.trim() ? o.host.trim() : DEFAULT_OBS_CONFIG.host,
     port: typeof o.port === 'number' && o.port > 0 && o.port < 65536 ? Math.floor(o.port) : DEFAULT_OBS_CONFIG.port,
     password: typeof o.password === 'string' ? o.password : '',
+  };
+}
+
+type PublicStreamlabsConfig = { enabled: boolean; host: string; port: number; hasToken: boolean };
+
+function publicStreamlabsConfig(cfg: StreamlabsConfig): PublicStreamlabsConfig {
+  return {
+    enabled: cfg.enabled,
+    host: cfg.host,
+    port: cfg.port,
+    hasToken: !!cfg.token,
+  };
+}
+
+function validateStreamlabsConfig(input: unknown, existing: StreamlabsConfig): StreamlabsConfig {
+  if (!input || typeof input !== 'object') throw new Error('invalid Streamlabs config');
+  const o = input as Record<string, unknown>;
+  return {
+    enabled: !!o.enabled,
+    host: typeof o.host === 'string' && o.host.trim() ? o.host.trim() : DEFAULT_STREAMLABS_CONFIG.host,
+    port: typeof o.port === 'number' && o.port > 0 && o.port < 65536 ? Math.floor(o.port) : DEFAULT_STREAMLABS_CONFIG.port,
+    // If `token` is omitted or empty, keep the existing one — UI never echoes the token back.
+    token: typeof o.token === 'string' && o.token.length > 0 ? o.token : existing.token,
   };
 }
 

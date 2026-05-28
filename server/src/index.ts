@@ -8,6 +8,7 @@ import { authorize, isLocalhost } from './auth.js';
 import { startMdns, stopMdns } from './mdns.js';
 import { migrateAppData } from './migrations.js';
 import { getObs } from './integrations/obs.js';
+import { getStreamlabs } from './integrations/streamlabs.js';
 import { getTwitch } from './integrations/twitch.js';
 import { getStreamers } from './integrations/twitch-streamers.js';
 import { getMic } from './actions/mic.js';
@@ -40,6 +41,10 @@ console.log(`config: ${CONFIG_FILE} (token loaded)`);
 const obs = getObs();
 obs.setConfig(serverConfig.integrations.obs);
 void obs.start();
+
+const streamlabs = getStreamlabs();
+streamlabs.setConfig(serverConfig.integrations.streamlabs);
+void streamlabs.start();
 
 const twitch = getTwitch();
 twitch.setConfig(serverConfig.integrations.twitch);
@@ -100,7 +105,7 @@ function broadcastLayout() {
 }
 
 function broadcastStates() {
-  const states = computeButtonStates(activeLayout(), obs.status(), twitch.status());
+  const states = computeButtonStates(activeLayout(), obs.status(), twitch.status(), streamlabs.status());
   const data = JSON.stringify({ type: 'states', states } satisfies ServerMsg);
   for (const ws of wss.clients) {
     if (ws.readyState === ws.OPEN) ws.send(data);
@@ -114,6 +119,7 @@ function scheduleStateBroadcast() {
 }
 
 obs.onChange(scheduleStateBroadcast);
+streamlabs.onChange(scheduleStateBroadcast);
 twitch.onChange(() => {
   scheduleStateBroadcast();
   // Twitch just reconnected — refresh streamer info so thumbnails appear without waiting a minute.
@@ -144,7 +150,7 @@ wss.on('connection', (ws: WebSocket) => {
   ));
   ws.send(JSON.stringify({
     type: 'states',
-    states: computeButtonStates(activeLayout(), obs.status(), twitch.status()),
+    states: computeButtonStates(activeLayout(), obs.status(), twitch.status(), streamlabs.status()),
   } satisfies ServerMsg));
 
   ws.on('message', async (data) => {
@@ -319,6 +325,7 @@ async function shutdown() {
   streamers.stop();
   mic.stop();
   await obs.stop();
+  await streamlabs.stop();
   await twitch.stop();
   stopMdns();
   httpServer.close();

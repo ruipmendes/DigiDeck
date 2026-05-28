@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { ArrowUp, ArrowDown, X, Plus } from 'lucide-react';
-import type { Action, ActionType, ButtonAction, MicOp, ObsOp } from '../lib/types';
+import type { Action, ActionType, ButtonAction, MicOp, ObsOp, StreamlabsOp } from '../lib/types';
 import { defaultAction } from '../lib/types';
 import * as api from '../lib/api';
 import { HotkeyInput } from './HotkeyInput';
 
 type PageRef = { id: number; name: string };
-export type IntegrationStatus = { obs: boolean; twitch: boolean };
+export type IntegrationStatus = { obs: boolean; twitch: boolean; streamlabs: boolean };
 
 type Props = {
   action: ButtonAction;
@@ -187,6 +187,7 @@ const ACTION_GROUPS: ActionGroup[] = [
     label: 'Streaming',
     options: [
       { value: 'obs',             label: 'OBS Studio' },
+      { value: 'streamlabs',      label: 'Streamlabs Desktop' },
       { value: 'twitch',          label: 'Twitch chat' },
       { value: 'twitch-streamer', label: 'Twitch streamer' },
     ],
@@ -218,6 +219,7 @@ function isActionTypeAvailable(type: ActionType, status: IntegrationStatus | und
   if (type === current) return true;
   if (!status) return true; // no status known yet → show everything
   if (type === 'obs') return status.obs;
+  if (type === 'streamlabs') return status.streamlabs;
   if (type === 'twitch' || type === 'twitch-streamer') return status.twitch;
   return true;
 }
@@ -355,6 +357,8 @@ function Body({ action, onChange, pages }: StepEditorProps) {
       );
     case 'obs':
       return <ObsBody action={action} onChange={onChange} />;
+    case 'streamlabs':
+      return <StreamlabsBody action={action} onChange={onChange} />;
     case 'twitch':
       return (
         <input
@@ -476,6 +480,54 @@ const OBS_OP_GROUPS: ObsOpGroup[] = [
 ];
 
 const OBS_OPS: ObsOpDef[] = OBS_OP_GROUPS.flatMap((g) => g.options);
+
+type StreamlabsNeeds = 'scene' | 'input' | null;
+const STREAMLABS_OPS: { value: StreamlabsOp; label: string; needs: StreamlabsNeeds }[] = [
+  { value: 'toggle-record', label: 'Toggle recording', needs: null },
+  { value: 'start-record',  label: 'Start recording',  needs: null },
+  { value: 'stop-record',   label: 'Stop recording',   needs: null },
+  { value: 'toggle-stream', label: 'Toggle stream',    needs: null },
+  { value: 'start-stream',  label: 'Start stream',     needs: null },
+  { value: 'stop-stream',   label: 'Stop stream',      needs: null },
+  { value: 'set-scene',     label: 'Switch to scene…', needs: 'scene' },
+  { value: 'toggle-mute',   label: 'Toggle mute…',     needs: 'input' },
+];
+
+function StreamlabsBody({ action, onChange }: { action: Extract<Action, { type: 'streamlabs' }>; onChange: (a: Action) => void }) {
+  const opMeta = STREAMLABS_OPS.find((o) => o.value === action.op);
+  const needs = opMeta?.needs ?? null;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <select
+        value={action.op}
+        onChange={(e) => onChange({ type: 'streamlabs', op: e.target.value as StreamlabsOp, params: action.params })}
+        style={selectStyle}
+      >
+        {STREAMLABS_OPS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+      {needs === 'scene' && (
+        <input
+          value={action.params?.sceneName ?? ''}
+          onChange={(e) => onChange({ ...action, params: { ...action.params, sceneName: e.target.value } })}
+          placeholder="scene name (as it appears in Streamlabs)"
+          style={inputStyle}
+        />
+      )}
+      {needs === 'input' && (
+        <input
+          value={action.params?.inputName ?? ''}
+          onChange={(e) => onChange({ ...action, params: { ...action.params, inputName: e.target.value } })}
+          placeholder="audio input name (e.g. Mic/Aux)"
+          style={inputStyle}
+        />
+      )}
+      <span style={{ fontSize: 11, color: '#f59e0b' }}>
+        Scaffolding only — taps to this action will fail until the Streamlabs protocol layer is wired up.
+      </span>
+    </div>
+  );
+}
 
 function ObsBody({ action, onChange }: { action: Extract<Action, { type: 'obs' }>; onChange: (a: Action) => void }) {
   const [snap, setSnap] = useState<{

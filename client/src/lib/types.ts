@@ -11,6 +11,14 @@ export type TwitchOp = 'chat';
 
 export type MicOp = 'toggle-mute' | 'mute' | 'unmute';
 
+export type StreamlabsOp =
+  | 'toggle-record' | 'start-record' | 'stop-record'
+  | 'toggle-stream' | 'start-stream' | 'stop-stream'
+  | 'set-scene'
+  | 'toggle-mute';
+
+export type StreamlabsActionParams = { sceneName?: string; inputName?: string };
+
 export type Action =
   | { type: 'hotkey'; keys: string[] }
   | { type: 'text'; text: string }
@@ -20,6 +28,7 @@ export type Action =
   | { type: 'volume'; delta?: number; mute?: boolean }
   | { type: 'mic'; op: MicOp }
   | { type: 'obs'; op: ObsOp; params?: ObsActionParams }
+  | { type: 'streamlabs'; op: StreamlabsOp; params?: StreamlabsActionParams }
   | { type: 'twitch'; op: TwitchOp; text: string }
   | { type: 'twitch-streamer'; login: string }
   | { type: 'goto-page'; pageId: number }
@@ -93,6 +102,7 @@ export function defaultAction(type: ActionType): Action {
     case 'volume': return { type: 'volume', delta: 2 };
     case 'mic':    return { type: 'mic', op: 'toggle-mute' };
     case 'obs':    return { type: 'obs', op: 'toggle-record' };
+    case 'streamlabs': return { type: 'streamlabs', op: 'toggle-record' };
     case 'twitch': return { type: 'twitch', op: 'chat', text: '' };
     case 'twitch-streamer': return { type: 'twitch-streamer', login: '' };
     case 'goto-page': return { type: 'goto-page', pageId: 0 };

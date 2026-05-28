@@ -1,6 +1,7 @@
 import type { Action } from './actions/types.js';
 import type { Tile, Layout } from './layout.js';
 import type { ObsStatus } from './integrations/obs.js';
+import type { StreamlabsStatus } from './integrations/streamlabs.js';
 import type { TwitchStatus } from './integrations/twitch.js';
 import { getStreamers } from './integrations/twitch-streamers.js';
 import { getMic } from './actions/mic.js';
@@ -25,18 +26,19 @@ export function computeButtonStates(
   layout: Layout,
   obs: ObsStatus,
   twitch: TwitchStatus,
+  streamlabs: StreamlabsStatus,
 ): ButtonState[] {
   const out: ButtonState[] = [];
   for (const page of layout.pages) {
     for (const tile of page.buttons) {
-      const s = computeOne(tile, obs, twitch);
+      const s = computeOne(tile, obs, twitch, streamlabs);
       if (s) out.push(s);
     }
   }
   return out;
 }
 
-function computeOne(t: Tile, obs: ObsStatus, twitch: TwitchStatus): ButtonState | null {
+function computeOne(t: Tile, obs: ObsStatus, twitch: TwitchStatus, streamlabs: StreamlabsStatus): ButtonState | null {
   if (t.kind === 'slider') {
     if (obs.state !== 'connected') return { id: t.id, unavailable: true };
     const value = obs.inputVolumes[t.inputName];
@@ -54,7 +56,7 @@ function computeOne(t: Tile, obs: ObsStatus, twitch: TwitchStatus): ButtonState 
   let live: boolean | undefined;
 
   for (const step of steps) {
-    const s = computeStepState(step, obs, twitch);
+    const s = computeStepState(step, obs, twitch, streamlabs);
     if (!s) continue;
     if (s.unavailable) unavailable = true;
     if (active === undefined && s.active !== undefined) {
@@ -86,7 +88,7 @@ type StepState = {
   live?: boolean;
 };
 
-function computeStepState(a: Action, obs: ObsStatus, twitch: TwitchStatus): StepState | null {
+function computeStepState(a: Action, obs: ObsStatus, twitch: TwitchStatus, streamlabs: StreamlabsStatus): StepState | null {
   if (a.type === 'obs') {
     const unavailable = obs.state !== 'connected';
     let active: boolean | undefined;
@@ -125,6 +127,30 @@ function computeStepState(a: Action, obs: ObsStatus, twitch: TwitchStatus): Step
         break;
     }
     return { active, kind, unavailable };
+  }
+
+  if (a.type === 'streamlabs') {
+    const unavailable = streamlabs.state !== 'connected';
+    let active: boolean | undefined;
+    switch (a.op) {
+      case 'toggle-record':
+      case 'start-record':
+      case 'stop-record':
+        active = streamlabs.recording;
+        break;
+      case 'toggle-stream':
+      case 'start-stream':
+      case 'stop-stream':
+        active = streamlabs.streaming;
+        break;
+      case 'set-scene':
+        active = !!a.params?.sceneName && a.params.sceneName === streamlabs.currentScene;
+        break;
+      case 'toggle-mute':
+        active = !!a.params?.inputName && streamlabs.mutedInputs.includes(a.params.inputName);
+        break;
+    }
+    return { active, unavailable };
   }
 
   if (a.type === 'twitch') {

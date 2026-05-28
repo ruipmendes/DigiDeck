@@ -215,7 +215,7 @@ export function watchLayout(onChange: () => void): () => void {
   return () => w.close();
 }
 
-const VALID_ACTION_TYPES = new Set(['hotkey', 'text', 'launch', 'url', 'script', 'volume', 'mic', 'obs', 'twitch', 'twitch-streamer', 'goto-page', 'wait']);
+const VALID_ACTION_TYPES = new Set(['hotkey', 'text', 'launch', 'url', 'script', 'volume', 'mic', 'obs', 'streamlabs', 'twitch', 'twitch-streamer', 'goto-page', 'wait']);
 
 export function validateLayout(input: unknown): Layout {
   if (!input || typeof input !== 'object') throw new Error('layout must be an object');

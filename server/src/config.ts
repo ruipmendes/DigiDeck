@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { DEFAULT_OBS_CONFIG, type ObsConfig } from './integrations/obs.js';
 import { DEFAULT_TWITCH_CONFIG, type TwitchConfig } from './integrations/twitch.js';
+import { DEFAULT_STREAMLABS_CONFIG, type StreamlabsConfig } from './integrations/streamlabs.js';
 
 const APP_DIR = join(
   process.env.APPDATA ?? join(process.env.USERPROFILE ?? '.', 'AppData', 'Roaming'),
@@ -13,6 +14,7 @@ export const CONFIG_FILE = join(APP_DIR, 'config.json');
 export type IntegrationsConfig = {
   obs: ObsConfig;
   twitch: TwitchConfig;
+  streamlabs: StreamlabsConfig;
 };
 
 export type ServerConfig = {
@@ -27,8 +29,9 @@ function withDefaults(parsed: Partial<ServerConfig> | null | undefined): ServerC
   return {
     token,
     integrations: {
-      obs:    { ...DEFAULT_OBS_CONFIG,    ...parsed?.integrations?.obs },
-      twitch: { ...DEFAULT_TWITCH_CONFIG, ...parsed?.integrations?.twitch },
+      obs:        { ...DEFAULT_OBS_CONFIG,        ...parsed?.integrations?.obs },
+      twitch:     { ...DEFAULT_TWITCH_CONFIG,     ...parsed?.integrations?.twitch },
+      streamlabs: { ...DEFAULT_STREAMLABS_CONFIG, ...parsed?.integrations?.streamlabs },
     },
   };
 }

@@ -9,7 +9,7 @@ import { IconPicker } from './IconPicker';
 import { ImagePicker } from './ImagePicker';
 import * as api from '../lib/api';
 
-export type IntegrationStatus = { obs: boolean; twitch: boolean };
+export type IntegrationStatus = { obs: boolean; twitch: boolean; streamlabs: boolean };
 
 type Props = {
   button: Tile;
