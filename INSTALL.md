@@ -2,6 +2,8 @@
 
 A ~10 minute setup, no programming knowledge required. Follow each step in order.
 
+> **Shortcut: just double-click `install.bat`** in the unzipped folder. It handles Node.js (via winget), installs the server + client, creates the desktop shortcut, and offers to launch. If that works, skip to **Step 6 — Pair your phone**. The steps below are the manual alternative.
+
 ## What you need
 
 - Windows 10 or 11
