@@ -9,17 +9,20 @@ import { IconPicker } from './IconPicker';
 import { ImagePicker } from './ImagePicker';
 import * as api from '../lib/api';
 
+export type IntegrationStatus = { obs: boolean; twitch: boolean };
+
 type Props = {
   button: Tile;
   pages: Page[];
   currentPageId: number;
   layout: Layout;
+  integrationStatus: IntegrationStatus;
   onChange: (patch: Partial<Tile>) => void;
   onDelete: () => void;
   onMove: (toPageId: number) => void;
 };
 
-export function ConfigRow({ button, pages, currentPageId, layout, onChange, onDelete, onMove }: Props) {
+export function ConfigRow({ button, pages, currentPageId, layout, integrationStatus, onChange, onDelete, onMove }: Props) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: button.id });
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
@@ -103,11 +106,13 @@ export function ConfigRow({ button, pages, currentPageId, layout, onChange, onDe
               action={button.action}
               onChange={(action) => onChange({ action })}
               pages={pages.map((p) => ({ id: p.id, name: p.name }))}
+              integrationStatus={integrationStatus}
             />
             <LongPressEditor
               value={button.longPressAction}
               onChange={(longPressAction) => onChange({ longPressAction })}
               pages={pages.map((p) => ({ id: p.id, name: p.name }))}
+              integrationStatus={integrationStatus}
             />
           </>
         )}
@@ -215,9 +220,10 @@ type LongPressProps = {
   value: ButtonAction | undefined;
   onChange: (next: ButtonAction | undefined) => void;
   pages: { id: number; name: string }[];
+  integrationStatus: IntegrationStatus;
 };
 
-function LongPressEditor({ value, onChange, pages }: LongPressProps) {
+function LongPressEditor({ value, onChange, pages, integrationStatus }: LongPressProps) {
   const [open, setOpen] = useState(value !== undefined);
 
   if (!open && value === undefined) {
@@ -280,6 +286,7 @@ function LongPressEditor({ value, onChange, pages }: LongPressProps) {
         action={value ?? defaultAction('hotkey')}
         onChange={onChange}
         pages={pages}
+        integrationStatus={integrationStatus}
       />
     </div>
   );

@@ -27,7 +27,33 @@ export function ConfigApp() {
   const [pairingOpen, setPairingOpen] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [preview, setPreview] = useState<api.PreviewInfo | null>(null);
+  const [integrationStatus, setIntegrationStatus] = useState<{ obs: boolean; twitch: boolean }>({
+    obs: false,
+    twitch: false,
+  });
   const importInputRef = useRef<HTMLInputElement>(null);
+
+  // Poll integration availability so the action-type dropdown can hide types
+  // for integrations the user hasn't set up (or has explicitly disabled).
+  useEffect(() => {
+    let alive = true;
+    async function load() {
+      try {
+        const [obs, twitch] = await Promise.all([
+          api.getObsState().catch(() => null),
+          api.getTwitchState().catch(() => null),
+        ]);
+        if (!alive) return;
+        setIntegrationStatus({
+          obs: !!obs?.config.enabled,
+          twitch: !!twitch?.config.enabled,
+        });
+      } catch { /* harmless */ }
+    }
+    void load();
+    const t = setInterval(load, 5_000);
+    return () => { alive = false; clearInterval(t); };
+  }, []);
 
   // Pick up any preview that's already active when this tab opens.
   useEffect(() => {
@@ -396,6 +422,7 @@ export function ConfigApp() {
                         pages={layout.pages}
                         currentPageId={activePage.id}
                         layout={layout}
+                        integrationStatus={integrationStatus}
                         onChange={(patch) => updateButton(activePage.id, b.id, patch)}
                         onDelete={() => deleteButton(activePage.id, b.id)}
                         onMove={(to) => moveButton(b.id, activePage.id, to)}

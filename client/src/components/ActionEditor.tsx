@@ -6,9 +6,16 @@ import * as api from '../lib/api';
 import { HotkeyInput } from './HotkeyInput';
 
 type PageRef = { id: number; name: string };
-type Props = { action: ButtonAction; onChange: (a: ButtonAction) => void; pages?: PageRef[] };
+export type IntegrationStatus = { obs: boolean; twitch: boolean };
 
-export function ActionEditor({ action, onChange, pages }: Props) {
+type Props = {
+  action: ButtonAction;
+  onChange: (a: ButtonAction) => void;
+  pages?: PageRef[];
+  integrationStatus?: IntegrationStatus;
+};
+
+export function ActionEditor({ action, onChange, pages, integrationStatus }: Props) {
   const steps: Action[] = Array.isArray(action) ? action : [action];
 
   function commit(next: Action[]) {
@@ -42,7 +49,12 @@ export function ActionEditor({ action, onChange, pages }: Props) {
   if (steps.length === 1) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <ActionStepEditor action={steps[0]} onChange={(a) => updateStep(0, a)} pages={pages} />
+        <ActionStepEditor
+          action={steps[0]}
+          onChange={(a) => updateStep(0, a)}
+          pages={pages}
+          integrationStatus={integrationStatus}
+        />
         <button onClick={addStep} style={addStepBtnStyle} type="button">
           <Plus size={12} /> add step
         </button>
@@ -66,6 +78,7 @@ export function ActionEditor({ action, onChange, pages }: Props) {
           onMoveUp={() => moveStep(i, -1)}
           onMoveDown={() => moveStep(i, 1)}
           pages={pages}
+          integrationStatus={integrationStatus}
         />
       ))}
       <button onClick={addStep} style={addStepBtnStyle} type="button">
@@ -84,9 +97,10 @@ type StepCardProps = {
   onMoveUp: () => void;
   onMoveDown: () => void;
   pages?: PageRef[];
+  integrationStatus?: IntegrationStatus;
 };
 
-function StepCard({ index, total, step, onChange, onRemove, onMoveUp, onMoveDown, pages }: StepCardProps) {
+function StepCard({ index, total, step, onChange, onRemove, onMoveUp, onMoveDown, pages, integrationStatus }: StepCardProps) {
   return (
     <div
       style={{
@@ -112,7 +126,7 @@ function StepCard({ index, total, step, onChange, onRemove, onMoveUp, onMoveDown
       >
         {index + 1}
       </div>
-      <ActionStepEditor action={step} onChange={onChange} pages={pages} />
+      <ActionStepEditor action={step} onChange={onChange} pages={pages} integrationStatus={integrationStatus} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center' }}>
         <button
           type="button"
@@ -192,9 +206,30 @@ const MIC_OPS: { value: MicOp; label: string }[] = [
   { value: 'unmute',      label: 'Unmute mic' },
 ];
 
-type StepEditorProps = { action: Action; onChange: (a: Action) => void; pages?: PageRef[] };
+type StepEditorProps = {
+  action: Action;
+  onChange: (a: Action) => void;
+  pages?: PageRef[];
+  integrationStatus?: IntegrationStatus;
+};
 
-function ActionStepEditor({ action, onChange, pages }: StepEditorProps) {
+function isActionTypeAvailable(type: ActionType, status: IntegrationStatus | undefined, current: ActionType): boolean {
+  // Always keep the currently-selected type visible so users don't lose their setting.
+  if (type === current) return true;
+  if (!status) return true; // no status known yet → show everything
+  if (type === 'obs') return status.obs;
+  if (type === 'twitch' || type === 'twitch-streamer') return status.twitch;
+  return true;
+}
+
+function ActionStepEditor({ action, onChange, pages, integrationStatus }: StepEditorProps) {
+  const filteredGroups = ACTION_GROUPS
+    .map((g) => ({
+      ...g,
+      options: g.options.filter((o) => isActionTypeAvailable(o.value, integrationStatus, action.type)),
+    }))
+    .filter((g) => g.options.length > 0);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <select
@@ -202,7 +237,7 @@ function ActionStepEditor({ action, onChange, pages }: StepEditorProps) {
         onChange={(e) => onChange(defaultAction(e.target.value as ActionType))}
         style={selectStyle}
       >
-        {ACTION_GROUPS.map((g) => (
+        {filteredGroups.map((g) => (
           <optgroup key={g.label} label={g.label}>
             {g.options.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
           </optgroup>
