@@ -166,7 +166,7 @@ The auth token is stored in `%APPDATA%\digi-deck\config.json` on the PC and in y
 
 **Config UI** ([http://localhost:5173/config](http://localhost:5173/config)): drag the ≡ handle to reorder, click the icon to change it, edit label and action, click **Save**. Connected phones get the new layout within ~200 ms.
 
-**Pages**: group buttons into named tabs (e.g. "Home", "OBS", "Twitch"). Click *+ page* to add one; rename / icon / delete via the bar under the tabs. Each button has a *→ page* dropdown to move it between pages.
+**Pages**: group buttons into named tabs (e.g. "Home", "OBS", "Twitch"). Click *+ page* to add one; rename / icon / image / delete via the bar under the tabs, plus a `cols` selector (1–4) so each page can choose its own grid density. Each button has a *→ page* dropdown to move it between pages.
 
 **Navigation mode** (top of the config editor): pick *Tabs at top* or *Folders (back-stack)*.
 - **Tabs at top** (default): phone shows the page strip at the top; tapping a tab jumps directly to that page.
@@ -220,23 +220,41 @@ Each button is `{ id, label, icon?, action }`. Action shapes:
 // Go to a different page (folder navigation).
 // In Folders mode the phone pushes onto a back-stack; a Back tile appears in the grid.
 { "type": "goto-page", "pageId": 1 }
+
+// Pause between steps in a sequence (no effect as a standalone button).
+{ "type": "wait", "ms": 300 }
 ```
 
-**Multi-step sequences.** A button's `action` field also accepts an *array* of steps that run in order. The sequence aborts on the first failing step. In the config UI, click "+ add step" under any action to turn one button into a sequence; remove all extra steps to collapse back to a single action.
+**Multi-step sequences.** A button's `action` field also accepts an *array* of steps that run in order. The sequence aborts on the first failing step. In the config UI, click "+ add step" under any action to turn one button into a sequence; remove all extra steps to collapse back to a single action. Drop a `wait` step in between to space them out.
 
 ```jsonc
-// One button that starts a stream: switch scene, start recording, post to chat.
+// One button that starts a stream: switch scene, pause, start recording, post to chat.
 {
   "id": 99, "label": "Go live", "icon": "video",
   "action": [
     { "type": "obs",    "op": "set-scene", "params": { "sceneName": "Gameplay" } },
+    { "type": "wait",   "ms": 250 },
     { "type": "obs",    "op": "start-record" },
     { "type": "twitch", "op": "chat", "text": "!live" }
   ]
 }
 ```
 
+**Long-press secondary action.** Any button can have a second action fired by holding (~500 ms). The config UI surfaces it as an *add long-press action* button under the primary editor; the phone gives a stronger haptic when the hold threshold trips, then runs the secondary action instead of the primary. Buttons without a long-press action keep firing instantly on touch — no latency penalty.
+
+**Custom images.** Each tile and page can upload its own image (PNG, JPG, **GIF**, WebP). On the phone, button images render Stream Deck–style: full-bleed cover with the label overlaid; page images appear in the tab strip. Images are content-hashed and stored under `%APPDATA%\digi-deck\images\`.
+
 Common `keys` values: `LeftControl`, `RightControl`, `LeftShift`, `LeftAlt`, `LeftSuper` (Windows key), `A`–`Z`, `F1`–`F12`, `Space`, `Enter`, `Escape`, `Tab`, `AudioVolUp`, `AudioVolDown`, `AudioMute`, `AudioPlay`, `AudioNext`, `AudioPrev`. Full list: nut-js [`Key` enum](https://nutjs.dev/api/Key). In the config UI, you can also just click **record** and press the combo — no need to type the names.
+
+---
+
+## Templates, export and import
+
+**Templates**: click **Templates** in the config header to browse starter layouts (Stream Focused, Chat Commands, System Controls). Hit **Preview** on one and your phone (plus the PC's preview view) switches to it live — your saved layout is untouched. Presses are no-op during preview, so you can poke around without firing actions. Click **Apply** to make it permanent, or **Exit** to drop the preview and snap back to what you had.
+
+**Export**: the config header's **Export** button downloads a single `digi-deck-layout-<date>.json` containing your full layout *and* every uploaded image (base64). Good for backups and for sharing a layout with someone else.
+
+**Import**: **Import** in the header takes any bundle of that shape, replaces the current layout, and rehydrates the images on disk. Filenames are content-hashed on import so duplicates dedupe automatically.
 
 ---
 
@@ -283,6 +301,10 @@ digi-deck/
 │   ├── src/
 │   │   ├── index.ts                   entry, wires everything together
 │   │   ├── layout.ts                  load/save/watch/validate layout.json
+│   │   ├── layout-bundle.ts           export/import bundles with embedded images
+│   │   ├── images.ts                  upload/serve/delete uploaded button images
+│   │   ├── templates.ts               starter templates + live preview state
+│   │   ├── templates/                 shipped template bundles (.json)
 │   │   ├── config.ts                  load/save config.json (token + integrations)
 │   │   ├── auth.ts                    token check + localhost bypass
 │   │   ├── http.ts                    REST endpoints
@@ -297,7 +319,8 @@ digi-deck/
 │   │   ├── GridApp.tsx                phone grid view
 │   │   ├── ConfigApp.tsx              PC config view
 │   │   ├── ws.ts                      WebSocket hook
-│   │   ├── components/                ButtonGrid, ConfigRow, ActionEditor, etc.
+│   │   ├── components/                ButtonGrid, ConfigRow, ActionEditor,
+│   │   │                              ImagePicker, TemplatesPanel, PreviewBanner, etc.
 │   │   └── lib/                       icons, api, types, token
 │   └── package.json
 ├── start.ps1                          launcher used by the desktop shortcut
@@ -308,6 +331,7 @@ User data lives outside the project folder, in `%APPDATA%\digi-deck\`:
 
 - `config.json` — auth token + OBS settings + Twitch credentials/refresh token.
 - `layout.json` — your pages and buttons.
+- `images/` — content-hashed copies of every image you've uploaded for buttons or page tabs.
 
 You can copy this folder to another machine to migrate everything, or delete it to factory-reset.
 
@@ -315,7 +339,10 @@ You can copy this folder to another machine to migrate everything, or delete it 
 
 ## Possible next steps
 
-Spotify integration, custom themes, export/import layouts, long-press for secondary action.
+- Custom button and page colors.
+- Page background images.
+- More integrations — Spotify, Philips Hue, Discord.
+- Native mobile apps.
 
 ---
 
