@@ -494,6 +494,24 @@ const STREAMLABS_OPS: { value: StreamlabsOp; label: string; needs: StreamlabsNee
 ];
 
 function StreamlabsBody({ action, onChange }: { action: Extract<Action, { type: 'streamlabs' }>; onChange: (a: Action) => void }) {
+  const [snap, setSnap] = useState<{ scenes: string[]; inputs: string[]; connected: boolean } | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    function load() {
+      api.getStreamlabsState()
+        .then((d) => { if (alive) setSnap({
+          scenes: d.status.scenes,
+          inputs: d.status.inputs,
+          connected: d.status.state === 'connected',
+        }); })
+        .catch(() => { if (alive) setSnap({ scenes: [], inputs: [], connected: false }); });
+    }
+    load();
+    const t = setInterval(load, 4000);
+    return () => { alive = false; clearInterval(t); };
+  }, []);
+
   const opMeta = STREAMLABS_OPS.find((o) => o.value === action.op);
   const needs = opMeta?.needs ?? null;
 
@@ -507,24 +525,26 @@ function StreamlabsBody({ action, onChange }: { action: Extract<Action, { type: 
         {STREAMLABS_OPS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
       {needs === 'scene' && (
-        <input
+        <PickOrType
           value={action.params?.sceneName ?? ''}
-          onChange={(e) => onChange({ ...action, params: { ...action.params, sceneName: e.target.value } })}
-          placeholder="scene name (as it appears in Streamlabs)"
-          style={inputStyle}
+          options={snap?.scenes ?? []}
+          placeholder="scene name"
+          onChange={(v) => onChange({ ...action, params: { ...action.params, sceneName: v } })}
         />
       )}
       {needs === 'input' && (
-        <input
+        <PickOrType
           value={action.params?.inputName ?? ''}
-          onChange={(e) => onChange({ ...action, params: { ...action.params, inputName: e.target.value } })}
+          options={snap?.inputs ?? []}
           placeholder="audio input name (e.g. Mic/Aux)"
-          style={inputStyle}
+          onChange={(v) => onChange({ ...action, params: { ...action.params, inputName: v } })}
         />
       )}
-      <span style={{ fontSize: 11, color: '#f59e0b' }}>
-        Scaffolding only — taps to this action will fail until the Streamlabs protocol layer is wired up.
-      </span>
+      {snap && !snap.connected && needs && (
+        <span style={{ fontSize: 11, color: '#9ca3af' }}>
+          Streamlabs not connected — type names manually, or connect to pick from a list.
+        </span>
+      )}
     </div>
   );
 }

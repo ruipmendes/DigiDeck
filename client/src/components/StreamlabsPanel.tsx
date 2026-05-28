@@ -125,10 +125,6 @@ export function StreamlabsPanel() {
 
       {expanded && config && (
         <div style={{ marginTop: 14, marginLeft: 26, display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div style={{ fontSize: 12, color: '#f59e0b', background: '#451a03', border: '1px solid #78350f', borderRadius: 6, padding: 8, lineHeight: 1.5 }}>
-            Scaffolding only — the protocol layer isn't wired up yet. The card and action type are in place so the rest of the app already knows about Streamlabs; ops will start working in a follow-up commit.
-          </div>
-
           <label style={row}>
             <input
               type="checkbox"
