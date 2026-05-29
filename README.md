@@ -363,6 +363,7 @@ You can copy this folder to another machine to migrate everything, or delete it 
 
 - Custom button and page colors.
 - Page background images.
+- Audio mixer slider tiles for Streamlabs (sliders are OBS-only today).
 - More integrations — Spotify, Philips Hue, Discord.
 - Native mobile apps.
 
