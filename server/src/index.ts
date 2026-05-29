@@ -268,7 +268,7 @@ function showUpdateDialog(result: UpdateCheck): void {
     `$result = [System.Windows.Forms.MessageBox]::Show(${psString(body)}, ${psString(title)}, $buttons, $icon)`,
   ];
   if (openRepo) {
-    psLines.push(`if ($result -eq [System.Windows.Forms.DialogResult]::Yes) { Start-Process ${psString(result.repoUrl)} }`);
+    psLines.push(`if ($result -eq [System.Windows.Forms.DialogResult]::Yes) { Start-Process ${psString(result.url)} }`);
   }
   const script = psLines.join('\n');
   const encoded = Buffer.from(script, 'utf16le').toString('base64');
@@ -280,28 +280,43 @@ function showUpdateDialog(result: UpdateCheck): void {
 }
 
 function renderUpdateDialog(r: UpdateCheck): { title: string; body: string; openRepo: boolean; icon: 'Information' | 'Warning' | 'Error' } {
+  const releaseLabel = (tag: string | null) => tag ?? 'latest commit';
   switch (r.status) {
     case 'up-to-date':
       return {
         title: 'Digi Deck — Up to date',
-        body: `You're on the latest version.\n\nCommit: ${r.localSha.slice(0, 7)}`,
+        body: r.tag
+          ? `You're on the latest release: ${r.tag}.`
+          : `You're up to date with main.\n\nCommit: ${r.localSha.slice(0, 7)}`,
         openRepo: false,
         icon: 'Information',
       };
     case 'update-available': {
-      const aheadLine = r.ahead != null ? `${r.ahead} new commit${r.ahead === 1 ? '' : 's'} available.\n\n` : 'A new commit is available.\n\n';
-      const localLine = r.localSha ? `Local:  ${r.localSha.slice(0, 7)}\n` : '';
+      const headline = r.tag
+        ? `New release available: ${r.tag}.`
+        : 'New commits available on main.';
+      const aheadLine = r.ahead != null && r.ahead > 0
+        ? `\n\nYou're ${r.ahead} commit${r.ahead === 1 ? '' : 's'} behind.`
+        : '';
+      const localLine = r.localSha ? `\n\nLocal:  ${r.localSha.slice(0, 7)}` : '';
       return {
         title: 'Digi Deck — Update available',
-        body: `${aheadLine}${localLine}Remote: ${r.remoteSha.slice(0, 7)}\n\nOpen GitHub to download the update?`,
+        body: `${headline}${aheadLine}${localLine}\nRemote: ${r.remoteSha.slice(0, 7)}\n\nOpen GitHub to download the update?`,
         openRepo: true,
         icon: 'Information',
       };
     }
+    case 'dev-build':
+      return {
+        title: 'Digi Deck — Dev build',
+        body: `You're running ahead of the latest release (${releaseLabel(r.tag)}) by ${r.ahead} commit${r.ahead === 1 ? '' : 's'}.\n\nLocal:  ${r.localSha.slice(0, 7)}\nRelease: ${r.remoteSha.slice(0, 7)}\n\nNo update needed.`,
+        openRepo: false,
+        icon: 'Information',
+      };
     case 'unknown-local':
       return {
         title: 'Digi Deck — Update check',
-        body: `Couldn't determine the local version. The remote latest is ${r.remoteSha.slice(0, 7)}.\n\nOpen GitHub to see what's new?`,
+        body: `Couldn't determine the local version. The latest ${r.tag ? `release is ${r.tag}` : `commit is ${r.remoteSha.slice(0, 7)}`}.\n\nOpen GitHub to see what's new?`,
         openRepo: true,
         icon: 'Warning',
       };
