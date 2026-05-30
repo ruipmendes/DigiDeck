@@ -23,6 +23,8 @@ type Ctx = {
   getServerConfig: () => ServerConfig;
   /** Called when the layout file has been updated — re-broadcasts and refreshes state. */
   onLayoutChanged: () => Promise<void>;
+  /** Called when an integration's `enabled` flag may have changed — lets the tray refresh its menu. */
+  onIntegrationsChanged: () => void;
 };
 
 export async function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: Ctx): Promise<void> {
@@ -224,6 +226,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse, c
       await saveConfig(cfg);
       getObs().setConfig(obsCfg);
       await getObs().restart();
+      ctx.onIntegrationsChanged();
       json(res, 200, { config: cfg.integrations.obs, status: getObs().status() });
     } catch (err) {
       json(res, 400, { error: (err as Error).message });
@@ -256,6 +259,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse, c
       await saveConfig(cfg);
       getStreamlabs().setConfig(slCfg);
       await getStreamlabs().restart();
+      ctx.onIntegrationsChanged();
       json(res, 200, {
         config: publicStreamlabsConfig(cfg.integrations.streamlabs),
         status: getStreamlabs().status(),
@@ -298,6 +302,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse, c
       } else {
         await getTwitch().stop();
       }
+      ctx.onIntegrationsChanged();
       json(res, 200, {
         config: publicTwitchConfig(cfg.integrations.twitch),
         status: getTwitch().status(),

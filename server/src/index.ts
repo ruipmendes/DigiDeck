@@ -13,7 +13,7 @@ import { getTwitch } from './integrations/twitch.js';
 import { getStreamers } from './integrations/twitch-streamers.js';
 import { getMic } from './actions/mic.js';
 import { computeButtonStates, type ButtonState } from './states.js';
-import { startTray, stopTray } from './tray.js';
+import { startTray, stopTray, updateTrayMenu, type TrayMenu } from './tray.js';
 import { spawn } from 'node:child_process';
 import type { Layout, PublicLayout } from './layout.js';
 import {
@@ -63,6 +63,14 @@ mic.start();
 
 function activeLayout(): Layout { return getPreview()?.layout ?? layout; }
 
+function currentTrayMenu(): TrayMenu {
+  return {
+    obs:        !!serverConfig.integrations.obs.enabled,
+    streamlabs: !!serverConfig.integrations.streamlabs.enabled,
+    twitch:     !!serverConfig.integrations.twitch.enabled,
+  };
+}
+
 const httpServer = createServer((req, res) => {
   handleRequest(req, res, {
     getLayout: () => layout,
@@ -70,6 +78,9 @@ const httpServer = createServer((req, res) => {
     onLayoutChanged: async () => {
       broadcastLayout();
       scheduleStateBroadcast();
+    },
+    onIntegrationsChanged: () => {
+      updateTrayMenu(currentTrayMenu());
     },
   })
     .catch((err) => {
@@ -248,6 +259,10 @@ startTray({
     console.log('[tray] restarting Twitch connection');
     await twitch.restart();
   },
+  onRestartStreamlabs: async () => {
+    console.log('[tray] restarting Streamlabs connection');
+    await streamlabs.restart();
+  },
   onCheckForUpdates: async () => {
     console.log('[tray] checking for updates');
     const result = await checkForUpdate();
@@ -257,7 +272,7 @@ startTray({
     console.log('[tray] quit requested');
     await shutdown();
   },
-});
+}, currentTrayMenu());
 
 function showUpdateDialog(result: UpdateCheck): void {
   const { title, body, openRepo, icon } = renderUpdateDialog(result);
