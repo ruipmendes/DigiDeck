@@ -38,6 +38,8 @@ export type Page = {
   cols?: number;
   /** Hex color string applied to the phone background while this page is active. */
   background?: string;
+  /** Uploaded image filename (under %APPDATA%/digi-deck/images/) used as the phone backdrop. */
+  backgroundImage?: string;
   buttons: Tile[];
 };
 export type NavigationMode = 'tabs' | 'folders';
@@ -71,7 +73,7 @@ export type PublicSlider = {
 };
 
 export type PublicTile = PublicButton | PublicSlider;
-export type PublicPage = { id: number; name: string; icon?: string; image?: string; cols?: number; background?: string; buttons: PublicTile[] };
+export type PublicPage = { id: number; name: string; icon?: string; image?: string; cols?: number; background?: string; backgroundImage?: string; buttons: PublicTile[] };
 export type PublicLayout = { navigation?: NavigationMode; pages: PublicPage[] };
 
 const APP_DIR = join(
@@ -167,6 +169,7 @@ export function toPublic(layout: Layout): PublicLayout {
       image: p.image,
       cols: p.cols,
       background: p.background,
+      backgroundImage: p.backgroundImage,
       buttons: p.buttons.map((t): PublicTile => {
         if (t.kind === 'slider') {
           return { kind: 'slider', id: t.id, label: t.label, icon: t.icon, image: t.image, accentColor: t.accentColor, inputName: t.inputName };
@@ -254,6 +257,7 @@ export function validateLayout(input: unknown): Layout {
     if (typeof pg.name !== 'string') throw new Error(`page ${pg.id}: name must be a string`);
     if (pg.icon !== undefined && typeof pg.icon !== 'string') throw new Error(`page ${pg.id}: icon must be a string`);
     validateImageField(pg.image, `page ${pg.id}`);
+    validateImageField(pg.backgroundImage, `page ${pg.id} (background)`);
     validateColorField(pg.background, `page ${pg.id}`, 'background');
     const cols = parseCols(pg.cols, pg.id);
     if (!Array.isArray(pg.buttons)) throw new Error(`page ${pg.id}: buttons must be an array`);
@@ -264,6 +268,7 @@ export function validateLayout(input: unknown): Layout {
       icon: pg.icon as string | undefined,
       image: pg.image as string | undefined,
       background: pg.background as string | undefined,
+      backgroundImage: pg.backgroundImage as string | undefined,
       buttons,
     };
     if (cols !== undefined) pageOut.cols = cols;

@@ -577,15 +577,30 @@ function PageBar({ page, layout, canDelete, onChange, onDelete }: PageBarProps) 
       borderRadius: 8, padding: 8,
     }}>
       <IconPicker value={page.icon} onChange={(icon) => onChange({ icon })} />
-      <ImagePicker
-        value={page.image}
-        onChange={(image) => onChange({ image })}
-        referencedElsewhere={
-          page.image
-            ? api.imageReferenceCount(layout, page.image, { pageId: page.id }) > 0
-            : false
-        }
-      />
+      <div title="page tab thumbnail" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+        <ImagePicker
+          value={page.image}
+          onChange={(image) => onChange({ image })}
+          referencedElsewhere={
+            page.image
+              ? api.imageReferenceCount(layout, page.image, { pageId: page.id, field: 'image' }) > 0
+              : false
+          }
+        />
+        <span style={{ fontSize: 9, color: '#6b7280' }}>tab</span>
+      </div>
+      <div title="full-screen background image while this page is active" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+        <ImagePicker
+          value={page.backgroundImage}
+          onChange={(backgroundImage) => onChange({ backgroundImage })}
+          referencedElsewhere={
+            page.backgroundImage
+              ? api.imageReferenceCount(layout, page.backgroundImage, { pageId: page.id, field: 'backgroundImage' }) > 0
+              : false
+          }
+        />
+        <span style={{ fontSize: 9, color: '#6b7280' }}>bg</span>
+      </div>
       <input
         value={page.name}
         onChange={(e) => onChange({ name: e.target.value })}

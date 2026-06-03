@@ -1,14 +1,27 @@
 * { box-sizing: border-box; }
-:root { --page-bg: #0a0a0a; }
+:root {
+  --page-bg: #0a0a0a;
+  /* Default to a no-op gradient so the image-stack always has two layers and the
+     URL form (when set) doesn't have to coexist with the keyword "none". */
+  --page-bg-image: linear-gradient(transparent, transparent);
+  --page-bg-overlay: 0;
+}
 html, body, #root { height: 100%; margin: 0; }
 body {
   font-family: system-ui, -apple-system, sans-serif;
-  background: var(--page-bg);
+  background-color: var(--page-bg);
+  background-image:
+    linear-gradient(rgba(0, 0, 0, var(--page-bg-overlay)), rgba(0, 0, 0, var(--page-bg-overlay))),
+    var(--page-bg-image);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
   color: #fff;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior: none;
   touch-action: manipulation;
-  transition: background 0.25s ease-out;
+  transition: background-color 0.25s ease-out;
 }
 button {
   font: inherit;

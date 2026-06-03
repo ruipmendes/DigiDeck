@@ -24,7 +24,7 @@ export type SliderTile = {
   inputName: string;
 };
 export type Tile = Button | SliderTile;
-export type Page = { id: number; name: string; icon?: string; image?: string; cols?: number; background?: string; buttons: Tile[] };
+export type Page = { id: number; name: string; icon?: string; image?: string; cols?: number; background?: string; backgroundImage?: string; buttons: Tile[] };
 export type NavigationMode = 'tabs' | 'folders';
 export type Layout = { navigation?: NavigationMode; pages: Page[] };
 

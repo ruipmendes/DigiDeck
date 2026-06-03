@@ -142,15 +142,26 @@ export function imageUrl(filename: string): string {
   return token ? `${base}?token=${encodeURIComponent(token)}` : base;
 }
 
-/** Count references to `filename` in the layout, optionally excluding a specific tile or page. */
+/**
+ * Count references to `filename` across the layout, optionally excluding a specific location.
+ *
+ * Exclude shapes:
+ * - `{ tileId }` — skip this tile's `image` field
+ * - `{ pageId }` — skip all of this page's image fields (both `image` and `backgroundImage`)
+ * - `{ pageId, field }` — skip only that one page-level field, so removing one doesn't
+ *   make the other on the same page look orphaned.
+ */
 export function imageReferenceCount(
   layout: Layout,
   filename: string,
-  exclude?: { tileId?: number; pageId?: number },
+  exclude?: { tileId?: number; pageId?: number; field?: 'image' | 'backgroundImage' },
 ): number {
   let n = 0;
   for (const p of layout.pages) {
-    if (p.image === filename && exclude?.pageId !== p.id) n++;
+    const excludeImage = exclude?.pageId === p.id && (exclude.field === undefined || exclude.field === 'image');
+    const excludeBg    = exclude?.pageId === p.id && (exclude.field === undefined || exclude.field === 'backgroundImage');
+    if (p.image === filename && !excludeImage) n++;
+    if (p.backgroundImage === filename && !excludeBg) n++;
     for (const t of p.buttons) {
       if ((t as Tile).image === filename && exclude?.tileId !== t.id) n++;
     }
@@ -161,6 +172,7 @@ export function imageReferenceCount(
 export function pageImages(page: Page): string[] {
   const out: string[] = [];
   if (page.image) out.push(page.image);
+  if (page.backgroundImage) out.push(page.backgroundImage);
   for (const t of page.buttons) {
     if (t.image) out.push(t.image);
   }

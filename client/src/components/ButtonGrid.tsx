@@ -51,16 +51,28 @@ export function ButtonGrid({ layout, lastAck, buttonStates, onPress, onSliderCha
     localStorage.setItem(PAGE_KEY, String(activePageId));
   }, [activePageId]);
 
-  // Apply the active page's custom background to the body via a CSS variable.
-  const activePageBg = layout?.pages.find((p) => p.id === activePageId)?.background;
+  // Apply the active page's custom background to the body via CSS variables.
+  // Image + color compose: image (with a dark overlay for legibility) sits on top of
+  // the color, so any transparent pixels in the image still show the chosen color.
+  const activePageMeta = layout?.pages.find((p) => p.id === activePageId);
+  const activePageBg = activePageMeta?.background;
+  const activePageBgImage = activePageMeta?.backgroundImage;
   useEffect(() => {
     const root = document.documentElement;
     root.style.setProperty('--page-bg', activePageBg ?? '#0a0a0a');
+    if (activePageBgImage) {
+      root.style.setProperty('--page-bg-image', `url("${imageUrl(activePageBgImage)}")`);
+      root.style.setProperty('--page-bg-overlay', '0.4');
+    } else {
+      root.style.removeProperty('--page-bg-image');
+      root.style.removeProperty('--page-bg-overlay');
+    }
     return () => {
-      // Reset on unmount (rare) so the dark default returns if e.g. the route changes.
       root.style.removeProperty('--page-bg');
+      root.style.removeProperty('--page-bg-image');
+      root.style.removeProperty('--page-bg-overlay');
     };
-  }, [activePageBg]);
+  }, [activePageBg, activePageBgImage]);
 
   if (!layout) {
     return <div style={{ opacity: 0.5, fontSize: 14 }}>Waiting for layout from server…</div>;

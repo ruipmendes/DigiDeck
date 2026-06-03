@@ -72,6 +72,7 @@ function collectImageFilenames(layout: Layout): Set<string> {
   const set = new Set<string>();
   for (const p of layout.pages) {
     if (p.image) set.add(p.image);
+    if (p.backgroundImage) set.add(p.backgroundImage);
     for (const t of p.buttons) {
       if ((t as Tile).image) set.add((t as Tile).image!);
     }
@@ -92,6 +93,7 @@ function rewriteImageRefs(layout: unknown, rename: Map<string, string>): unknown
 
   for (const p of obj.pages as Page[]) {
     if (p.image) p.image = remap(p.image);
+    if (p.backgroundImage) p.backgroundImage = remap(p.backgroundImage);
     if (Array.isArray(p.buttons)) {
       for (const t of p.buttons) {
         if ((t as Tile).image) (t as Tile).image = remap((t as Tile).image);
