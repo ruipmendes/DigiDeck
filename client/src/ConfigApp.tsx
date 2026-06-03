@@ -13,6 +13,7 @@ import { PairingModal } from './components/PairingModal';
 import { IntegrationsPanel } from './components/IntegrationsPanel';
 import { IconPicker } from './components/IconPicker';
 import { ImagePicker } from './components/ImagePicker';
+import { ColorPicker } from './components/ColorPicker';
 import { TemplatesPanel } from './components/TemplatesPanel';
 import { PreviewBanner, usePreviewHeartbeat } from './components/PreviewBanner';
 import { getIcon } from './lib/icons';
@@ -619,6 +620,13 @@ function PageBar({ page, layout, canDelete, onChange, onDelete }: PageBarProps) 
           <option value={4}>4</option>
         </select>
       </label>
+      <div title="phone background colour while this page is active">
+        <ColorPicker
+          value={page.background}
+          onChange={(background) => onChange({ background })}
+          label="background"
+        />
+      </div>
       {canDelete && (
         <button
           onClick={onDelete}

@@ -1,12 +1,14 @@
 * { box-sizing: border-box; }
+:root { --page-bg: #0a0a0a; }
 html, body, #root { height: 100%; margin: 0; }
 body {
   font-family: system-ui, -apple-system, sans-serif;
-  background: #0a0a0a;
+  background: var(--page-bg);
   color: #fff;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior: none;
   touch-action: manipulation;
+  transition: background 0.25s ease-out;
 }
 button {
   font: inherit;

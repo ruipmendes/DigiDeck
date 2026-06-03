@@ -49,6 +49,8 @@ export type Button = {
   icon?: string;
   /** Uploaded image filename (server-side, under %APPDATA%/digi-deck/images/). Wins over `icon`. */
   image?: string;
+  /** Hex color override for active-state border / flash / source dot. */
+  accentColor?: string;
   action: ButtonAction;
   /** Optional action fired on hold (~500ms). When absent, holding still triggers the primary action. */
   longPressAction?: ButtonAction;
@@ -60,12 +62,14 @@ export type SliderTile = {
   label: string;
   icon?: string;
   image?: string;
+  /** Hex color override for the fader fill. */
+  accentColor?: string;
   /** OBS input name this slider drives (volume + mute). */
   inputName: string;
 };
 
 export type Tile = Button | SliderTile;
-export type Page = { id: number; name: string; icon?: string; image?: string; cols?: number; buttons: Tile[] };
+export type Page = { id: number; name: string; icon?: string; image?: string; cols?: number; background?: string; buttons: Tile[] };
 export type NavigationMode = 'tabs' | 'folders';
 export type Layout = { navigation?: NavigationMode; pages: Page[] };
 

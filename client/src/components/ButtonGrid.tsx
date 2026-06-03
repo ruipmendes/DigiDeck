@@ -4,6 +4,18 @@ import type { ButtonState, Layout, Tile } from '../ws';
 import { getIcon } from '../lib/icons';
 import { imageUrl } from '../lib/api';
 
+/** Convert "#abc" or "#aabbcc" to rgba(...). Falls back to the alpha-only black if parsing fails. */
+function hexToRgba(hex: string, alpha: number): string {
+  const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(hex);
+  if (!m) return `rgba(0,0,0,${alpha})`;
+  let h = m[1];
+  if (h.length === 3) h = h.split('').map((c) => c + c).join('');
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
 type Props = {
   layout: Layout | null;
   lastAck: { id: number; at: number } | null;
@@ -38,6 +50,17 @@ export function ButtonGrid({ layout, lastAck, buttonStates, onPress, onSliderCha
   useEffect(() => {
     localStorage.setItem(PAGE_KEY, String(activePageId));
   }, [activePageId]);
+
+  // Apply the active page's custom background to the body via a CSS variable.
+  const activePageBg = layout?.pages.find((p) => p.id === activePageId)?.background;
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty('--page-bg', activePageBg ?? '#0a0a0a');
+    return () => {
+      // Reset on unmount (rare) so the dark default returns if e.g. the route changes.
+      root.style.removeProperty('--page-bg');
+    };
+  }, [activePageBg]);
 
   if (!layout) {
     return <div style={{ opacity: 0.5, fontSize: 14 }}>Waiting for layout from server…</div>;
@@ -205,8 +228,11 @@ function ButtonTileView({
   const active = !!state?.active;
   const unavailable = !!state?.unavailable;
   const isSource = state?.kind === 'source';
-  const activeColor = isSource ? '#10b981' : '#3b82f6';
-  const activeBg = isSource ? '#022c22' : '#172554';
+  const defaultActiveColor = isSource ? '#10b981' : '#3b82f6';
+  const defaultActiveBg = isSource ? '#022c22' : '#172554';
+  const activeColor = tile.accentColor ?? defaultActiveColor;
+  const activeBg = tile.accentColor ? hexToRgba(tile.accentColor, 0.18) : defaultActiveBg;
+  const flashColor = tile.accentColor ?? '#3b82f6';
   const isStreamer = !!tile.streamerLogin;
   const thumbnail = state?.thumbnail;
   const live = state?.live;
@@ -264,7 +290,7 @@ function ButtonTileView({
       onContextMenu={(e) => e.preventDefault()}
       style={{
         position: 'relative',
-        background: flash ? '#3b82f6' : active ? activeBg : '#1f1f1f',
+        background: flash ? flashColor : active ? activeBg : '#1f1f1f',
         border: active ? `2px solid ${activeColor}` : '1px solid #2a2a2a',
         borderRadius: 16,
         fontSize: 15,

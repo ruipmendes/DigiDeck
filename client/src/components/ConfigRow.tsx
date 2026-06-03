@@ -7,6 +7,7 @@ import { defaultTile, defaultAction } from '../lib/types';
 import { ActionEditor } from './ActionEditor';
 import { IconPicker } from './IconPicker';
 import { ImagePicker } from './ImagePicker';
+import { ColorPicker } from './ColorPicker';
 import * as api from '../lib/api';
 
 export type IntegrationStatus = { obs: boolean; twitch: boolean; streamlabs: boolean };
@@ -73,6 +74,11 @@ export function ConfigRow({ button, pages, currentPageId, layout, integrationSta
               ? api.imageReferenceCount(layout, button.image, { tileId: button.id }) > 0
               : false
           }
+        />
+        <ColorPicker
+          value={button.accentColor}
+          onChange={(accentColor) => onChange({ accentColor })}
+          label="accent"
         />
         <div style={{ fontSize: 10, color: '#6b7280' }}>id: {button.id}</div>
       </div>

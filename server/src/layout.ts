@@ -9,6 +9,8 @@ export type Button = {
   icon?: string;
   /** Uploaded image filename (stored under %APPDATA%/digi-deck/images/). Wins over `icon` when set. */
   image?: string;
+  /** Hex color string (e.g. "#3b82f6") that overrides the active-state border + flash. */
+  accentColor?: string;
   action: ButtonAction;
   /** Optional secondary action triggered when the user holds the button (~500ms). */
   longPressAction?: ButtonAction;
@@ -20,6 +22,8 @@ export type SliderTile = {
   label: string;
   icon?: string;
   image?: string;
+  /** Hex color string that overrides the fader fill. */
+  accentColor?: string;
   /** OBS input/source name whose volume + mute this slider drives. */
   inputName: string;
 };
@@ -32,6 +36,8 @@ export type Page = {
   image?: string;
   /** Phone grid column count for this page. Default 2 when omitted. Valid range: 1-4. */
   cols?: number;
+  /** Hex color string applied to the phone background while this page is active. */
+  background?: string;
   buttons: Tile[];
 };
 export type NavigationMode = 'tabs' | 'folders';
@@ -43,6 +49,7 @@ export type PublicButton = {
   label: string;
   icon?: string;
   image?: string;
+  accentColor?: string;
   /** True when the button has a configured long-press action.
    *  Phone uses this to opt into press-hold detection (otherwise it fires instantly on touch). */
   hasLongPress?: boolean;
@@ -59,11 +66,12 @@ export type PublicSlider = {
   label: string;
   icon?: string;
   image?: string;
+  accentColor?: string;
   inputName: string;
 };
 
 export type PublicTile = PublicButton | PublicSlider;
-export type PublicPage = { id: number; name: string; icon?: string; image?: string; cols?: number; buttons: PublicTile[] };
+export type PublicPage = { id: number; name: string; icon?: string; image?: string; cols?: number; background?: string; buttons: PublicTile[] };
 export type PublicLayout = { navigation?: NavigationMode; pages: PublicPage[] };
 
 const APP_DIR = join(
@@ -158,11 +166,12 @@ export function toPublic(layout: Layout): PublicLayout {
       icon: p.icon,
       image: p.image,
       cols: p.cols,
+      background: p.background,
       buttons: p.buttons.map((t): PublicTile => {
         if (t.kind === 'slider') {
-          return { kind: 'slider', id: t.id, label: t.label, icon: t.icon, image: t.image, inputName: t.inputName };
+          return { kind: 'slider', id: t.id, label: t.label, icon: t.icon, image: t.image, accentColor: t.accentColor, inputName: t.inputName };
         }
-        const out: PublicButton = { kind: 'button', id: t.id, label: t.label, icon: t.icon, image: t.image };
+        const out: PublicButton = { kind: 'button', id: t.id, label: t.label, icon: t.icon, image: t.image, accentColor: t.accentColor };
         if (t.longPressAction !== undefined) out.hasLongPress = true;
         const steps = Array.isArray(t.action) ? t.action : [t.action];
         const streamer = steps.find((a) => a.type === 'twitch-streamer');
@@ -245,6 +254,7 @@ export function validateLayout(input: unknown): Layout {
     if (typeof pg.name !== 'string') throw new Error(`page ${pg.id}: name must be a string`);
     if (pg.icon !== undefined && typeof pg.icon !== 'string') throw new Error(`page ${pg.id}: icon must be a string`);
     validateImageField(pg.image, `page ${pg.id}`);
+    validateColorField(pg.background, `page ${pg.id}`, 'background');
     const cols = parseCols(pg.cols, pg.id);
     if (!Array.isArray(pg.buttons)) throw new Error(`page ${pg.id}: buttons must be an array`);
     const buttons = validateButtons(pg.buttons, buttonIds);
@@ -253,6 +263,7 @@ export function validateLayout(input: unknown): Layout {
       name: pg.name,
       icon: pg.icon as string | undefined,
       image: pg.image as string | undefined,
+      background: pg.background as string | undefined,
       buttons,
     };
     if (cols !== undefined) pageOut.cols = cols;
@@ -286,6 +297,14 @@ function validateImageField(value: unknown, where: string): void {
   }
 }
 
+/** Accepts undefined/null/empty (means "no override") or a hex color like #abc or #aabbcc. */
+function validateColorField(value: unknown, where: string, field: string): void {
+  if (value === undefined || value === null || value === '') return;
+  if (typeof value !== 'string' || !/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(value)) {
+    throw new Error(`${where}: ${field} must be a hex color like "#3b82f6"`);
+  }
+}
+
 function validateButtons(input: unknown[], seenIds: Set<number>): Tile[] {
   const result: Tile[] = [];
   for (const t of input) {
@@ -297,6 +316,7 @@ function validateButtons(input: unknown[], seenIds: Set<number>): Tile[] {
     if (typeof tile.label !== 'string') throw new Error(`tile ${tile.id}: label must be a string`);
     if (tile.icon !== undefined && typeof tile.icon !== 'string') throw new Error(`tile ${tile.id}: icon must be a string`);
     validateImageField(tile.image, `tile ${tile.id}`);
+    validateColorField(tile.accentColor, `tile ${tile.id}`, 'accentColor');
 
     const kind = (tile.kind as string | undefined) ?? 'button';
     if (kind === 'slider') {

@@ -6,6 +6,7 @@ export type Button = {
   label: string;
   icon?: string;
   image?: string;
+  accentColor?: string;
   /** Server tells us the button has a long-press action; opt into hold detection. */
   hasLongPress?: boolean;
   /** Set on Twitch streamer buttons. Phone uses it to render a thumbnail. */
@@ -19,10 +20,11 @@ export type SliderTile = {
   label: string;
   icon?: string;
   image?: string;
+  accentColor?: string;
   inputName: string;
 };
 export type Tile = Button | SliderTile;
-export type Page = { id: number; name: string; icon?: string; image?: string; cols?: number; buttons: Tile[] };
+export type Page = { id: number; name: string; icon?: string; image?: string; cols?: number; background?: string; buttons: Tile[] };
 export type NavigationMode = 'tabs' | 'folders';
 export type Layout = { navigation?: NavigationMode; pages: Page[] };
 
