@@ -566,10 +566,26 @@ class StreamlabsClient {
     const id = this.audioIdByName.get(inputName.trim());
     if (!id) throw new Error(`Streamlabs audio source "${inputName}" not found`);
     const v = clamp01(value);
-    // Optimistically update locally so successive WS messages reflect the latest
-    // value even before Streamlabs echoes it back via an event/snapshot refresh.
+    // Optimistically update + broadcast so the phone's slider doesn't snap back
+    // to the previous broadcast value while the RPC is in flight. (Streamlabs
+    // doesn't reliably emit volume-change events, so without this the next
+    // broadcast wouldn't fire until refreshAudio runs again.)
+    const previous = this.inputVolumesByName.get(inputName);
     this.inputVolumesByName.set(inputName, v);
-    await this.callMethod(`AudioSource["${id}"]`, 'setDeflection', [v]);
+    this.emitChange();
+    try {
+      await this.callMethod(`AudioSource["${id}"]`, 'setDeflection', [v]);
+    } catch (err) {
+      // RPC failed — revert the optimistic update and re-broadcast so the
+      // phone slider snaps back to the actual Streamlabs value.
+      if (previous !== undefined) {
+        this.inputVolumesByName.set(inputName, previous);
+      } else {
+        this.inputVolumesByName.delete(inputName);
+      }
+      this.emitChange();
+      throw err;
+    }
   }
 
   async execute(op: StreamlabsOp, params?: StreamlabsActionParams): Promise<void> {
