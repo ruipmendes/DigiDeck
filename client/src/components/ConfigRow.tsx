@@ -8,6 +8,7 @@ import { ActionEditor } from './ActionEditor';
 import { IconPicker } from './IconPicker';
 import { ImagePicker } from './ImagePicker';
 import { ColorPicker } from './ColorPicker';
+import { AppearancePopover, AppearanceSection } from './AppearancePopover';
 import * as api from '../lib/api';
 
 export type IntegrationStatus = { obs: boolean; twitch: boolean; streamlabs: boolean };
@@ -64,22 +65,33 @@ export function ConfigRow({ button, pages, currentPageId, layout, integrationSta
         <GripVertical size={18} />
       </button>
 
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-        <IconPicker value={button.icon} onChange={(icon) => onChange({ icon })} />
-        <ImagePicker
-          value={button.image}
-          onChange={(image) => onChange({ image })}
-          referencedElsewhere={
-            button.image
-              ? api.imageReferenceCount(layout, button.image, { tileId: button.id }) > 0
-              : false
-          }
-        />
-        <ColorPicker
-          value={button.accentColor}
-          onChange={(accentColor) => onChange({ accentColor })}
-          label="accent"
-        />
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+        <AppearancePopover
+          hint={{ icon: button.icon, image: button.image, accentColor: button.accentColor }}
+          title="tile appearance"
+        >
+          <AppearanceSection label="Icon">
+            <IconPicker value={button.icon} onChange={(icon) => onChange({ icon })} />
+          </AppearanceSection>
+          <AppearanceSection label="Image">
+            <ImagePicker
+              value={button.image}
+              onChange={(image) => onChange({ image })}
+              referencedElsewhere={
+                button.image
+                  ? api.imageReferenceCount(layout, button.image, { tileId: button.id }) > 0
+                  : false
+              }
+            />
+          </AppearanceSection>
+          <AppearanceSection label="Accent color">
+            <ColorPicker
+              value={button.accentColor}
+              onChange={(accentColor) => onChange({ accentColor })}
+              label="accent"
+            />
+          </AppearanceSection>
+        </AppearancePopover>
         <div style={{ fontSize: 10, color: '#6b7280' }}>id: {button.id}</div>
       </div>
 

@@ -14,6 +14,7 @@ import { IntegrationsPanel } from './components/IntegrationsPanel';
 import { IconPicker } from './components/IconPicker';
 import { ImagePicker } from './components/ImagePicker';
 import { ColorPicker } from './components/ColorPicker';
+import { AppearancePopover, AppearanceSection } from './components/AppearancePopover';
 import { TemplatesPanel } from './components/TemplatesPanel';
 import { PreviewBanner, usePreviewHeartbeat } from './components/PreviewBanner';
 import { getIcon } from './lib/icons';
@@ -576,31 +577,43 @@ function PageBar({ page, layout, canDelete, onChange, onDelete }: PageBarProps) 
       background: '#0a0a0a', border: '1px solid #1f2937',
       borderRadius: 8, padding: 8,
     }}>
-      <IconPicker value={page.icon} onChange={(icon) => onChange({ icon })} />
-      <div title="page tab thumbnail" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-        <ImagePicker
-          value={page.image}
-          onChange={(image) => onChange({ image })}
-          referencedElsewhere={
-            page.image
-              ? api.imageReferenceCount(layout, page.image, { pageId: page.id, field: 'image' }) > 0
-              : false
-          }
-        />
-        <span style={{ fontSize: 9, color: '#6b7280' }}>tab</span>
-      </div>
-      <div title="full-screen background image while this page is active" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-        <ImagePicker
-          value={page.backgroundImage}
-          onChange={(backgroundImage) => onChange({ backgroundImage })}
-          referencedElsewhere={
-            page.backgroundImage
-              ? api.imageReferenceCount(layout, page.backgroundImage, { pageId: page.id, field: 'backgroundImage' }) > 0
-              : false
-          }
-        />
-        <span style={{ fontSize: 9, color: '#6b7280' }}>bg</span>
-      </div>
+      <AppearancePopover
+        hint={{ icon: page.icon, image: page.image, accentColor: page.background }}
+        title="page appearance"
+      >
+        <AppearanceSection label="Tab icon">
+          <IconPicker value={page.icon} onChange={(icon) => onChange({ icon })} />
+        </AppearanceSection>
+        <AppearanceSection label="Tab thumbnail">
+          <ImagePicker
+            value={page.image}
+            onChange={(image) => onChange({ image })}
+            referencedElsewhere={
+              page.image
+                ? api.imageReferenceCount(layout, page.image, { pageId: page.id, field: 'image' }) > 0
+                : false
+            }
+          />
+        </AppearanceSection>
+        <AppearanceSection label="Phone background image">
+          <ImagePicker
+            value={page.backgroundImage}
+            onChange={(backgroundImage) => onChange({ backgroundImage })}
+            referencedElsewhere={
+              page.backgroundImage
+                ? api.imageReferenceCount(layout, page.backgroundImage, { pageId: page.id, field: 'backgroundImage' }) > 0
+                : false
+            }
+          />
+        </AppearanceSection>
+        <AppearanceSection label="Phone background color">
+          <ColorPicker
+            value={page.background}
+            onChange={(background) => onChange({ background })}
+            label="background"
+          />
+        </AppearanceSection>
+      </AppearancePopover>
       <input
         value={page.name}
         onChange={(e) => onChange({ name: e.target.value })}
@@ -635,13 +648,6 @@ function PageBar({ page, layout, canDelete, onChange, onDelete }: PageBarProps) 
           <option value={4}>4</option>
         </select>
       </label>
-      <div title="phone background colour while this page is active">
-        <ColorPicker
-          value={page.background}
-          onChange={(background) => onChange({ background })}
-          label="background"
-        />
-      </div>
       {canDelete && (
         <button
           onClick={onDelete}
