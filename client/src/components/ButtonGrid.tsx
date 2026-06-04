@@ -245,6 +245,10 @@ function ButtonTileView({
   const activeColor = tile.accentColor ?? defaultActiveColor;
   const activeBg = tile.accentColor ? hexToRgba(tile.accentColor, 0.18) : defaultActiveBg;
   const flashColor = tile.accentColor ?? '#3b82f6';
+  // Resting border picks up the accent (thin) so the colour is visible even
+  // on tiles that never enter the "active" state — otherwise picking an
+  // accent on a plain Hotkey button has no visible effect.
+  const restingBorder = tile.accentColor ?? '#2a2a2a';
   const isStreamer = !!tile.streamerLogin;
   const thumbnail = state?.thumbnail;
   const live = state?.live;
@@ -303,7 +307,7 @@ function ButtonTileView({
       style={{
         position: 'relative',
         background: flash ? flashColor : active ? activeBg : '#1f1f1f',
-        border: active ? `2px solid ${activeColor}` : '1px solid #2a2a2a',
+        border: active ? `2px solid ${activeColor}` : `1px solid ${restingBorder}`,
         borderRadius: 16,
         fontSize: 15,
         fontWeight: 500,
@@ -489,8 +493,8 @@ function SliderTileView({
     onMute();
   }
 
-  const fillColor = muted ? '#6b7280' : '#3b82f6';
-  const borderColor = muted ? '#7f1d1d' : '#2a2a2a';
+  const fillColor = muted ? '#6b7280' : (tile.accentColor ?? '#3b82f6');
+  const borderColor = muted ? '#7f1d1d' : (tile.accentColor ?? '#2a2a2a');
 
   return (
     <div
