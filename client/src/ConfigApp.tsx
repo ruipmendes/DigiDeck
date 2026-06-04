@@ -4,7 +4,7 @@ import {
   type DragEndEvent,
 } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
-import { Smartphone, Plus, Trash2, Download, Upload, LayoutGrid } from 'lucide-react';
+import { Smartphone, Plus, Trash2, Download, Upload, LayoutGrid, MoreHorizontal } from 'lucide-react';
 import * as api from './lib/api';
 import type { Tile, Layout, Page, TileKind } from './lib/types';
 import { defaultTile, nextButtonId, nextPageId } from './lib/types';
@@ -279,27 +279,11 @@ export function ConfigApp() {
               if (f) void handleImportFile(f);
             }}
           />
-          <button
-            onClick={() => setTemplatesOpen(true)}
-            title="browse template layouts"
-            style={headerBtnStyle}
-          >
-            <LayoutGrid size={16} /> Templates
-          </button>
-          <button
-            onClick={() => importInputRef.current?.click()}
-            title="import a layout bundle"
-            style={headerBtnStyle}
-          >
-            <Upload size={16} /> Import
-          </button>
-          <button
-            onClick={handleExport}
-            title="export the current layout"
-            style={headerBtnStyle}
-          >
-            <Download size={16} /> Export
-          </button>
+          <HeaderMoreMenu
+            onTemplates={() => setTemplatesOpen(true)}
+            onImport={() => importInputRef.current?.click()}
+            onExport={handleExport}
+          />
           <button
             onClick={() => setPairingOpen(true)}
             style={headerBtnStyle}
@@ -666,5 +650,111 @@ function PageBar({ page, layout, canDelete, onChange, onDelete }: PageBarProps) 
         </button>
       )}
     </div>
+  );
+}
+
+/**
+ * Header overflow menu for the infrequent layout actions
+ * (Templates / Import / Export). Keeps Pair phone + Save as the
+ * primary header buttons.
+ */
+function HeaderMoreMenu({
+  onTemplates,
+  onImport,
+  onExport,
+}: {
+  onTemplates: () => void;
+  onImport: () => void;
+  onExport: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const popRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onMouseDown(e: MouseEvent) {
+      if (popRef.current && !popRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
+  }, [open]);
+
+  function run(action: () => void) {
+    setOpen(false);
+    action();
+  }
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        title="more actions"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        style={{ ...headerBtnStyle, padding: '8px 10px' }}
+      >
+        <MoreHorizontal size={16} /> More
+      </button>
+      {open && (
+        <div
+          ref={popRef}
+          role="menu"
+          style={{
+            position: 'absolute',
+            top: '100%', right: 0,
+            marginTop: 6,
+            background: '#0a0a0a',
+            border: '1px solid #374151',
+            borderRadius: 8,
+            minWidth: 200,
+            zIndex: 20,
+            boxShadow: '0 10px 30px rgba(0,0,0,0.6)',
+            overflow: 'hidden',
+          }}
+        >
+          <MoreMenuItem icon={<LayoutGrid size={14} />} label="Templates…" onClick={() => run(onTemplates)} />
+          <MoreMenuItem icon={<Upload     size={14} />} label="Import layout…" onClick={() => run(onImport)} />
+          <MoreMenuItem icon={<Download   size={14} />} label="Export layout" onClick={() => run(onExport)} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MoreMenuItem({
+  icon,
+  label,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+}) {
+  const [hover, setHover] = useState(false);
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        width: '100%',
+        padding: '10px 14px',
+        background: hover ? '#111827' : 'transparent',
+        border: 0,
+        color: '#fff',
+        fontSize: 13,
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        textAlign: 'left',
+      }}
+    >
+      {icon}
+      {label}
+    </button>
   );
 }
