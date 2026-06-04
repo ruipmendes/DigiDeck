@@ -449,9 +449,29 @@ function SliderTileView({
   // Local dragging state so the slider stays responsive — server echoes back ~ms later
   // and we want optimistic update during drag.
   const [dragValue, setDragValue] = useState<number | null>(null);
+  // After release, keep showing the user's intended value until the server
+  // broadcast catches up. Otherwise a fast tap snaps back to the pre-tap
+  // value for the ~150ms broadcast debounce window.
+  const [pendingValue, setPendingValue] = useState<number | null>(null);
   const trackRef = useRef<HTMLDivElement>(null);
-  const displayValue = dragValue ?? serverValue;
+  const displayValue = dragValue ?? pendingValue ?? serverValue;
   const percent = Math.round(displayValue * 100);
+
+  // Server caught up to our last sent value → release the pending.
+  useEffect(() => {
+    if (pendingValue === null) return;
+    if (Math.abs(serverValue - pendingValue) < 0.02) {
+      setPendingValue(null);
+    }
+  }, [serverValue, pendingValue]);
+
+  // Safety timeout — if a broadcast never arrives (e.g., RPC silently failed),
+  // drop the pending after 1s so the slider reflects reality.
+  useEffect(() => {
+    if (pendingValue === null) return;
+    const t = setTimeout(() => setPendingValue(null), 1000);
+    return () => clearTimeout(t);
+  }, [pendingValue]);
 
   function valueFromPointer(clientX: number): number {
     const track = trackRef.current;
@@ -482,7 +502,9 @@ function SliderTileView({
     if (e.currentTarget.hasPointerCapture(e.pointerId)) {
       e.currentTarget.releasePointerCapture(e.pointerId);
     }
-    // Release local control; let server state take over.
+    // Hand off to pendingValue so the slider keeps showing the user's last
+    // sent value until the next server broadcast confirms it (or 1s safety).
+    if (dragValue !== null) setPendingValue(dragValue);
     setDragValue(null);
   }
 
