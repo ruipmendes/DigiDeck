@@ -4,7 +4,7 @@ import {
   type DragEndEvent,
 } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
-import { Smartphone, Plus, Trash2, Download, Upload, LayoutGrid, MoreHorizontal } from 'lucide-react';
+import { Smartphone, Plus, Trash2, Download, Upload, LayoutGrid, MoreHorizontal, Settings } from 'lucide-react';
 import * as api from './lib/api';
 import type { Tile, Layout, Page, TileKind } from './lib/types';
 import { defaultTile, nextButtonId, nextPageId } from './lib/types';
@@ -19,9 +19,19 @@ import { TemplatesPanel } from './components/TemplatesPanel';
 import { PreviewBanner, usePreviewHeartbeat } from './components/PreviewBanner';
 import { getIcon } from './lib/icons';
 
+const CONFIG_ACTIVE_PAGE_KEY = 'digi-deck:config_active_page';
+
 export function ConfigApp() {
   const [layout, setLayout] = useState<Layout | null>(null);
-  const [activePageId, setActivePageId] = useState<number | null>(null);
+  // Hydrate from localStorage so leaving for the grid view and coming back
+  // lands the user on the same page they were last editing. Validated
+  // against the loaded layout in the layout-fetch effect below.
+  const [activePageId, setActivePageId] = useState<number | null>(() => {
+    const stored = localStorage.getItem(CONFIG_ACTIVE_PAGE_KEY);
+    if (stored === null) return null;
+    const n = Number(stored);
+    return Number.isFinite(n) ? n : null;
+  });
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,6 +39,18 @@ export function ConfigApp() {
   const [pairingOpen, setPairingOpen] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [preview, setPreview] = useState<api.PreviewInfo | null>(null);
+  // ConfigRow expansion state is parent-managed so we can: (a) auto-expand
+  // freshly added tiles, (b) collapse every row on Save.
+  const [expandedTileIds, setExpandedTileIds] = useState<Set<number>>(new Set());
+
+  function toggleExpanded(id: number) {
+    setExpandedTileIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
   const [integrationStatus, setIntegrationStatus] = useState<{ obs: boolean; twitch: boolean; streamlabs: boolean }>({
     obs: false,
     twitch: false,
@@ -139,10 +161,21 @@ export function ConfigApp() {
     api.getLayout()
       .then((l) => {
         setLayout(l);
-        setActivePageId(l.pages[0]?.id ?? null);
+        // Prefer the persisted page if it still exists, else fall back to the first page.
+        setActivePageId((prev) => {
+          if (prev !== null && l.pages.some((p) => p.id === prev)) return prev;
+          return l.pages[0]?.id ?? null;
+        });
       })
       .catch((e) => setError((e as Error).message));
   }, []);
+
+  // Persist the active page so reopening the config (after a trip to the grid)
+  // lands on the same page.
+  useEffect(() => {
+    if (activePageId === null) localStorage.removeItem(CONFIG_ACTIVE_PAGE_KEY);
+    else localStorage.setItem(CONFIG_ACTIVE_PAGE_KEY, String(activePageId));
+  }, [activePageId]);
 
   // Keep activePageId valid when pages change
   useEffect(() => {
@@ -154,8 +187,14 @@ export function ConfigApp() {
 
   const activePage = layout?.pages.find((p) => p.id === activePageId) ?? null;
 
-  function updateLayout(next: Layout) {
-    setLayout(next);
+  // Merge-style update so partial patches (e.g., { pages } or { navigation })
+  // never accidentally drop other top-level fields like navigation. Previously
+  // every caller passed `{ pages: ... }` and silently nuked the navigation
+  // field on every edit, so a saved "folders" choice got reverted to "tabs"
+  // on the next save.
+  function updateLayout(patch: Partial<Layout>) {
+    if (!layout) return;
+    setLayout({ ...layout, ...patch });
     setDirty(true);
   }
 
@@ -217,6 +256,12 @@ export function ConfigApp() {
         buttons: [...p.buttons, newTile],
       } : p)),
     });
+    // Open the new row so the user sees the editor right after adding.
+    setExpandedTileIds((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
   }
 
   function moveButton(buttonId: number, fromPageId: number, toPageId: number) {
@@ -254,6 +299,8 @@ export function ConfigApp() {
       await api.putLayout(layout);
       setDirty(false);
       setSavedAt(new Date());
+      // Successful save → collapse every expanded row.
+      setExpandedTileIds(new Set());
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -351,42 +398,13 @@ export function ConfigApp() {
         </div>
       ) : (
         <>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 12, color: '#9ca3af' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              Navigation:
-              <select
-                value={layout.navigation ?? 'tabs'}
-                onChange={(e) =>
-                  updateLayout({
-                    ...layout,
-                    navigation: e.target.value as 'tabs' | 'folders',
-                  })
-                }
-                style={{
-                  padding: '4px 8px',
-                  background: '#0a0a0a',
-                  color: '#fff',
-                  border: '1px solid #374151',
-                  borderRadius: 6,
-                  fontSize: 12,
-                }}
-              >
-                <option value="tabs">Tabs at top</option>
-                <option value="folders">Folders (back-stack)</option>
-              </select>
-            </label>
-            <span style={{ fontSize: 11 }}>
-              {(layout.navigation ?? 'tabs') === 'folders'
-                ? 'Phone hides the tab strip; a Back tile appears as the first grid cell after you tap a "Go to page" button.'
-                : 'Phone shows a tab strip at the top of the grid.'}
-            </span>
-          </div>
-
           <PageTabBar
             pages={layout.pages}
             activePageId={activePageId}
+            navigation={layout.navigation ?? 'tabs'}
             onSelect={setActivePageId}
             onAdd={addPage}
+            onNavigationChange={(navigation) => updateLayout({ navigation })}
           />
 
           {activePage && (
@@ -412,6 +430,8 @@ export function ConfigApp() {
                         currentPageId={activePage.id}
                         layout={layout}
                         integrationStatus={integrationStatus}
+                        expanded={expandedTileIds.has(b.id)}
+                        onToggleExpanded={() => toggleExpanded(b.id)}
                         onChange={(patch) => updateButton(activePage.id, b.id, patch)}
                         onDelete={() => deleteButton(activePage.id, b.id)}
                         onMove={(to) => moveButton(b.id, activePage.id, to)}
@@ -489,13 +509,17 @@ const headerBtnStyle: React.CSSProperties = {
 type TabBarProps = {
   pages: Page[];
   activePageId: number | null;
+  navigation: 'tabs' | 'folders';
   onSelect: (id: number) => void;
   onAdd: () => void;
+  onNavigationChange: (next: 'tabs' | 'folders') => void;
 };
 
-function PageTabBar({ pages, activePageId, onSelect, onAdd }: TabBarProps) {
+function PageTabBar({ pages, activePageId, navigation, onSelect, onAdd, onNavigationChange }: TabBarProps) {
   return (
-    <div style={{ display: 'flex', gap: 6, alignItems: 'center', overflowX: 'auto', paddingBottom: 4 }}>
+    // Outer row carries the layout-nav popover (no overflow clipping); inner row scrolls the tabs.
+    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', overflowX: 'auto', paddingBottom: 4, flex: 1, minWidth: 0 }}>
       {pages.map((p) => {
         const Icon = getIcon(p.icon);
         const active = p.id === activePageId;
@@ -542,6 +566,100 @@ function PageTabBar({ pages, activePageId, onSelect, onAdd }: TabBarProps) {
       >
         <Plus size={12} /> page
       </button>
+      </div>
+      <LayoutNavPopover navigation={navigation} onNavigationChange={onNavigationChange} />
+    </div>
+  );
+}
+
+/**
+ * Layout-scope settings (just navigation mode for now) live next to
+ * the "+ page" button so the scope reads as "all pages" naturally.
+ * Per-page settings stay on the PageBar.
+ */
+function LayoutNavPopover({
+  navigation,
+  onNavigationChange,
+}: {
+  navigation: 'tabs' | 'folders';
+  onNavigationChange: (next: 'tabs' | 'folders') => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const popRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onMouseDown(e: MouseEvent) {
+      if (popRef.current && !popRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
+  }, [open]);
+
+  return (
+    <div style={{ position: 'relative', flexShrink: 0 }}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        title="layout navigation"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        style={{
+          padding: '6px 10px',
+          background: 'transparent',
+          border: '1px solid #374151',
+          borderRadius: 8,
+          color: '#9ca3af',
+          fontSize: 13,
+          cursor: 'pointer',
+          display: 'flex', alignItems: 'center', gap: 4,
+        }}
+      >
+        <Settings size={12} />
+      </button>
+      {open && (
+        <div
+          ref={popRef}
+          role="dialog"
+          style={{
+            position: 'absolute',
+            top: '100%', right: 0,
+            marginTop: 6,
+            background: '#0a0a0a',
+            border: '1px solid #374151',
+            borderRadius: 10,
+            padding: 12,
+            minWidth: 280,
+            zIndex: 20,
+            boxShadow: '0 10px 30px rgba(0,0,0,0.6)',
+            display: 'flex', flexDirection: 'column', gap: 6,
+          }}
+        >
+          <span style={{ fontSize: 10, color: '#6b7280', letterSpacing: 0.5, textTransform: 'uppercase' }}>
+            Navigation
+          </span>
+          <select
+            value={navigation}
+            onChange={(e) => onNavigationChange(e.target.value as 'tabs' | 'folders')}
+            style={{
+              padding: '6px 8px',
+              background: '#0a0a0a',
+              color: '#fff',
+              border: '1px solid #374151',
+              borderRadius: 6,
+              fontSize: 13,
+            }}
+          >
+            <option value="tabs">Tabs at top</option>
+            <option value="folders">Folders (back-stack)</option>
+          </select>
+          <span style={{ fontSize: 11, color: '#6b7280', lineHeight: 1.5 }}>
+            {navigation === 'folders'
+              ? 'Phone hides the tab strip; a Back tile appears as the first grid cell after you tap a "Go to page" button.'
+              : 'Phone shows a tab strip at the top of the grid.'}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
