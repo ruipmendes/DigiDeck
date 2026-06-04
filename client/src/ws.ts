@@ -14,6 +14,8 @@ export type Button = {
   /** Set when the button's action contains a goto-page step. Phone navigates locally on press. */
   gotoPageId?: number;
 };
+export type SliderProvider = 'obs' | 'streamlabs';
+
 export type SliderTile = {
   kind: 'slider';
   id: number;
@@ -21,6 +23,7 @@ export type SliderTile = {
   icon?: string;
   image?: string;
   accentColor?: string;
+  provider?: SliderProvider;
   inputName: string;
 };
 export type Tile = Button | SliderTile;

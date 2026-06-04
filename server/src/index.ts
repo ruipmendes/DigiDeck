@@ -202,7 +202,12 @@ wss.on('connection', (ws: WebSocket) => {
       if (tile.kind !== 'slider') return;
       if (previewing) return; // no-op during preview
       try {
-        await obs.setInputVolume(tile.inputName, msg.value);
+        const provider = tile.provider ?? 'obs';
+        if (provider === 'streamlabs') {
+          await streamlabs.setInputVolume(tile.inputName, msg.value);
+        } else {
+          await obs.setInputVolume(tile.inputName, msg.value);
+        }
       } catch (err) {
         console.error('  slider failed:', (err as Error).message);
       }
@@ -213,7 +218,12 @@ wss.on('connection', (ws: WebSocket) => {
       if (tile.kind !== 'slider') return;
       if (previewing) return; // no-op during preview
       try {
-        await obs.execute('toggle-mute', { inputName: tile.inputName });
+        const provider = tile.provider ?? 'obs';
+        if (provider === 'streamlabs') {
+          await streamlabs.execute('toggle-mute', { inputName: tile.inputName });
+        } else {
+          await obs.execute('toggle-mute', { inputName: tile.inputName });
+        }
       } catch (err) {
         console.error('  slider mute failed:', (err as Error).message);
       }

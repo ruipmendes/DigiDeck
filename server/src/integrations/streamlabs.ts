@@ -54,6 +54,8 @@ export type StreamlabsStatus = {
   virtualCam: boolean;
   replayBuffer: boolean;
   mutedInputs: string[];
+  /** Audio input name → current fader deflection (0..1). */
+  inputVolumes: Record<string, number>;
   retryStopped: boolean;
 };
 
@@ -83,7 +85,14 @@ type SlobsSceneItem = {
   sceneNodeType?: string;
 };
 type SlobsScene = { id: string; name: string; nodes?: SlobsSceneItem[] };
-type SlobsAudioSource = { sourceId?: string; resourceId?: string; name: string; muted: boolean };
+type SlobsAudioSource = {
+  sourceId?: string;
+  resourceId?: string;
+  name: string;
+  muted: boolean;
+  /** Slobs returns fader info inline on AudioSource models. */
+  fader?: { db?: number; deflection?: number; mul?: number };
+};
 type RpcResolver = { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: NodeJS.Timeout };
 
 class StreamlabsClient {
@@ -108,6 +117,7 @@ class StreamlabsClient {
   private audioSources: SlobsAudioSource[] = [];
   private mutedSet = new Set<string>();
   private audioIdByName = new Map<string, string>();
+  private inputVolumesByName = new Map<string, number>();
   private recording = false;
   private streaming = false;
   private virtualCam = false;
@@ -146,6 +156,7 @@ class StreamlabsClient {
       virtualCam: this.virtualCam,
       replayBuffer: this.replayBuffer,
       mutedInputs: [...this.mutedSet],
+      inputVolumes: Object.fromEntries(this.inputVolumesByName),
       retryStopped: this.retryStopped,
     };
   }
@@ -205,6 +216,7 @@ class StreamlabsClient {
     this.audioSources = [];
     this.sceneIdByName.clear();
     this.audioIdByName.clear();
+    this.inputVolumesByName.clear();
     this.sceneItemResourceByKey.clear();
     this.sceneItemsByName.clear();
     this.sourceStatesByKey.clear();
@@ -524,6 +536,10 @@ class StreamlabsClient {
         .filter(([, id]) => id.length > 0),
     );
     this.mutedSet = new Set(sources.filter((s) => s.muted).map((s) => s.name));
+    this.inputVolumesByName = new Map(
+      sources
+        .map((s) => [s.name, clamp01(s.fader?.deflection ?? 1)] as [string, number]),
+    );
   }
 
   private subscribeToEvents(): void {
@@ -538,6 +554,23 @@ class StreamlabsClient {
   }
 
   // ─── Action dispatch ────────────────────────────────────────────
+
+  /**
+   * Set an audio source's fader to a 0..1 deflection.
+   * The slider tile uses the same 0..1 range; clamp is defensive.
+   */
+  async setInputVolume(inputName: string, value: number): Promise<void> {
+    if (this.state !== 'connected') {
+      throw new Error(`Streamlabs not connected (state: ${this.state})`);
+    }
+    const id = this.audioIdByName.get(inputName.trim());
+    if (!id) throw new Error(`Streamlabs audio source "${inputName}" not found`);
+    const v = clamp01(value);
+    // Optimistically update locally so successive WS messages reflect the latest
+    // value even before Streamlabs echoes it back via an event/snapshot refresh.
+    this.inputVolumesByName.set(inputName, v);
+    await this.callMethod(`AudioSource["${id}"]`, 'setDeflection', [v]);
+  }
 
   async execute(op: StreamlabsOp, params?: StreamlabsActionParams): Promise<void> {
     if (this.state !== 'connected') {
@@ -620,6 +653,13 @@ class StreamlabsClient {
       }
     }
   }
+}
+
+function clamp01(n: number): number {
+  if (!Number.isFinite(n)) return 0;
+  if (n < 0) return 0;
+  if (n > 1) return 1;
+  return n;
 }
 
 let _instance: StreamlabsClient | null = null;

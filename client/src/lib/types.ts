@@ -56,6 +56,8 @@ export type Button = {
   longPressAction?: ButtonAction;
 };
 
+export type SliderProvider = 'obs' | 'streamlabs';
+
 export type SliderTile = {
   kind: 'slider';
   id: number;
@@ -64,7 +66,9 @@ export type SliderTile = {
   image?: string;
   /** Hex color override for the fader fill. */
   accentColor?: string;
-  /** OBS input name this slider drives (volume + mute). */
+  /** Which integration owns this slider. Defaults to 'obs' when omitted. */
+  provider?: SliderProvider;
+  /** Audio input name this slider drives (volume + mute). */
   inputName: string;
 };
 

@@ -252,6 +252,7 @@ export type StreamlabsStatus = {
   virtualCam: boolean;
   replayBuffer: boolean;
   mutedInputs: string[];
+  inputVolumes: Record<string, number>;
   retryStopped: boolean;
 };
 

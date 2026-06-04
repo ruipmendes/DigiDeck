@@ -40,9 +40,11 @@ export function computeButtonStates(
 
 function computeOne(t: Tile, obs: ObsStatus, twitch: TwitchStatus, streamlabs: StreamlabsStatus): ButtonState | null {
   if (t.kind === 'slider') {
-    if (obs.state !== 'connected') return { id: t.id, unavailable: true };
-    const value = obs.inputVolumes[t.inputName];
-    const muted = obs.mutedInputs.includes(t.inputName);
+    const provider = t.provider ?? 'obs';
+    const src = provider === 'streamlabs' ? streamlabs : obs;
+    if (src.state !== 'connected') return { id: t.id, unavailable: true };
+    const value = src.inputVolumes[t.inputName];
+    const muted = src.mutedInputs.includes(t.inputName);
     if (value === undefined) return { id: t.id, unavailable: true };
     return { id: t.id, sliderValue: value, sliderMuted: muted };
   }

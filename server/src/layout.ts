@@ -16,6 +16,8 @@ export type Button = {
   longPressAction?: ButtonAction;
 };
 
+export type SliderProvider = 'obs' | 'streamlabs';
+
 export type SliderTile = {
   kind: 'slider';
   id: number;
@@ -24,7 +26,9 @@ export type SliderTile = {
   image?: string;
   /** Hex color string that overrides the fader fill. */
   accentColor?: string;
-  /** OBS input/source name whose volume + mute this slider drives. */
+  /** Which integration owns this slider. Defaults to 'obs' for layouts created before this field existed. */
+  provider?: SliderProvider;
+  /** Audio input/source name whose volume + mute this slider drives. */
   inputName: string;
 };
 
@@ -69,6 +73,7 @@ export type PublicSlider = {
   icon?: string;
   image?: string;
   accentColor?: string;
+  provider?: SliderProvider;
   inputName: string;
 };
 
@@ -172,7 +177,7 @@ export function toPublic(layout: Layout): PublicLayout {
       backgroundImage: p.backgroundImage,
       buttons: p.buttons.map((t): PublicTile => {
         if (t.kind === 'slider') {
-          return { kind: 'slider', id: t.id, label: t.label, icon: t.icon, image: t.image, accentColor: t.accentColor, inputName: t.inputName };
+          return { kind: 'slider', id: t.id, label: t.label, icon: t.icon, image: t.image, accentColor: t.accentColor, provider: t.provider, inputName: t.inputName };
         }
         const out: PublicButton = { kind: 'button', id: t.id, label: t.label, icon: t.icon, image: t.image, accentColor: t.accentColor };
         if (t.longPressAction !== undefined) out.hasLongPress = true;
@@ -327,6 +332,9 @@ function validateButtons(input: unknown[], seenIds: Set<number>): Tile[] {
     if (kind === 'slider') {
       if (typeof tile.inputName !== 'string' || !tile.inputName) {
         throw new Error(`tile ${tile.id}: slider requires inputName`);
+      }
+      if (tile.provider !== undefined && tile.provider !== 'obs' && tile.provider !== 'streamlabs') {
+        throw new Error(`tile ${tile.id}: slider provider must be 'obs' or 'streamlabs'`);
       }
     } else if (kind === 'button') {
       validateButtonAction(tile.action, tile.id);

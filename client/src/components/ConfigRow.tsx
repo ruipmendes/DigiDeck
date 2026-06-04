@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, Trash2, Sliders, Hand } from 'lucide-react';
-import type { Tile, Page, TileKind, Layout, ButtonAction } from '../lib/types';
+import type { Tile, Page, TileKind, Layout, ButtonAction, SliderProvider } from '../lib/types';
 import { defaultTile, defaultAction } from '../lib/types';
 import { ActionEditor } from './ActionEditor';
 import { IconPicker } from './IconPicker';
@@ -104,7 +104,9 @@ export function ConfigRow({ button, pages, currentPageId, layout, integrationSta
         {button.kind === 'slider' ? (
           <SliderEditor
             inputName={button.inputName}
-            onChange={(inputName) => onChange({ inputName })}
+            provider={button.provider ?? 'obs'}
+            integrationStatus={integrationStatus}
+            onChange={(patch) => onChange(patch)}
           />
         ) : (
           <>
@@ -164,10 +166,14 @@ export function ConfigRow({ button, pages, currentPageId, layout, integrationSta
 
 function SliderEditor({
   inputName,
+  provider,
+  integrationStatus,
   onChange,
 }: {
   inputName: string;
-  onChange: (v: string) => void;
+  provider: SliderProvider;
+  integrationStatus: IntegrationStatus;
+  onChange: (patch: { inputName?: string; provider?: SliderProvider }) => void;
 }) {
   const [inputs, setInputs] = useState<string[]>([]);
   const [connected, setConnected] = useState(false);
@@ -175,47 +181,74 @@ function SliderEditor({
   useEffect(() => {
     let alive = true;
     function load() {
-      api.getObsState()
+      const fetcher = provider === 'streamlabs'
+        ? api.getStreamlabsState().then((d) => ({ inputs: d.status.inputs ?? [], connected: d.status.state === 'connected' }))
+        : api.getObsState().then((d) => ({ inputs: d.status.inputs ?? [], connected: d.status.state === 'connected' }));
+      fetcher
         .then((d) => {
           if (!alive) return;
-          setInputs(d.status.inputs ?? []);
-          setConnected(d.status.state === 'connected');
+          setInputs(d.inputs);
+          setConnected(d.connected);
         })
         .catch(() => { if (alive) { setInputs([]); setConnected(false); } });
     }
     load();
     const t = setInterval(load, 4000);
     return () => { alive = false; clearInterval(t); };
-  }, []);
+  }, [provider]);
 
   const hasOptions = inputs.length > 0;
   const usingOptionList = hasOptions && (inputName === '' || inputs.includes(inputName));
+  const providerLabel = provider === 'streamlabs' ? 'Streamlabs Desktop' : 'OBS Studio';
+
+  // Build the provider option list: include configured integrations, plus the
+  // currently-selected provider even if its integration is disabled, so users
+  // don't lose context when toggling the integration off.
+  type ProviderOpt = { value: SliderProvider; label: string };
+  const providerOpts: ProviderOpt[] = [];
+  if (integrationStatus.obs || provider === 'obs') providerOpts.push({ value: 'obs', label: 'OBS Studio' });
+  if (integrationStatus.streamlabs || provider === 'streamlabs') providerOpts.push({ value: 'streamlabs', label: 'Streamlabs Desktop' });
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#9ca3af' }}>
-        <Sliders size={12} /> OBS audio mixer slider — drag-to-set-volume + tap-to-mute
+        <Sliders size={12} /> {providerLabel} audio mixer slider — drag-to-set-volume + tap-to-mute
       </div>
+      {providerOpts.length > 0 && (
+        <select
+          value={provider}
+          onChange={(e) => onChange({ provider: e.target.value as SliderProvider, inputName: '' })}
+          title="audio source provider"
+          style={selectStyle}
+        >
+          {providerOpts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      )}
+      {providerOpts.length === 0 && (
+        <span style={{ fontSize: 11, color: '#f59e0b' }}>
+          Enable OBS or Streamlabs in Integrations to use slider tiles.
+        </span>
+      )}
       {usingOptionList ? (
         <select
           value={inputName}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) => onChange({ inputName: e.target.value })}
           style={selectStyle}
         >
-          <option value="">— pick an OBS audio input —</option>
+          <option value="">— pick a {providerLabel} audio input —</option>
           {inputs.map((i) => <option key={i} value={i}>{i}</option>)}
         </select>
       ) : (
         <input
           value={inputName}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="OBS input name (e.g. Mic/Aux)"
+          onChange={(e) => onChange({ inputName: e.target.value })}
+          placeholder={`${providerLabel} input name (e.g. Mic/Aux)`}
           style={inputStyle}
         />
       )}
       {!connected && (
         <span style={{ fontSize: 11, color: '#9ca3af' }}>
-          OBS not connected — type the input name manually, or connect OBS to pick from a list.
+          {providerLabel} not connected — type the input name manually, or connect it to pick from a list.
         </span>
       )}
     </div>
