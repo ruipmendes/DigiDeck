@@ -246,7 +246,9 @@ Each button is `{ id, label, icon?, action }`. Action shapes:
 
 **Long-press secondary action.** Any button can have a second action fired by holding (~500 ms). The config UI surfaces it as an *add long-press action* button under the primary editor; the phone gives a stronger haptic when the hold threshold trips, then runs the secondary action instead of the primary. Buttons without a long-press action keep firing instantly on touch — no latency penalty.
 
-**Custom images.** Each tile and page can upload its own image (PNG, JPG, **GIF**, WebP). On the phone, button images render Stream Deck–style: full-bleed cover with the label overlaid; page images appear in the tab strip. Images are content-hashed and stored under `%APPDATA%\digi-deck\images\`.
+**Custom images.** Each tile and page can upload its own image (PNG, JPG, **GIF**, WebP). On the phone, button images render Stream Deck–style: full-bleed cover with the label overlaid; pages can use a separate image as a full-screen phone backdrop (with a soft dark overlay so buttons stay legible) and another smaller one as the tab thumbnail. Images are content-hashed and stored under `%APPDATA%\digi-deck\images\`.
+
+**Custom colours.** Each tile can pick an accent colour that drives its resting border, active-state border, ack flash, and source dot — useful to colour-code rows by purpose. Each page can pick a background colour (composes under any background image). The picker offers eight curated swatches plus a native colour picker for anything off-palette.
 
 Common `keys` values: `LeftControl`, `RightControl`, `LeftShift`, `LeftAlt`, `LeftSuper` (Windows key), `A`–`Z`, `F1`–`F12`, `Space`, `Enter`, `Escape`, `Tab`, `AudioVolUp`, `AudioVolDown`, `AudioMute`, `AudioPlay`, `AudioNext`, `AudioPrev`. Full list: nut-js [`Key` enum](https://nutjs.dev/api/Key). In the config UI, you can also just click **record** and press the combo — no need to type the names.
 
@@ -276,7 +278,9 @@ Live state on the phone: recording / streaming / virtual cam / scene-active / mu
 
 ### Audio mixer slider tiles
 
-The config UI's *+ add slider* button creates a slider tile bound to one OBS audio input. The tile renders as a horizontal fader with an integrated mute button — drag to set the volume, tap the speaker icon to toggle mute. The slider colour goes gray when the input is muted, and the percentage display switches to `muted`. Volume changes made from OBS itself (e.g. via the desktop mixer) push back to the phone within ~200 ms.
+The config UI's *+ add slider* button creates a slider tile bound to one audio input. The tile renders as a horizontal fader with an integrated mute button — drag to set the volume, tap the speaker icon to toggle mute. The slider colour goes gray when the input is muted, and the percentage display switches to `muted`. Volume changes made from OBS itself (e.g. via the desktop mixer) push back to the phone within ~200 ms.
+
+Each slider has a **provider** sub-dropdown that lets it target either OBS Studio *or* Streamlabs Desktop. The dropdown only shows providers whose integration is currently enabled (existing sliders keep the provider they were created with). Defaults to OBS for backwards compatibility.
 
 ---
 
@@ -292,7 +296,7 @@ Action types you can bind: toggle/start/stop recording, toggle/start/stop stream
 
 Live state on the phone: recording / streaming / virtual cam / replay buffer / scene-active / muted buttons light up with a blue dot, source-visible buttons show a green dot, and any Streamlabs button is dimmed with an "offline" pip if Streamlabs isn't connected. The integration auto-reconnects every 5 seconds for up to 5 minutes, then surfaces a manual *retry* button in the card.
 
-The only OBS feature not yet on Streamlabs is the **audio mixer slider tile** — slider tiles currently target OBS exclusively. Adding Streamlabs sliders needs a small schema change (a `provider` field on slider tiles) so they're held back for a separate decision.
+Audio mixer slider tiles work for Streamlabs too — the slider editor exposes a provider toggle (OBS / Streamlabs) that's filtered by which integration is enabled. See *Audio mixer slider tiles* under the OBS section above; everything carries over.
 
 ---
 
@@ -361,9 +365,9 @@ You can copy this folder to another machine to migrate everything, or delete it 
 
 ## Possible next steps
 
-- Custom button and page colors.
-- Page background images.
-- Audio mixer slider tiles for Streamlabs (sliders are OBS-only today).
+- Phone-side action-failure feedback (right now a failed action looks identical to a successful one — only the server log knows).
+- mDNS-based auto-discovery on the phone (skip the QR rescan after the first pairing).
+- More starter templates (gamer / podcaster / music-producer presets).
 - More integrations — Spotify, Philips Hue, Discord.
 - Native mobile apps.
 
