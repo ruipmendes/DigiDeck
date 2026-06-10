@@ -832,8 +832,8 @@ function HeaderMoreMenu({
           }}
         >
           <MoreMenuItem icon={<LayoutGrid size={14} />} label="Templates…" onClick={() => run(onTemplates)} />
-          <MoreMenuItem icon={<Upload     size={14} />} label="Import layout…" onClick={() => run(onImport)} />
-          <MoreMenuItem icon={<Download   size={14} />} label="Export layout" onClick={() => run(onExport)} />
+          <MoreMenuItem icon={<Download   size={14} />} label="Import layout…" onClick={() => run(onImport)} />
+          <MoreMenuItem icon={<Upload     size={14} />} label="Export layout" onClick={() => run(onExport)} />
         </div>
       )}
     </div>
