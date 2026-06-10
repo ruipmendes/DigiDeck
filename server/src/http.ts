@@ -11,6 +11,7 @@ import {
   saveImage, imagePath, imageExists, deleteImage, imageMime, MAX_IMAGE_BYTES,
 } from './images.js';
 import { exportBundle, importBundle } from './layout-bundle.js';
+import { browseForFile } from './system-dialog.js';
 import {
   listTemplates, loadTemplate, materializeTemplate,
   startPreview, clearPreview, consumePreview, heartbeatPreview, previewInfo,
@@ -149,6 +150,22 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse, c
   if (pathname === '/api/pairing' && req.method === 'GET') {
     if (!isLocalhost(req)) return unauthorized(res);
     json(res, 200, buildPairing(token()));
+    return;
+  }
+
+  // ─── System ────────────────────────────────────────────────
+  // Pops a native Windows OpenFileDialog on the PC running the server and
+  // returns the chosen path. Useful for the Launch action's path field so
+  // users don't have to copy-paste app locations.
+  if (pathname === '/api/system/browse-file' && req.method === 'POST') {
+    if (!authorize(req, token())) return unauthorized(res);
+    try {
+      const body = await readJsonBody(req).catch(() => ({})) as { title?: string; initialDir?: string; filter?: string };
+      const path = await browseForFile(body);
+      json(res, 200, { path });
+    } catch (err) {
+      json(res, 500, { error: (err as Error).message });
+    }
     return;
   }
 

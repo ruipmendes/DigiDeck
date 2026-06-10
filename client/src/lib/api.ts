@@ -113,6 +113,30 @@ export async function importLayoutBundle(file: File): Promise<Layout> {
   return out.layout as Layout;
 }
 
+/**
+ * Pops a native file dialog on the PC running the server and returns the
+ * chosen path (null if the user cancelled). Used by the Launch action
+ * editor so users can browse for an app instead of typing/pasting its path.
+ */
+export async function browseForFile(opts?: {
+  title?: string;
+  initialDir?: string;
+  filter?: string;
+}): Promise<string | null> {
+  const res = await fetch('/api/system/browse-file', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(opts ?? {}),
+  });
+  if (!res.ok) {
+    let msg = `browse failed: ${res.status}`;
+    try { msg = (await res.json()).error ?? msg; } catch { /* keep default */ }
+    throw new Error(msg);
+  }
+  const data = await res.json();
+  return typeof data.path === 'string' && data.path.length > 0 ? data.path : null;
+}
+
 export async function uploadImage(file: File): Promise<{ filename: string }> {
   const buf = await file.arrayBuffer();
   const res = await fetch('/api/images', {

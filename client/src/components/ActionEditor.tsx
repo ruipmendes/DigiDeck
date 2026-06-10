@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowUp, ArrowDown, X, Plus } from 'lucide-react';
+import { ArrowUp, ArrowDown, X, Plus, FolderOpen } from 'lucide-react';
 import type { Action, ActionType, ButtonAction, MicOp, ObsOp, StreamlabsOp } from '../lib/types';
 import { defaultAction } from '../lib/types';
 import * as api from '../lib/api';
@@ -271,12 +271,17 @@ function Body({ action, onChange, pages }: StepEditorProps) {
     case 'launch':
       return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <input
-            value={action.path}
-            onChange={(e) => onChange({ ...action, path: e.target.value })}
-            placeholder="path or binary (e.g. notepad.exe)"
-            style={inputStyle}
-          />
+          <div style={{ display: 'flex', gap: 6 }}>
+            <input
+              value={action.path}
+              onChange={(e) => onChange({ ...action, path: e.target.value })}
+              placeholder="path or binary (e.g. notepad.exe)"
+              style={{ ...inputStyle, flex: 1 }}
+            />
+            <BrowseFileButton
+              onPicked={(p) => onChange({ ...action, path: p })}
+            />
+          </div>
           <input
             value={action.args?.join(', ') ?? ''}
             onChange={(e) => onChange({
@@ -755,4 +760,61 @@ function stepIconBtn(disabled: boolean): React.CSSProperties {
     alignItems: 'center',
     justifyContent: 'center',
   };
+}
+
+/**
+ * Opens a native file dialog on the PC running the server and feeds the
+ * chosen path back. The dialog appears on the PC regardless of which
+ * device clicked the button — useful when configuring from a phone, you'd
+ * still need to be at your PC to pick the file.
+ */
+function BrowseFileButton({ onPicked }: { onPicked: (path: string) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function browse() {
+    setBusy(true);
+    setError(null);
+    try {
+      const picked = await api.browseForFile({
+        title: 'Digi Deck — select an app to launch',
+        initialDir: '%ProgramFiles%',
+        filter: 'Apps and shortcuts (*.exe;*.lnk;*.bat;*.cmd)|*.exe;*.lnk;*.bat;*.cmd|All files (*.*)|*.*',
+      });
+      if (picked) onPicked(picked);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-start' }}>
+      <button
+        type="button"
+        onClick={browse}
+        disabled={busy}
+        title="open a file dialog on the PC"
+        style={{
+          padding: '8px 10px',
+          background: '#1f2937',
+          color: '#fff',
+          border: '1px solid #374151',
+          borderRadius: 6,
+          fontSize: 13,
+          cursor: busy ? 'wait' : 'pointer',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+          opacity: busy ? 0.7 : 1,
+          whiteSpace: 'nowrap',
+        }}
+      >
+        <FolderOpen size={14} />
+        {busy ? 'Waiting…' : 'Browse…'}
+      </button>
+      {error && <span style={{ fontSize: 11, color: '#f87171' }}>{error}</span>}
+    </div>
+  );
 }
