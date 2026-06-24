@@ -1,7 +1,13 @@
-# Digi Deck launcher
-# - Starts the server and the client if they're not already running
-# - If no browser tab currently shows the config page, opens it in Firefox
-#   (falls back to the system default browser if Firefox is not installed)
+# Digi Deck launcher (production mode — single Node process).
+# - Builds the server and client if their dist/ folders are missing.
+# - Starts `node dist/index.js`, which serves both the API + WebSocket
+#   AND the built client as static files (port 8765, single port).
+# - Runs the server at BelowNormal priority so Fortnite / OBS / Discord
+#   never have to compete with the deck for CPU time.
+# - Opens the config UI in Firefox / default browser.
+#
+# Dev workflow is unaffected: run `npm run dev` in server/ and client/
+# in separate terminals for HMR + live reload.
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -22,42 +28,45 @@ function Test-Port {
   }
 }
 
-$startedAnything = $false
+# ── Build if needed ─────────────────────────────────────────────
+if (-not (Test-Path "$root\server\dist\index.js")) {
+  Write-Host 'Server dist/ missing — building...' -ForegroundColor Cyan
+  Push-Location "$root\server"
+  try { npm run build } finally { Pop-Location }
+}
+if (-not (Test-Path "$root\client\dist\index.html")) {
+  Write-Host 'Client dist/ missing — building...' -ForegroundColor Cyan
+  Push-Location "$root\client"
+  try { npm run build } finally { Pop-Location }
+}
 
+# ── Start the server (one process, BelowNormal priority) ───────
 if (-not (Test-Port 8765)) {
-  Write-Host 'Starting digi-deck server...' -ForegroundColor Cyan
-  Start-Process powershell.exe `
-    -WorkingDirectory "$root\server" `
-    -ArgumentList '-NoExit', '-NoProfile', '-Command',
-      'Write-Host "digi-deck server" -ForegroundColor Cyan; npm run dev'
-  $startedAnything = $true
+  Write-Host 'Starting digi-deck server (port 8765)...' -ForegroundColor Cyan
+  $psi = New-Object System.Diagnostics.ProcessStartInfo
+  $psi.FileName = (Get-Command node).Source
+  $psi.Arguments = 'dist/index.js'
+  $psi.WorkingDirectory = "$root\server"
+  $psi.CreateNoWindow = $true
+  $psi.UseShellExecute = $false
+  $proc = [System.Diagnostics.Process]::Start($psi)
+  Start-Sleep -Milliseconds 200
+  try { $proc.PriorityClass = 'BelowNormal' } catch { }
+
+  # Wait for the server to start listening (up to 20s — a built node start is ~1s).
+  $deadline = (Get-Date).AddSeconds(20)
+  while ((Get-Date) -lt $deadline) {
+    if (Test-Port 8765) { break }
+    Start-Sleep -Milliseconds 250
+  }
 } else {
   Write-Host 'Server already running on :8765' -ForegroundColor DarkGray
 }
 
-if (-not (Test-Port 5173)) {
-  Write-Host 'Starting digi-deck client (Vite)...' -ForegroundColor Cyan
-  Start-Process powershell.exe `
-    -WorkingDirectory "$root\client" `
-    -ArgumentList '-NoExit', '-NoProfile', '-Command',
-      'Write-Host "digi-deck client" -ForegroundColor Cyan; npm run dev'
-  $startedAnything = $true
-} else {
-  Write-Host 'Client already running on :5173' -ForegroundColor DarkGray
-}
+# ── Open the config page ────────────────────────────────────────
+$configUrl = 'http://localhost:8765/config'
 
-# Wait for Vite when we just launched it (give it up to 45s to be ready)
-if ($startedAnything) {
-  Write-Host 'Waiting for Vite...' -ForegroundColor DarkGray
-  $deadline = (Get-Date).AddSeconds(45)
-  while ((Get-Date) -lt $deadline) {
-    if (Test-Port 5173) { break }
-    Start-Sleep -Milliseconds 500
-  }
-  Start-Sleep -Seconds 1  # let Vite finish its initial compile
-}
-
-# Is the config page already open in any browser window?
+# Is the config tab already open in any browser window?
 $configOpen = $false
 try {
   $configOpen = [bool](
@@ -72,7 +81,6 @@ if ($configOpen) {
 }
 
 # Locate Firefox; fall back to the default browser.
-$configUrl = 'http://localhost:5173/config'
 $firefox = @(
   "$env:ProgramFiles\Mozilla Firefox\firefox.exe",
   "${env:ProgramFiles(x86)}\Mozilla Firefox\firefox.exe"

@@ -242,7 +242,7 @@ startPreviewWatchdog();
 
 httpServer.listen(PORT, () => {
   console.log(`digi-deck server listening on :${PORT}`);
-  console.log('Open config UI on PC:  http://localhost:5173/config');
+  console.log(`Open config UI on PC:  http://localhost:${PORT}/config`);
 });
 
 startMdns(PORT);

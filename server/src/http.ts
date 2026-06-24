@@ -18,6 +18,34 @@ import {
 } from './templates.js';
 import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve as resolvePath, extname, sep as pathSep } from 'node:path';
+
+// ─── Built client (single-process production mode) ────────────
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+// `http.ts` lives at server/src/ in dev (tsx) and server/dist/ in prod (tsc).
+// Both are two levels above client/dist.
+const CLIENT_DIST = resolvePath(__dirname, '../../client/dist');
+
+const STATIC_MIME: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8',
+  '.js':   'application/javascript; charset=utf-8',
+  '.mjs':  'application/javascript; charset=utf-8',
+  '.css':  'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.map':  'application/json; charset=utf-8',
+  '.png':  'image/png',
+  '.jpg':  'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif':  'image/gif',
+  '.webp': 'image/webp',
+  '.svg':  'image/svg+xml',
+  '.ico':  'image/x-icon',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.txt':  'text/plain; charset=utf-8',
+};
 
 type Ctx = {
   getLayout: () => Layout;
@@ -390,8 +418,57 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse, c
     return;
   }
 
+  // ─── Static client (built SPA) ──────────────────────────────
+  // Any non-/api request falls through to the built client at client/dist/.
+  // The SPA-routing fallback returns index.html for paths without an extension
+  // so URLs like /config keep working without a hash-router.
+  if (!pathname.startsWith('/api')) {
+    if (await serveStaticOrSpa(res, pathname)) return;
+  }
+
   res.writeHead(404, { 'Content-Type': 'text/plain' });
   res.end('not found');
+}
+
+async function serveStaticOrSpa(res: ServerResponse, pathname: string): Promise<boolean> {
+  const reqPath = pathname === '/' ? '/index.html' : pathname;
+  const filePath = resolvePath(CLIENT_DIST, '.' + reqPath);
+  // Defense against path traversal.
+  if (!filePath.startsWith(CLIENT_DIST)) return false;
+
+  if (await sendFile(res, filePath)) return true;
+
+  // SPA fallback: serve index.html for routes without a file extension
+  // (e.g. /config). Requests for an explicit missing asset (foo.js) 404.
+  if (extname(reqPath) === '' || reqPath.endsWith('.html')) {
+    return sendFile(res, resolvePath(CLIENT_DIST, 'index.html'));
+  }
+  return false;
+}
+
+async function sendFile(res: ServerResponse, filePath: string): Promise<boolean> {
+  let stats;
+  try {
+    stats = await stat(filePath);
+    if (!stats.isFile()) return false;
+  } catch {
+    return false;
+  }
+  const ext = extname(filePath).toLowerCase();
+  const mime = STATIC_MIME[ext] ?? 'application/octet-stream';
+  // Vite emits hashed filenames under /assets/, so they're safe to cache forever.
+  // Anything else gets a short max-age so file changes (e.g. favicon swap) propagate.
+  const cache =
+    ext === '.html' ? 'no-cache' :
+    filePath.includes(`${pathSep}assets${pathSep}`) ? 'public, max-age=31536000, immutable' :
+    'public, max-age=3600';
+  res.writeHead(200, {
+    'Content-Type': mime,
+    'Content-Length': String(stats.size),
+    'Cache-Control': cache,
+  });
+  createReadStream(filePath).pipe(res);
+  return true;
 }
 
 function buildPairing(token: string) {
@@ -399,7 +476,7 @@ function buildPairing(token: string) {
   for (const list of Object.values(networkInterfaces())) {
     for (const ni of list ?? []) {
       if (ni.family === 'IPv4' && !ni.internal) {
-        urls.push(`http://${ni.address}:5173/?token=${encodeURIComponent(token)}`);
+        urls.push(`http://${ni.address}:8765/?token=${encodeURIComponent(token)}`);
       }
     }
   }

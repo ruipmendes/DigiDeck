@@ -85,8 +85,8 @@ You should now see a **Digi Deck** icon on your desktop.
 
 - Double-click **Digi Deck** on your desktop
 - Windows will pop a firewall prompt for Node.js → tick **Private networks** → **Allow access**
-- Two small terminal windows open (the server and the client) — leave them running
-- Your browser opens to the config page automatically (`http://localhost:5173/config`)
+- A single background Node process starts (no visible terminal). Look for the **Digi Deck** tray icon — right-click it for Open / Reload / Quit.
+- Your browser opens to the config page automatically (`http://localhost:8765/config`)
 
 ---
 
@@ -119,7 +119,7 @@ You should now see a **Digi Deck** icon on your desktop.
 | Phone shows "Not paired" or nothing happens after scanning | Double-check phone and PC are on the same Wi-Fi network. Click Pair phone in the config UI to regenerate the QR. |
 | Phone can connect but no button does anything | The Windows Firewall prompt was missed. Re-enable: Start menu → *Allow an app through firewall* → find Node.js → tick **Private**. |
 | `Execution of scripts is disabled on this system` when running the shortcut | The shortcut already uses `-ExecutionPolicy Bypass`. If you got here some other way, paste this in **PowerShell (Admin)**: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` |
-| Browser doesn't open automatically | Manually visit http://localhost:5173/config |
+| Browser doesn't open automatically | Manually visit http://localhost:8765/config |
 | Want to start over | Right-click tray icon → Quit. Delete `C:\Users\<your-username>\AppData\Roaming\digi-deck\` to wipe paired phones, OBS/Twitch settings, and your button layout. |
 
 ---

@@ -2,7 +2,7 @@
 
 Personal Stream Deck-style app: a PWA on your phone triggers actions on your Windows PC over LAN.
 
-Two processes run on the PC: a Node WebSocket server (port 8765) that owns the layout file and executes actions, and a Vite + React dev server (port 5173) that serves the PWA to your phone. Your phone connects to both over your Wi-Fi.
+A single Node process runs on the PC (port 8765) — it owns the layout file, executes actions, hosts the WebSocket, and serves the built React PWA as static files. Your phone connects to that one port over your Wi-Fi. (Developers can still run Vite in dev mode separately; see *Manually running the server and client* below.)
 
 ---
 
@@ -108,7 +108,7 @@ Either double-click the **Digi Deck** desktop shortcut, or:
 C:\Users\<you>\digi-deck\start.ps1
 ```
 
-The launcher idempotently starts both processes (skips whatever's already running on `:8765` and `:5173`), then opens the config UI in Firefox / your default browser if a Digi Deck tab isn't already open.
+The launcher builds the server and client if their `dist/` folders are missing, then starts a single `node dist/index.js` at **BelowNormal** process priority — so when you're streaming or gaming, the deck never has to compete with your foreground app for CPU time. The config UI opens in Firefox / your default browser if a Digi Deck tab isn't already open.
 
 When the **Windows Firewall prompt** appears for Node.js, tick **Private networks** and click Allow. Without this the phone can't reach the server.
 
@@ -149,7 +149,9 @@ cd C:\Users\<you>\digi-deck\client
 npm run dev
 ```
 
-The server prints `digi-deck server listening on :8765` and the LAN URLs Vite is on (e.g. `http://192.168.1.10:5173`).
+The server prints `digi-deck server listening on :8765`. From the same port the phone gets the PWA, the API, and the WebSocket — one port end to end.
+
+For active development (HMR + live reload), run `npm run dev` in each folder separately; Vite stays on `:5173` for that workflow and proxies `/api` to the Node server on `:8765`.
 
 ---
 
@@ -164,7 +166,7 @@ The auth token is stored in `%APPDATA%\digi-deck\config.json` on the PC and in y
 
 ## Customizing buttons
 
-**Config UI** ([http://localhost:5173/config](http://localhost:5173/config)): drag the ≡ handle to reorder, click the icon to change it, edit label and action, click **Save**. Connected phones get the new layout within ~200 ms.
+**Config UI** ([http://localhost:8765/config](http://localhost:8765/config)): drag the ≡ handle to reorder, click the icon to change it, edit label and action, click **Save**. Connected phones get the new layout within ~200 ms.
 
 **Pages**: group buttons into named tabs (e.g. "Home", "OBS", "Twitch"). Click *+ page* to add one; rename / icon / image / delete via the bar under the tabs, plus a `cols` selector (1–4) so each page can choose its own grid density. Each button has a *→ page* dropdown to move it between pages.
 
@@ -339,7 +341,7 @@ digi-deck/
 │   │   ├── actions/                   one file per action type
 │   │   └── integrations/              obs.ts, streamlabs.ts, twitch.ts
 │   └── package.json
-├── client/                            ← Vite + React PWA (port 5173)
+├── client/                            ← Vite + React PWA (built to client/dist, served by the server at :8765)
 │   ├── src/
 │   │   ├── GridApp.tsx                phone grid view
 │   │   ├── ConfigApp.tsx              PC config view

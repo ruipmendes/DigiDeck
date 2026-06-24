@@ -82,7 +82,22 @@ try {
   try { npm install --no-audit --no-fund } finally { Pop-Location }
   Write-Ok 'Client deps installed'
 
-  # ─── 5. Version stamp (best effort) ─────────────────────────────
+  # ─── 5. Production builds ───────────────────────────────────────
+  # Server is run as `node dist/index.js` (not tsx watch) for production,
+  # and the built client lives at client/dist/ which the server serves
+  # as static files. Single Node process at runtime; no Vite running
+  # while you stream/game.
+  Write-Step 'Building server (tsc)'
+  Push-Location "$root\server"
+  try { npm run build } finally { Pop-Location }
+  Write-Ok 'Server built'
+
+  Write-Step 'Building client (vite build)'
+  Push-Location "$root\client"
+  try { npm run build } finally { Pop-Location }
+  Write-Ok 'Client built'
+
+  # ─── 6. Version stamp (best effort) ─────────────────────────────
   Write-Step 'Recording installed version'
   $sha = $null
   try {
@@ -107,7 +122,7 @@ try {
     Write-Warn 'Could not determine current commit (no git, GitHub unreachable, or repo private). Update check will say "unknown local version".'
   }
 
-  # ─── 6. Desktop shortcut ────────────────────────────────────────
+  # ─── 7. Desktop shortcut ────────────────────────────────────────
   Write-Step 'Creating desktop shortcut'
   $desktop  = [Environment]::GetFolderPath('Desktop')
   $lnkPath  = Join-Path $desktop 'Digi Deck.lnk'
@@ -123,7 +138,7 @@ try {
   $shortcut.Save()
   Write-Ok "Shortcut: $lnkPath"
 
-  # ─── 7. Optional launch ─────────────────────────────────────────
+  # ─── 8. Optional launch ─────────────────────────────────────────
   Write-Host ''
   Write-Host 'Install complete.' -ForegroundColor Green
   Write-Host ''
