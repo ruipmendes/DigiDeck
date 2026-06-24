@@ -47,6 +47,7 @@ export type PreviewInfo = { name: string; title: string };
 type ServerMsg =
   | { type: 'layout'; layout: Layout; preview?: PreviewInfo }
   | { type: 'ack'; id: number }
+  | { type: 'nack'; id: number; error: string }
   | { type: 'states'; states: ButtonState[] };
 
 export type WSStatus = 'connecting' | 'open' | 'closed';
@@ -62,6 +63,7 @@ export function useMacroWS(url: string, token: string | null) {
   const [layout, setLayout] = useState<Layout | null>(null);
   const [preview, setPreview] = useState<PreviewInfo | null>(null);
   const [lastAck, setLastAck] = useState<{ id: number; at: number } | null>(null);
+  const [lastNack, setLastNack] = useState<{ id: number; error: string; at: number } | null>(null);
   const [buttonStates, setButtonStates] = useState<Map<number, ButtonState>>(new Map());
   const wsRef = useRef<WebSocket | null>(null);
 
@@ -89,6 +91,7 @@ export function useMacroWS(url: string, token: string | null) {
             setPreview(msg.preview ?? null);
           }
           else if (msg.type === 'ack') setLastAck({ id: msg.id, at: Date.now() });
+          else if (msg.type === 'nack') setLastNack({ id: msg.id, error: msg.error, at: Date.now() });
           else if (msg.type === 'states') {
             const m = new Map<number, ButtonState>();
             for (const s of msg.states) m.set(s.id, s);
@@ -121,5 +124,5 @@ export function useMacroWS(url: string, token: string | null) {
   function sliderValue(id: number, value: number) { send({ type: 'slider', id, value }); }
   function sliderMute(id: number) { send({ type: 'slider-mute', id }); }
 
-  return { status, layout, preview, lastAck, buttonStates, press, sliderValue, sliderMute };
+  return { status, layout, preview, lastAck, lastNack, buttonStates, press, sliderValue, sliderMute };
 }

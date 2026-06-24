@@ -19,6 +19,7 @@ function hexToRgba(hex: string, alpha: number): string {
 type Props = {
   layout: Layout | null;
   lastAck: { id: number; at: number } | null;
+  lastNack: { id: number; error: string; at: number } | null;
   buttonStates: Map<number, ButtonState>;
   onPress: (id: number, longPress?: boolean) => void;
   onSliderChange: (id: number, value: number) => void;
@@ -30,8 +31,11 @@ const LONG_PRESS_MS = 500;
 const PAGE_KEY = 'digi-deck:active_page';
 const BACK_TILE_ID = -1; // synthetic id; never collides with real tile ids (which are >= 0)
 
-export function ButtonGrid({ layout, lastAck, buttonStates, onPress, onSliderChange, onSliderMute }: Props) {
-  const [flash, setFlash] = useState<number | null>(null);
+export function ButtonGrid({ layout, lastAck, lastNack, buttonStates, onPress, onSliderChange, onSliderMute }: Props) {
+  // Flash state carries the tile id AND the kind of flash so failed actions
+  // can briefly tint red while successful ones tint blue/accent.
+  const [flash, setFlash] = useState<{ id: number; kind: 'ack' | 'nack' } | null>(null);
+  const [toast, setToast] = useState<{ message: string; at: number } | null>(null);
   const [activePageId, setActivePageId] = useState<number>(() => {
     const stored = localStorage.getItem(PAGE_KEY);
     return stored !== null ? Number(stored) : 0;
@@ -42,10 +46,27 @@ export function ButtonGrid({ layout, lastAck, buttonStates, onPress, onSliderCha
 
   useEffect(() => {
     if (!lastAck) return;
-    setFlash(lastAck.id);
+    setFlash({ id: lastAck.id, kind: 'ack' });
     const t = setTimeout(() => setFlash(null), 180);
     return () => clearTimeout(t);
   }, [lastAck]);
+
+  useEffect(() => {
+    if (!lastNack) return;
+    setFlash({ id: lastNack.id, kind: 'nack' });
+    // Distinct haptic so failures feel different from a normal press.
+    navigator.vibrate?.([60, 40, 60]);
+    setToast({ message: lastNack.error, at: lastNack.at });
+    const t = setTimeout(() => setFlash(null), 350);
+    return () => clearTimeout(t);
+  }, [lastNack]);
+
+  // Auto-dismiss the toast 4s after the latest failure.
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 4000);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   useEffect(() => {
     localStorage.setItem(PAGE_KEY, String(activePageId));
@@ -147,7 +168,7 @@ export function ButtonGrid({ layout, lastAck, buttonStates, onPress, onSliderCha
       >
         {showBackTile && (
           <BackTileView
-            flash={flash === BACK_TILE_ID}
+            flash={flash?.id === BACK_TILE_ID}
             isHome={backTileIsHome}
             onPress={backTileIsHome ? goHome : goBack}
           />
@@ -165,12 +186,14 @@ export function ButtonGrid({ layout, lastAck, buttonStates, onPress, onSliderCha
               />
             );
           }
+          const tileFlash = flash?.id === t.id ? flash.kind : undefined;
           return (
             <ButtonTileView
               key={t.id}
               tile={t}
               state={state}
-              flash={flash === t.id}
+              flash={!!tileFlash}
+              flashKind={tileFlash}
               onPress={(longPress) => handlePress(t, longPress)}
             />
           );
@@ -181,6 +204,41 @@ export function ButtonGrid({ layout, lastAck, buttonStates, onPress, onSliderCha
           </div>
         )}
       </div>
+      {toast && <ActionFailureToast message={toast.message} onDismiss={() => setToast(null)} />}
+    </div>
+  );
+}
+
+function ActionFailureToast({ message, onDismiss }: { message: string; onDismiss: () => void }) {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      onClick={onDismiss}
+      style={{
+        position: 'fixed',
+        left: 16,
+        right: 16,
+        bottom: 16,
+        background: '#7f1d1d',
+        border: '1px solid #b91c1c',
+        borderRadius: 8,
+        padding: '10px 14px',
+        color: '#fee2e2',
+        fontSize: 13,
+        lineHeight: 1.4,
+        zIndex: 100,
+        boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+      }}
+    >
+      <span style={{ fontWeight: 700, color: '#fff' }}>Failed</span>
+      <span style={{ opacity: 0.5 }}>·</span>
+      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{message}</span>
+      <span style={{ opacity: 0.6, fontSize: 11 }}>tap to dismiss</span>
     </div>
   );
 }
@@ -229,11 +287,13 @@ function ButtonTileView({
   tile,
   state,
   flash,
+  flashKind,
   onPress,
 }: {
   tile: Extract<Tile, { kind: 'button' }>;
   state: ButtonState | undefined;
   flash: boolean;
+  flashKind?: 'ack' | 'nack';
   onPress: (longPress: boolean) => void;
 }) {
   const Icon = getIcon(tile.icon);
@@ -244,7 +304,9 @@ function ButtonTileView({
   const defaultActiveBg = isSource ? '#022c22' : '#172554';
   const activeColor = tile.accentColor ?? defaultActiveColor;
   const activeBg = tile.accentColor ? hexToRgba(tile.accentColor, 0.18) : defaultActiveBg;
-  const flashColor = tile.accentColor ?? '#3b82f6';
+  const flashColor =
+    flashKind === 'nack' ? '#dc2626' :  // red for failure
+    (tile.accentColor ?? '#3b82f6');
   // Resting border picks up the accent (thin) so the colour is visible even
   // on tiles that never enter the "active" state — otherwise picking an
   // accent on a plain Hotkey button has no visible effect.

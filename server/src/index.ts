@@ -30,6 +30,7 @@ type ClientMsg =
 type ServerMsg =
   | { type: 'layout'; layout: PublicLayout; preview?: { name: string; title: string } }
   | { type: 'ack'; id: number }
+  | { type: 'nack'; id: number; error: string }
   | { type: 'states'; states: ButtonState[] };
 
 await migrateAppData();
@@ -193,7 +194,9 @@ wss.on('connection', (ws: WebSocket) => {
         await executeAction(action);
         ws.send(JSON.stringify({ type: 'ack', id: msg.id } satisfies ServerMsg));
       } catch (err) {
-        console.error('  action failed:', (err as Error).message);
+        const message = (err as Error).message;
+        console.error('  action failed:', message);
+        ws.send(JSON.stringify({ type: 'nack', id: msg.id, error: message } satisfies ServerMsg));
       }
       return;
     }
@@ -209,7 +212,9 @@ wss.on('connection', (ws: WebSocket) => {
           await obs.setInputVolume(tile.inputName, msg.value);
         }
       } catch (err) {
-        console.error('  slider failed:', (err as Error).message);
+        const message = (err as Error).message;
+        console.error('  slider failed:', message);
+        ws.send(JSON.stringify({ type: 'nack', id: msg.id, error: message } satisfies ServerMsg));
       }
       return;
     }
@@ -225,7 +230,9 @@ wss.on('connection', (ws: WebSocket) => {
           await obs.execute('toggle-mute', { inputName: tile.inputName });
         }
       } catch (err) {
-        console.error('  slider mute failed:', (err as Error).message);
+        const message = (err as Error).message;
+        console.error('  slider mute failed:', message);
+        ws.send(JSON.stringify({ type: 'nack', id: msg.id, error: message } satisfies ServerMsg));
       }
       return;
     }

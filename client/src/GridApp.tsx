@@ -22,7 +22,7 @@ export function GridApp() {
     () => localStorage.getItem(STORAGE_KEY) ?? defaultUrl(),
   );
   const [draft, setDraft] = useState<string | null>(null);
-  const { status, layout, preview, lastAck, buttonStates, press, sliderValue, sliderMute } = useMacroWS(url, token);
+  const { status, layout, preview, lastAck, lastNack, buttonStates, press, sliderValue, sliderMute } = useMacroWS(url, token);
   const [previewError, setPreviewError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -129,6 +129,7 @@ export function GridApp() {
       <ButtonGrid
         layout={layout}
         lastAck={lastAck}
+        lastNack={lastNack}
         buttonStates={buttonStates}
         onPress={press}
         onSliderChange={sliderValue}
