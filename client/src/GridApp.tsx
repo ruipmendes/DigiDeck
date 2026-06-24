@@ -148,7 +148,7 @@ function NotPaired() {
       <div style={{ fontSize: 48, opacity: 0.6 }}>🔒</div>
       <h2 style={{ margin: 0 }}>Not paired</h2>
       <p style={{ color: '#9ca3af', fontSize: 14, maxWidth: 320, lineHeight: 1.5 }}>
-        On your PC, open <code style={{ color: '#fff' }}>http://localhost:5173/config</code>,
+        On your PC, open <code style={{ color: '#fff' }}>http://localhost:8765/config</code>,
         click <strong>Pair phone</strong>, and scan the QR code with this device's camera.
       </p>
     </div>

@@ -259,7 +259,7 @@ function openInDefaultBrowser(url: string): void {
 }
 
 startTray({
-  onOpen: () => openInDefaultBrowser('http://localhost:5173/config'),
+  onOpen: () => openInDefaultBrowser(`http://localhost:${PORT}/config`),
   onReload: async () => {
     layout = await reloadLayout();
     const total = layout.pages.reduce((n, p) => n + p.buttons.length, 0);
