@@ -129,6 +129,10 @@ class StreamlabsClient {
   private retryStopped = false;
   private explicitStop = false;
   private onChangeCb: (() => void) | null = null;
+  // Polls audio every second while connected, since Streamlabs Desktop doesn't
+  // reliably push per-source volume events. Diff-checked so we only broadcast
+  // when something actually changed.
+  private audioPollTimer: NodeJS.Timeout | null = null;
 
   setConfig(cfg: StreamlabsConfig): void {
     this.cfg = { ...cfg };
@@ -185,6 +189,7 @@ class StreamlabsClient {
       console.log(`[streamlabs] connected to ${this.cfg.host}:${this.cfg.port}`);
       await this.refreshSnapshot().catch((e) => console.warn('[streamlabs] snapshot failed:', (e as Error).message));
       this.subscribeToEvents();
+      this.startAudioPoll();
       this.emitChange();
     } catch (err) {
       this.err = (err as Error).message;
@@ -197,6 +202,7 @@ class StreamlabsClient {
   async stop(): Promise<void> {
     this.explicitStop = true;
     if (this.retryTimer) { clearTimeout(this.retryTimer); this.retryTimer = null; }
+    this.stopAudioPoll();
     this.firstFailureAt = null;
     this.retryStopped = false;
     if (this.ws) {
@@ -329,6 +335,7 @@ class StreamlabsClient {
   }
 
   private handleClose(): void {
+    this.stopAudioPoll();
     if (this.explicitStop) return;
     const wasConnected = this.state === 'connected';
     if (wasConnected) {
@@ -432,10 +439,27 @@ class StreamlabsClient {
       this.emitChange();
       return;
     }
-    // Audio source mute/unmute. Refresh the whole audio snapshot — it's cheap.
+    // Audio source mute/unmute or volume change. Refresh the snapshot —
+    // only emit if something actually changed (the poll already drives
+    // most updates; this is just for low-latency event-driven cases).
     if (typeof resource === 'string' && resource.startsWith('AudioService')) {
-      void this.refreshAudio().then(() => this.emitChange()).catch(() => undefined);
+      void this.refreshAudio().then((changed) => { if (changed) this.emitChange(); }).catch(() => undefined);
       return;
+    }
+  }
+
+  private startAudioPoll(): void {
+    if (this.audioPollTimer) return;
+    this.audioPollTimer = setInterval(() => {
+      if (this.state !== 'connected') return;
+      void this.refreshAudio().then((changed) => { if (changed) this.emitChange(); }).catch(() => undefined);
+    }, 1000);
+  }
+
+  private stopAudioPoll(): void {
+    if (this.audioPollTimer) {
+      clearInterval(this.audioPollTimer);
+      this.audioPollTimer = null;
     }
   }
 
@@ -526,20 +550,32 @@ class StreamlabsClient {
     }
   }
 
-  private async refreshAudio(): Promise<void> {
+  /** Refreshes the audio snapshot. Returns true if mute or volume state actually changed. */
+  private async refreshAudio(): Promise<boolean> {
     const sources = await this.callMethod('AudioService', 'getSources') as SlobsAudioSource[] | undefined;
-    if (!Array.isArray(sources)) return;
-    this.audioSources = sources;
-    this.audioIdByName = new Map(
+    if (!Array.isArray(sources)) return false;
+
+    const newAudioIdByName = new Map(
       sources
         .map((s) => [s.name, s.sourceId ?? s.resourceId ?? ''] as [string, string])
         .filter(([, id]) => id.length > 0),
     );
-    this.mutedSet = new Set(sources.filter((s) => s.muted).map((s) => s.name));
-    this.inputVolumesByName = new Map(
+    const newMutedSet = new Set(sources.filter((s) => s.muted).map((s) => s.name));
+    const newInputVolumesByName = new Map(
       sources
         .map((s) => [s.name, clamp01(s.fader?.deflection ?? 1)] as [string, number]),
     );
+
+    const changed =
+      !sameStringSet(this.mutedSet, newMutedSet) ||
+      !sameVolumeMap(this.inputVolumesByName, newInputVolumesByName);
+
+    this.audioSources = sources;
+    this.audioIdByName = newAudioIdByName;
+    this.mutedSet = newMutedSet;
+    this.inputVolumesByName = newInputVolumesByName;
+
+    return changed;
   }
 
   private subscribeToEvents(): void {
@@ -551,6 +587,11 @@ class StreamlabsClient {
     void subscribe('StreamingService', 'streamingStatusChange');
     void subscribe('StreamingService', 'recordingStatusChange');
     void subscribe('StreamingService', 'replayBufferStatusChange');
+    // Audio events aren't documented; try the most likely names. If neither
+    // exists, the 1s audio poll still catches volume / mute changes within
+    // a second. The subscribe call rejects silently on unknown events.
+    void subscribe('AudioService', 'audioSourceUpdated');
+    void subscribe('AudioService', 'sourceUpdated');
   }
 
   // ─── Action dispatch ────────────────────────────────────────────
@@ -676,6 +717,23 @@ function clamp01(n: number): number {
   if (n < 0) return 0;
   if (n > 1) return 1;
   return n;
+}
+
+function sameStringSet(a: Set<string>, b: Set<string>): boolean {
+  if (a.size !== b.size) return false;
+  for (const x of a) if (!b.has(x)) return false;
+  return true;
+}
+
+function sameVolumeMap(a: Map<string, number>, b: Map<string, number>): boolean {
+  if (a.size !== b.size) return false;
+  for (const [name, va] of a) {
+    const vb = b.get(name);
+    if (vb === undefined) return false;
+    // 0.001 ~ < 0.1% — well below visible slider movement.
+    if (Math.abs(va - vb) > 0.001) return false;
+  }
+  return true;
 }
 
 let _instance: StreamlabsClient | null = null;
