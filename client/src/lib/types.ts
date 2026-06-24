@@ -72,7 +72,13 @@ export type SliderTile = {
   inputName: string;
 };
 
-export type Tile = Button | SliderTile;
+/** Spacer tile — no label, no action, no visuals. Just occupies one grid slot. */
+export type BlankTile = {
+  kind: 'blank';
+  id: number;
+};
+
+export type Tile = Button | SliderTile | BlankTile;
 export type Page = {
   id: number;
   name: string;
@@ -92,6 +98,9 @@ export type TileKind = Tile['kind'];
 export function defaultTile(kind: TileKind, id: number): Tile {
   if (kind === 'slider') {
     return { kind: 'slider', id, label: 'Slider', inputName: '' };
+  }
+  if (kind === 'blank') {
+    return { kind: 'blank', id };
   }
   return { kind: 'button', id, label: 'New', action: defaultAction('hotkey') };
 }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, Trash2, Sliders, Hand, ChevronDown, ChevronRight } from 'lucide-react';
+import { GripVertical, Trash2, Sliders, Hand, ChevronDown, ChevronRight, Square } from 'lucide-react';
 import type { Tile, Page, TileKind, Layout, ButtonAction, SliderProvider, Action } from '../lib/types';
 import { defaultTile, defaultAction } from '../lib/types';
 import { ActionEditor } from './ActionEditor';
@@ -26,7 +26,16 @@ type Props = {
   onMove: (toPageId: number) => void;
 };
 
-export function ConfigRow({ button, pages, currentPageId, layout, integrationStatus, expanded, onToggleExpanded, onChange, onDelete, onMove }: Props) {
+export function ConfigRow(props: Props) {
+  if (props.button.kind === 'blank') {
+    return <BlankConfigRow {...props} button={props.button} />;
+  }
+  return <NonBlankConfigRow {...props} button={props.button} />;
+}
+
+type NonBlankProps = Omit<Props, 'button'> & { button: Exclude<Tile, { kind: 'blank' }> };
+
+function NonBlankConfigRow({ button, pages, currentPageId, layout, integrationStatus, expanded, onToggleExpanded, onChange, onDelete, onMove }: NonBlankProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: button.id });
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
@@ -38,8 +47,11 @@ export function ConfigRow({ button, pages, currentPageId, layout, integrationSta
     if (newKind === button.kind) return;
     // Reset action/inputName when switching kinds — fields differ between types.
     const replacement = defaultTile(newKind, button.id);
-    replacement.label = button.label;
-    replacement.icon = button.icon;
+    // Carry label/icon when switching button↔slider; blank has neither.
+    if (replacement.kind !== 'blank') {
+      replacement.label = button.label;
+      replacement.icon = button.icon;
+    }
     onChange(replacement);
   }
 
@@ -168,6 +180,7 @@ export function ConfigRow({ button, pages, currentPageId, layout, integrationSta
             >
               <option value="button">Button</option>
               <option value="slider">Slider</option>
+              <option value="blank">Blank (spacer)</option>
             </select>
             <span style={{ ...metaLabel, marginLeft: 'auto' }}>id: {button.id}</span>
           </div>
@@ -200,6 +213,125 @@ export function ConfigRow({ button, pages, currentPageId, layout, integrationSta
   );
 }
 
+type BlankProps = Omit<Props, 'button'> & { button: Extract<Tile, { kind: 'blank' }> };
+
+/**
+ * Compact row for spacer tiles — no label/appearance/action, just drag handle,
+ * a static "blank" hint, page-move, kind switcher (to convert back), and delete.
+ */
+function BlankConfigRow({ button, pages, currentPageId, expanded, onToggleExpanded, onChange, onDelete, onMove }: BlankProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: button.id });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  function changeKind(newKind: TileKind) {
+    if (newKind === button.kind) return;
+    onChange(defaultTile(newKind, button.id));
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        ...style,
+        background: '#0a0a0a',
+        border: '1px dashed #374151',
+        borderRadius: 10,
+        padding: 8,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
+      }}
+    >
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'auto auto 1fr auto auto auto',
+          alignItems: 'center',
+          gap: 8,
+        }}
+      >
+        <button
+          {...attributes}
+          {...listeners}
+          style={{ background: 'transparent', border: 0, color: '#6b7280', cursor: 'grab', padding: 4 }}
+          aria-label="drag to reorder"
+        >
+          <GripVertical size={18} />
+        </button>
+
+        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, color: '#4b5563' }}>
+          <Square size={16} strokeDasharray="3 3" />
+        </span>
+
+        <span style={{ color: '#9ca3af', fontSize: 13, fontStyle: 'italic' }}>
+          Blank tile · holds an empty grid slot
+        </span>
+
+        {pages.length > 1 ? (
+          <select
+            value={currentPageId}
+            onChange={(e) => {
+              const to = Number(e.target.value);
+              if (to !== currentPageId) onMove(to);
+            }}
+            title="move to page"
+            style={{ ...inputStyle, padding: '6px 8px', fontSize: 12, maxWidth: 140 }}
+          >
+            {pages.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.id === currentPageId ? `${p.name} (here)` : `→ ${p.name}`}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <span />
+        )}
+
+        <button
+          onClick={() => onToggleExpanded()}
+          style={toggleBtnStyle}
+          aria-label={expanded ? 'collapse details' : 'expand details'}
+          aria-expanded={expanded}
+          title={expanded ? 'collapse details' : 'convert to button or slider'}
+        >
+          {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          <span>Edit</span>
+        </button>
+
+        <button
+          onClick={onDelete}
+          style={iconBtnStyle}
+          aria-label="delete tile"
+          title="delete"
+        >
+          <Trash2 size={18} />
+        </button>
+      </div>
+
+      {expanded && (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '6px 4px 4px 36px' }}>
+          <span style={metaLabel}>Kind</span>
+          <select
+            value={button.kind}
+            onChange={(e) => changeKind(e.target.value as TileKind)}
+            title="tile kind"
+            style={{ ...inputStyle, padding: '6px 8px', fontSize: 12, maxWidth: 160 }}
+          >
+            <option value="button">Button</option>
+            <option value="slider">Slider</option>
+            <option value="blank">Blank (spacer)</option>
+          </select>
+          <span style={{ ...metaLabel, marginLeft: 'auto' }}>id: {button.id}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SummaryChip({ text, onClick }: { text: string; onClick: () => void }) {
   return (
     <button
@@ -226,6 +358,7 @@ function SummaryChip({ text, onClick }: { text: string; onClick: () => void }) {
 }
 
 function summarizeTile(tile: Tile): string {
+  if (tile.kind === 'blank') return 'Spacer · empty grid slot';
   if (tile.kind === 'slider') {
     const provider = tile.provider === 'streamlabs' ? 'Streamlabs' : 'OBS';
     return tile.inputName ? `${provider} slider · ${tile.inputName}` : `${provider} slider`;

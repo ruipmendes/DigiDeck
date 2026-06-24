@@ -1,4 +1,4 @@
-import type { Layout, Tile, Page } from './types';
+import type { Layout, Page } from './types';
 import { getStoredToken } from './token';
 
 export async function getLayout(): Promise<Layout> {
@@ -187,7 +187,8 @@ export function imageReferenceCount(
     if (p.image === filename && !excludeImage) n++;
     if (p.backgroundImage === filename && !excludeBg) n++;
     for (const t of p.buttons) {
-      if ((t as Tile).image === filename && exclude?.tileId !== t.id) n++;
+      if (t.kind === 'blank') continue;
+      if (t.image === filename && exclude?.tileId !== t.id) n++;
     }
   }
   return n;
@@ -198,6 +199,7 @@ export function pageImages(page: Page): string[] {
   if (page.image) out.push(page.image);
   if (page.backgroundImage) out.push(page.backgroundImage);
   for (const t of page.buttons) {
+    if (t.kind === 'blank') continue;
     if (t.image) out.push(t.image);
   }
   return out;

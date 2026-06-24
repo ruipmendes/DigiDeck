@@ -39,6 +39,7 @@ export function computeButtonStates(
 }
 
 function computeOne(t: Tile, obs: ObsStatus, twitch: TwitchStatus, streamlabs: StreamlabsStatus): ButtonState | null {
+  if (t.kind === 'blank') return null;
   if (t.kind === 'slider') {
     const provider = t.provider ?? 'obs';
     const src = provider === 'streamlabs' ? streamlabs : obs;

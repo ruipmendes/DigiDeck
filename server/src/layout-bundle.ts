@@ -74,7 +74,8 @@ function collectImageFilenames(layout: Layout): Set<string> {
     if (p.image) set.add(p.image);
     if (p.backgroundImage) set.add(p.backgroundImage);
     for (const t of p.buttons) {
-      if ((t as Tile).image) set.add((t as Tile).image!);
+      if (t.kind === 'blank') continue;
+      if (t.image) set.add(t.image);
     }
   }
   return set;
@@ -96,7 +97,8 @@ function rewriteImageRefs(layout: unknown, rename: Map<string, string>): unknown
     if (p.backgroundImage) p.backgroundImage = remap(p.backgroundImage);
     if (Array.isArray(p.buttons)) {
       for (const t of p.buttons) {
-        if ((t as Tile).image) (t as Tile).image = remap((t as Tile).image);
+        if (t.kind === 'blank') continue;
+        if (t.image) t.image = remap(t.image);
       }
     }
   }

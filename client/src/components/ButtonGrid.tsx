@@ -174,6 +174,9 @@ export function ButtonGrid({ layout, lastAck, lastNack, buttonStates, onPress, o
           />
         )}
         {activePage.buttons.map((t) => {
+          if (t.kind === 'blank') {
+            return <BlankTileView key={t.id} />;
+          }
           const state = buttonStates.get(t.id);
           if (t.kind === 'slider') {
             return (
@@ -241,6 +244,11 @@ function ActionFailureToast({ message, onDismiss }: { message: string; onDismiss
       <span style={{ opacity: 0.6, fontSize: 11 }}>tap to dismiss</span>
     </div>
   );
+}
+
+/** Invisible spacer that still occupies its grid slot — used to push real tiles to a row/column. */
+function BlankTileView() {
+  return <div aria-hidden style={{ minHeight: 96, pointerEvents: 'none' }} />;
 }
 
 function BackTileView({ flash, isHome, onPress }: { flash: boolean; isHome: boolean; onPress: () => void }) {

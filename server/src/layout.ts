@@ -32,7 +32,17 @@ export type SliderTile = {
   inputName: string;
 };
 
-export type Tile = Button | SliderTile;
+/**
+ * A spacer tile. Has no label, no action, no visual treatment — just occupies one
+ * grid slot on the phone so the user can push real tiles to a column or row of
+ * their choosing.
+ */
+export type BlankTile = {
+  kind: 'blank';
+  id: number;
+};
+
+export type Tile = Button | SliderTile | BlankTile;
 export type Page = {
   id: number;
   name: string;
@@ -77,7 +87,9 @@ export type PublicSlider = {
   inputName: string;
 };
 
-export type PublicTile = PublicButton | PublicSlider;
+export type PublicBlank = { kind: 'blank'; id: number };
+
+export type PublicTile = PublicButton | PublicSlider | PublicBlank;
 export type PublicPage = { id: number; name: string; icon?: string; image?: string; cols?: number; background?: string; backgroundImage?: string; buttons: PublicTile[] };
 export type PublicLayout = { navigation?: NavigationMode; pages: PublicPage[] };
 
@@ -176,6 +188,9 @@ export function toPublic(layout: Layout): PublicLayout {
       background: p.background,
       backgroundImage: p.backgroundImage,
       buttons: p.buttons.map((t): PublicTile => {
+        if (t.kind === 'blank') {
+          return { kind: 'blank', id: t.id };
+        }
         if (t.kind === 'slider') {
           return { kind: 'slider', id: t.id, label: t.label, icon: t.icon, image: t.image, accentColor: t.accentColor, provider: t.provider, inputName: t.inputName };
         }
@@ -323,12 +338,20 @@ function validateButtons(input: unknown[], seenIds: Set<number>): Tile[] {
     if (typeof tile.id !== 'number') throw new Error('tile.id must be a number');
     if (seenIds.has(tile.id)) throw new Error(`duplicate tile id: ${tile.id}`);
     seenIds.add(tile.id);
+
+    const kind = (tile.kind as string | undefined) ?? 'button';
+    // Blank tiles are pure spacers — strip every other field so accidental
+    // imports don't smuggle in stale label/action/image references.
+    if (kind === 'blank') {
+      result.push({ kind: 'blank', id: tile.id });
+      continue;
+    }
+
     if (typeof tile.label !== 'string') throw new Error(`tile ${tile.id}: label must be a string`);
     if (tile.icon !== undefined && typeof tile.icon !== 'string') throw new Error(`tile ${tile.id}: icon must be a string`);
     validateImageField(tile.image, `tile ${tile.id}`);
     validateColorField(tile.accentColor, `tile ${tile.id}`, 'accentColor');
 
-    const kind = (tile.kind as string | undefined) ?? 'button';
     if (kind === 'slider') {
       if (typeof tile.inputName !== 'string' || !tile.inputName) {
         throw new Error(`tile ${tile.id}: slider requires inputName`);

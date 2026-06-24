@@ -461,6 +461,13 @@ export function ConfigApp() {
                 >
                   + add slider
                 </button>
+                <button
+                  onClick={() => addButton(activePage.id, 'blank')}
+                  style={addTileBtnStyle}
+                  title="Add an empty grid slot to push other tiles to a column or row"
+                >
+                  + add blank
+                </button>
               </div>
             </>
           )}

@@ -26,7 +26,13 @@ export type SliderTile = {
   provider?: SliderProvider;
   inputName: string;
 };
-export type Tile = Button | SliderTile;
+/** Spacer tile — no label, no action, occupies one grid slot. */
+export type BlankTile = {
+  kind: 'blank';
+  id: number;
+};
+
+export type Tile = Button | SliderTile | BlankTile;
 export type Page = { id: number; name: string; icon?: string; image?: string; cols?: number; background?: string; backgroundImage?: string; buttons: Tile[] };
 export type NavigationMode = 'tabs' | 'folders';
 export type Layout = { navigation?: NavigationMode; pages: Page[] };
