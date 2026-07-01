@@ -288,7 +288,7 @@ Each slider has a **provider** sub-dropdown that lets it target either OBS Studi
 
 ## Streamlabs Desktop integration
 
-A separate integration for Streamlabs Desktop users — OBS Studio and Streamlabs are completely isolated from each other; you can use one, the other, or neither. Status badged **EXPERIMENTAL** in the config UI until it gets more mileage; please file an issue if any op misbehaves on your Streamlabs build.
+A separate integration for Streamlabs Desktop users — OBS Studio and Streamlabs are completely isolated from each other; you can use one, the other, or neither.
 
 In Streamlabs Desktop: *Settings → Remote Control → click QR Code → show details*. Copy the API token.
 

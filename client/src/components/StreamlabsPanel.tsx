@@ -86,9 +86,6 @@ export function StreamlabsPanel() {
         {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
         <Tv size={18} />
         <strong>Streamlabs Desktop</strong>
-        <span style={{ fontSize: 10, color: '#a78bfa', background: '#3b1d6e', padding: '1px 6px', borderRadius: 4, letterSpacing: 0.3 }}>
-          EXPERIMENTAL
-        </span>
         <StatusBadge state={status?.state} />
         {status?.retryStopped && (
           <span style={{ fontSize: 11, color: '#f59e0b' }}>retries paused</span>
