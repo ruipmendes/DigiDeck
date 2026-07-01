@@ -10,13 +10,7 @@ export type KickStreamerInfo = {
 const POLL_INTERVAL_MS = 60_000;
 
 type ChannelsResponse = {
-  data?: Array<{
-    slug?: string;
-    broadcaster_user_id?: number;
-    user?: { profile_picture?: string; name?: string; username?: string };
-    stream?: { is_live?: boolean } | null;
-    stream_title?: string;
-  }>;
+  data?: unknown;
 };
 
 class KickStreamerPoller {
@@ -65,32 +59,30 @@ class KickStreamerPoller {
   private async poll(): Promise<void> {
     if (this.polling) return;
     if (this.slugs.size === 0) return;
+    // Kick's OAuth API is the only channels endpoint that isn't Cloudflare-blocked
+    // server-side, so the poll requires an authorized Kick integration.
     if (!getKick().isReady()) return;
 
     this.polling = true;
     try {
-      // /public/v1/channels accepts repeated ?slug=<...> params. Fetch all in one call.
       const slugs = [...this.slugs];
-      const result = await getKick().apiGet<ChannelsResponse>('/channels', { slug: slugs });
+      const results = await Promise.all(slugs.map((s) => this.fetchOne(s)));
 
       let changed = false;
-      for (const c of result.data ?? []) {
-        const slug = (c.slug ?? '').toLowerCase();
-        if (!slug) continue;
-        const live = !!c.stream?.is_live;
-        const displayName = c.user?.username ?? c.user?.name ?? slug;
-        const profileImageUrl = c.user?.profile_picture ?? '';
+      for (let i = 0; i < slugs.length; i++) {
+        const slug = slugs[i];
+        const info = results[i];
+        if (!info) continue;
         const prev = this.cache.get(slug);
-        const next: KickStreamerInfo = { slug, displayName, profileImageUrl, live };
         if (
           !prev ||
-          prev.live !== live ||
-          prev.profileImageUrl !== profileImageUrl ||
-          prev.displayName !== displayName
+          prev.live !== info.live ||
+          prev.profileImageUrl !== info.profileImageUrl ||
+          prev.displayName !== info.displayName
         ) {
           changed = true;
         }
-        this.cache.set(slug, next);
+        this.cache.set(slug, info);
       }
       if (changed) this.onChangeCb?.();
     } catch (err) {
@@ -99,6 +91,42 @@ class KickStreamerPoller {
       this.polling = false;
     }
   }
+
+  private async fetchOne(slug: string): Promise<KickStreamerInfo | null> {
+    try {
+      const raw = await getKick().apiGet<ChannelsResponse>('/channels', { slug });
+      const rows: unknown[] = Array.isArray(raw?.data)
+        ? raw.data
+        : raw?.data && typeof raw.data === 'object'
+          ? [raw.data]
+          : [];
+      const row = rows.find((r) => matchesSlug(r, slug)) ?? rows[0];
+      if (!row || typeof row !== 'object') return null;
+
+      const c = row as Record<string, unknown>;
+      const stream = (c.stream ?? c.livestream ?? null) as Record<string, unknown> | null;
+      const live = !!(stream && (stream.is_live === true || stream.isLive === true));
+
+      // /public/v1/channels doesn't return the broadcaster's profile picture, and
+      // /public/v1/users?user_id=<id> ignores the filter and returns the auth'd
+      // user. The best identity signal we can get from the API alone is the live
+      // stream thumbnail; users who want a stable avatar paste the URL manually
+      // via the action's optional `avatarUrl` field.
+      const streamThumb = live && stream && typeof stream.thumbnail === 'string' ? stream.thumbnail : '';
+
+      return { slug, displayName: slug, profileImageUrl: streamThumb, live };
+    } catch (err) {
+      console.warn(`[kick-streamers] ${slug} fetch failed:`, (err as Error).message);
+      return null;
+    }
+  }
+}
+
+function matchesSlug(row: unknown, slug: string): boolean {
+  if (!row || typeof row !== 'object') return false;
+  const r = row as Record<string, unknown>;
+  const raw = r.slug;
+  return typeof raw === 'string' && raw.toLowerCase() === slug;
 }
 
 let _instance: KickStreamerPoller | null = null;

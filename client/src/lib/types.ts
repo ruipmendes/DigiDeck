@@ -37,7 +37,7 @@ export type Action =
   | { type: 'twitch'; op: TwitchOp; text: string }
   | { type: 'twitch-streamer'; login: string }
   | { type: 'kick'; op: KickOp; text: string }
-  | { type: 'kick-streamer'; slug: string }
+  | { type: 'kick-streamer'; slug: string; avatarUrl?: string }
   | { type: 'goto-page'; pageId: number }
   | { type: 'wait'; ms: number };
 

@@ -406,14 +406,21 @@ function Body({ action, onChange, pages }: StepEditorProps) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <input
             value={action.slug}
-            onChange={(e) => onChange({ type: 'kick-streamer', slug: e.target.value.trim().toLowerCase() })}
+            onChange={(e) => onChange({ ...action, type: 'kick-streamer', slug: e.target.value.trim().toLowerCase() })}
             placeholder="streamer slug (e.g. adin)"
             spellCheck={false}
             autoCapitalize="none"
             style={inputStyle}
           />
+          <input
+            value={action.avatarUrl ?? ''}
+            onChange={(e) => onChange({ ...action, avatarUrl: e.target.value.trim() || undefined })}
+            placeholder="avatar URL (optional — paste from kick.com)"
+            spellCheck={false}
+            style={inputStyle}
+          />
           <span style={{ fontSize: 11, color: '#6b7280' }}>
-            Tap on the phone opens kick.com/{action.slug || '<slug>'}. Thumbnail + live state require Kick connected.
+            Kick's API doesn't expose other users' avatars. On kick.com/{action.slug || '<slug>'} right-click their profile picture → <em>Copy image address</em>, then paste it above. Live state auto-refreshes; a stream preview is used if no avatar URL is set.
           </span>
         </div>
       );

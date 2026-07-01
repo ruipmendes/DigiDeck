@@ -484,15 +484,33 @@ function ButtonTileView({
               )}
             </div>
           ) : isStreamer ? (
-            <div
-              style={{
-                width: 56, height: 56, borderRadius: '50%',
-                background: '#1f1f1f', border: '2px solid #374151',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: '#9ca3af', fontSize: 18, fontWeight: 700,
-              }}
-            >
-              {(tile.label[0] ?? '?').toUpperCase()}
+            <div style={{ position: 'relative' }}>
+              <div
+                style={{
+                  width: 56, height: 56, borderRadius: '50%',
+                  background: '#1f1f1f',
+                  border: live
+                    ? `2px solid ${isKickStreamer ? '#53fc18' : '#a855f7'}`
+                    : '2px solid #374151',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: '#9ca3af', fontSize: 18, fontWeight: 700,
+                  transition: 'border-color 0.2s',
+                }}
+              >
+                {(tile.label[0] ?? '?').toUpperCase()}
+              </div>
+              {live && (
+                <span
+                  aria-hidden
+                  style={{
+                    position: 'absolute', bottom: -2, left: '50%', transform: 'translateX(-50%)',
+                    background: '#ef4444', color: '#fff', fontSize: 9, lineHeight: 1,
+                    padding: '2px 6px', borderRadius: 4, fontWeight: 700, letterSpacing: 0.3,
+                  }}
+                >
+                  LIVE
+                </span>
+              )}
             </div>
           ) : Icon ? (
             <Icon size={32} strokeWidth={1.75} />

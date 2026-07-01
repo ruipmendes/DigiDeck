@@ -195,8 +195,13 @@ function computeStepState(a: Action, obs: ObsStatus, twitch: TwitchStatus, strea
 
   if (a.type === 'kick-streamer') {
     const info = getKickStreamers().get(a.slug);
-    if (!info) return null;
-    return { thumbnail: info.profileImageUrl, live: info.live };
+    // User-pasted avatarUrl wins — Kick's OAuth API doesn't expose other users'
+    // profile pics, so this field lets people supply a stable image from
+    // files.kick.com (right-click the avatar on kick.com → Copy image address).
+    const thumbnail = a.avatarUrl || info?.profileImageUrl || undefined;
+    const live = info?.live;
+    if (thumbnail === undefined && live === undefined) return null;
+    return { thumbnail, live };
   }
 
   if (a.type === 'mic') {
