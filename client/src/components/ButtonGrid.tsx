@@ -43,6 +43,25 @@ export function ButtonGrid({ layout, lastAck, lastNack, buttonStates, onPress, o
   // History stack of page ids we navigated through via folder buttons. Cleared when
   // user picks a tab or when the layout's nav mode is 'tabs'.
   const [history, setHistory] = useState<number[]>([]);
+  // Reserve a right-side thumb strip ONLY when the page actually scrolls;
+  // otherwise the gutter would needlessly shrink columns when everything fits.
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [pageScrolls, setPageScrolls] = useState(false);
+  useEffect(() => {
+    function check() {
+      const doc = document.documentElement;
+      setPageScrolls(doc.scrollHeight > doc.clientHeight);
+    }
+    check();
+    const grid = gridRef.current;
+    const ro = grid ? new ResizeObserver(check) : null;
+    if (ro && grid) ro.observe(grid);
+    window.addEventListener('resize', check);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener('resize', check);
+    };
+  }, [activePageId, layout]);
 
   useEffect(() => {
     if (!lastAck) return;
@@ -158,12 +177,16 @@ export function ButtonGrid({ layout, lastAck, lastNack, buttonStates, onPress, o
         />
       )}
       <div
+        ref={gridRef}
         style={{
           display: 'grid',
           gridTemplateColumns: `repeat(${activePage.cols ?? 2}, 1fr)`,
           gap: 12,
           flex: 1,
           alignContent: 'start',
+          // Right-side thumb strip — only when the page actually scrolls,
+          // so we don't shrink columns when the whole grid already fits.
+          paddingRight: pageScrolls ? 24 : 0,
         }}
       >
         {showBackTile && (
