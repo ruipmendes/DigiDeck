@@ -7,6 +7,7 @@ import { saveConfig, type ServerConfig } from './config.js';
 import { getObs, DEFAULT_OBS_CONFIG, type ObsConfig } from './integrations/obs.js';
 import { getStreamlabs, DEFAULT_STREAMLABS_CONFIG, type StreamlabsConfig } from './integrations/streamlabs.js';
 import { getTwitch, type TwitchConfig } from './integrations/twitch.js';
+import { getKick, type KickConfig } from './integrations/kick.js';
 import {
   saveImage, imagePath, imageExists, deleteImage, imageMime, MAX_IMAGE_BYTES,
 } from './images.js';
@@ -418,6 +419,99 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse, c
     return;
   }
 
+  // ─── Kick ─────────────────────────────────────────────────────
+  if (pathname === '/api/integrations/kick' && req.method === 'GET') {
+    if (!authorize(req, token())) return unauthorized(res);
+    json(res, 200, {
+      config: publicKickConfig(ctx.getServerConfig().integrations.kick),
+      status: getKick().status(),
+    });
+    return;
+  }
+  if (pathname === '/api/integrations/kick/config' && req.method === 'PUT') {
+    if (!isLocalhost(req)) return unauthorized(res);
+    try {
+      const body = await readJsonBody(req);
+      const kickCfg = validateKickConfig(body, ctx.getServerConfig().integrations.kick);
+      const cfg = ctx.getServerConfig();
+      cfg.integrations.kick = kickCfg;
+      await saveConfig(cfg);
+      getKick().setConfig(kickCfg);
+      if (kickCfg.enabled && kickCfg.refreshToken) {
+        await getKick().restart();
+      } else {
+        await getKick().stop();
+      }
+      ctx.onIntegrationsChanged();
+      json(res, 200, {
+        config: publicKickConfig(cfg.integrations.kick),
+        status: getKick().status(),
+      });
+    } catch (err) {
+      json(res, 400, { error: (err as Error).message });
+    }
+    return;
+  }
+  if (pathname === '/api/integrations/kick/authorize' && req.method === 'GET') {
+    if (!isLocalhost(req)) return unauthorized(res);
+    try {
+      const url = getKick().buildAuthorizeUrl();
+      json(res, 200, { url });
+    } catch (err) {
+      json(res, 400, { error: (err as Error).message });
+    }
+    return;
+  }
+  if (pathname === '/api/integrations/kick/callback' && req.method === 'GET') {
+    if (!isLocalhost(req)) {
+      res.writeHead(403, { 'Content-Type': 'text/plain' });
+      res.end('forbidden');
+      return;
+    }
+    const url = new URL(req.url ?? '', 'http://localhost');
+    const code = url.searchParams.get('code');
+    const state = url.searchParams.get('state');
+    const oauthErr = url.searchParams.get('error');
+    if (oauthErr) {
+      htmlResponse(res, 200, callbackHtml('Authorization cancelled', oauthErr, false));
+      return;
+    }
+    if (!code || !state) {
+      htmlResponse(res, 400, callbackHtml('Bad request', 'Missing code or state.', false));
+      return;
+    }
+    try {
+      await getKick().handleCallback(code, state);
+      const slug = getKick().status().slug;
+      htmlResponse(res, 200, callbackHtml(
+        'Connected to Kick',
+        slug ? `Logged in as ${slug}.` : 'Authorization complete.',
+        true,
+      ));
+    } catch (err) {
+      htmlResponse(res, 500, callbackHtml('Auth failed', (err as Error).message, false));
+    }
+    return;
+  }
+  if (pathname === '/api/integrations/kick/disconnect' && req.method === 'POST') {
+    if (!isLocalhost(req)) return unauthorized(res);
+    await getKick().disconnectIntegration();
+    json(res, 200, {
+      config: publicKickConfig(ctx.getServerConfig().integrations.kick),
+      status: getKick().status(),
+    });
+    return;
+  }
+  if (pathname === '/api/integrations/kick/reconnect' && req.method === 'POST') {
+    if (!isLocalhost(req)) return unauthorized(res);
+    await getKick().restart();
+    json(res, 200, {
+      config: publicKickConfig(ctx.getServerConfig().integrations.kick),
+      status: getKick().status(),
+    });
+    return;
+  }
+
   // ─── Static client (built SPA) ──────────────────────────────
   // Any non-/api request falls through to the built client at client/dist/.
   // The SPA-routing fallback returns index.html for paths without an extension
@@ -542,6 +636,34 @@ function validateTwitchConfig(input: unknown, existing: TwitchConfig): TwitchCon
     // Refresh token and username are managed by the OAuth flow, not by this endpoint.
     refreshToken: existing.refreshToken,
     username: existing.username,
+  };
+}
+
+function publicKickConfig(cfg: KickConfig): {
+  enabled: boolean; clientId: string; hasSecret: boolean; hasRefreshToken: boolean; slug: string;
+} {
+  return {
+    enabled: cfg.enabled,
+    clientId: cfg.clientId,
+    hasSecret: !!cfg.clientSecret,
+    hasRefreshToken: !!cfg.refreshToken,
+    slug: cfg.slug,
+  };
+}
+
+function validateKickConfig(input: unknown, existing: KickConfig): KickConfig {
+  if (!input || typeof input !== 'object') throw new Error('invalid Kick config');
+  const o = input as Record<string, unknown>;
+  return {
+    enabled: !!o.enabled,
+    clientId: typeof o.clientId === 'string' ? o.clientId.trim() : existing.clientId,
+    clientSecret: typeof o.clientSecret === 'string' && o.clientSecret.length > 0
+      ? o.clientSecret
+      : existing.clientSecret,
+    // Managed by OAuth flow, not this endpoint.
+    refreshToken: existing.refreshToken,
+    slug: existing.slug,
+    broadcasterUserId: existing.broadcasterUserId,
   };
 }
 

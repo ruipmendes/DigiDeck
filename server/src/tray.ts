@@ -6,6 +6,7 @@ export type TrayActions = {
   onRestartObs: () => Promise<void> | void;
   onRestartTwitch: () => Promise<void> | void;
   onRestartStreamlabs: () => Promise<void> | void;
+  onRestartKick: () => Promise<void> | void;
   onCheckForUpdates: () => Promise<void> | void;
   onQuit: () => Promise<void> | void;
 };
@@ -15,6 +16,7 @@ export type TrayMenu = {
   obs: boolean;
   streamlabs: boolean;
   twitch: boolean;
+  kick: boolean;
 };
 
 function buildPsScript(menu: TrayMenu): string {
@@ -30,6 +32,10 @@ function buildPsScript(menu: TrayMenu): string {
   if (menu.twitch) {
     restartItems.push(`$twitchItem = $menu.Items.Add('Restart Twitch connection')`);
     restartItems.push(`$twitchItem.Add_Click({ Send-Cmd 'RESTART_TWITCH' })`);
+  }
+  if (menu.kick) {
+    restartItems.push(`$kickItem = $menu.Items.Add('Restart Kick connection')`);
+    restartItems.push(`$kickItem.Add_Click({ Send-Cmd 'RESTART_KICK' })`);
   }
   // Only emit the separator when at least one restart item exists, otherwise it dangles.
   const restartBlock = restartItems.length > 0
@@ -148,7 +154,7 @@ export function startTray(actions: TrayActions, menu: TrayMenu): void {
 export function updateTrayMenu(menu: TrayMenu): void {
   if (process.platform !== 'win32') return;
   if (!currentActions) return;
-  if (currentMenu && currentMenu.obs === menu.obs && currentMenu.streamlabs === menu.streamlabs && currentMenu.twitch === menu.twitch) {
+  if (currentMenu && currentMenu.obs === menu.obs && currentMenu.streamlabs === menu.streamlabs && currentMenu.twitch === menu.twitch && currentMenu.kick === menu.kick) {
     return;
   }
   currentMenu = menu;
@@ -165,6 +171,7 @@ function menuLabel(menu: TrayMenu): string {
   if (menu.obs) items.push('obs');
   if (menu.streamlabs) items.push('streamlabs');
   if (menu.twitch) items.push('twitch');
+  if (menu.kick) items.push('kick');
   return items.length > 0 ? items.join(', ') : 'none';
 }
 
@@ -176,6 +183,7 @@ async function dispatch(cmd: string, actions: TrayActions): Promise<void> {
       case 'RESTART_OBS':         await actions.onRestartObs(); break;
       case 'RESTART_STREAMLABS':  await actions.onRestartStreamlabs(); break;
       case 'RESTART_TWITCH':      await actions.onRestartTwitch(); break;
+      case 'RESTART_KICK':        await actions.onRestartKick(); break;
       case 'CHECK_UPDATES':       await actions.onCheckForUpdates(); break;
       case 'QUIT':                await actions.onQuit(); break;
       default:               console.warn(`[tray] unknown command: ${cmd}`);

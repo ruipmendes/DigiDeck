@@ -4,6 +4,7 @@ import * as api from '../lib/api';
 import { ObsPanel } from './ObsPanel';
 import { StreamlabsPanel } from './StreamlabsPanel';
 import { TwitchPanel } from './TwitchPanel';
+import { KickPanel } from './KickPanel';
 
 type StatusKind = 'connected' | 'connecting' | 'disconnected' | 'error' | 'disabled' | 'needs-auth' | 'not-configured';
 
@@ -11,12 +12,14 @@ type Summary = {
   obs:        { enabled: boolean; state: StatusKind };
   streamlabs: { enabled: boolean; state: StatusKind };
   twitch:     { enabled: boolean; state: StatusKind };
+  kick:       { enabled: boolean; state: StatusKind };
 };
 
 const DEFAULT_SUMMARY: Summary = {
   obs:        { enabled: false, state: 'disabled' },
   streamlabs: { enabled: false, state: 'disabled' },
   twitch:     { enabled: false, state: 'disabled' },
+  kick:       { enabled: false, state: 'disabled' },
 };
 
 /**
@@ -36,16 +39,18 @@ export function IntegrationsPanel() {
     let alive = true;
     async function load() {
       try {
-        const [obs, sl, tw] = await Promise.all([
+        const [obs, sl, tw, kk] = await Promise.all([
           api.getObsState().catch(() => null),
           api.getStreamlabsState().catch(() => null),
           api.getTwitchState().catch(() => null),
+          api.getKickState().catch(() => null),
         ]);
         if (!alive) return;
         setSummary({
           obs:        { enabled: !!obs?.config.enabled, state: (obs?.status.state as StatusKind) ?? 'disabled' },
           streamlabs: { enabled: !!sl?.config.enabled,  state: (sl?.status.state  as StatusKind) ?? 'disabled' },
           twitch:     { enabled: !!tw?.config.enabled,  state: (tw?.status.state  as StatusKind) ?? 'disabled' },
+          kick:       { enabled: !!kk?.config.enabled,  state: (kk?.status.state  as StatusKind) ?? 'disabled' },
         });
       } catch { /* harmless */ }
     }
@@ -80,6 +85,7 @@ export function IntegrationsPanel() {
           <Pill name="OBS"        s={summary.obs} />
           <Pill name="Streamlabs" s={summary.streamlabs} />
           <Pill name="Twitch"     s={summary.twitch} />
+          <Pill name="Kick"       s={summary.kick} />
         </span>
       </button>
 
@@ -88,6 +94,7 @@ export function IntegrationsPanel() {
           <ObsPanel />
           <StreamlabsPanel />
           <TwitchPanel />
+          <KickPanel />
         </div>
       )}
     </div>

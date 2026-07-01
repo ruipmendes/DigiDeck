@@ -4,6 +4,7 @@ import { randomBytes } from 'node:crypto';
 import { DEFAULT_OBS_CONFIG, type ObsConfig } from './integrations/obs.js';
 import { DEFAULT_TWITCH_CONFIG, type TwitchConfig } from './integrations/twitch.js';
 import { DEFAULT_STREAMLABS_CONFIG, type StreamlabsConfig } from './integrations/streamlabs.js';
+import { DEFAULT_KICK_CONFIG, type KickConfig } from './integrations/kick.js';
 
 const APP_DIR = join(
   process.env.APPDATA ?? join(process.env.USERPROFILE ?? '.', 'AppData', 'Roaming'),
@@ -15,6 +16,7 @@ export type IntegrationsConfig = {
   obs: ObsConfig;
   twitch: TwitchConfig;
   streamlabs: StreamlabsConfig;
+  kick: KickConfig;
 };
 
 export type ServerConfig = {
@@ -32,6 +34,7 @@ function withDefaults(parsed: Partial<ServerConfig> | null | undefined): ServerC
       obs:        { ...DEFAULT_OBS_CONFIG,        ...parsed?.integrations?.obs },
       twitch:     { ...DEFAULT_TWITCH_CONFIG,     ...parsed?.integrations?.twitch },
       streamlabs: { ...DEFAULT_STREAMLABS_CONFIG, ...parsed?.integrations?.streamlabs },
+      kick:       { ...DEFAULT_KICK_CONFIG,       ...parsed?.integrations?.kick },
     },
   };
 }

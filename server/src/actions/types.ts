@@ -10,6 +10,8 @@ import { getStreamlabs } from '../integrations/streamlabs.js';
 import type { StreamlabsOp, StreamlabsActionParams } from '../integrations/streamlabs.js';
 import { getTwitch } from '../integrations/twitch.js';
 import type { TwitchOp } from '../integrations/twitch.js';
+import { getKick } from '../integrations/kick.js';
+import type { KickOp } from '../integrations/kick.js';
 import { getMic } from './mic.js';
 import type { MicOp } from './mic.js';
 
@@ -25,6 +27,8 @@ export type Action =
   | { type: 'streamlabs'; op: StreamlabsOp; params?: StreamlabsActionParams }
   | { type: 'twitch'; op: TwitchOp; text: string }
   | { type: 'twitch-streamer'; login: string }
+  | { type: 'kick'; op: KickOp; text: string }
+  | { type: 'kick-streamer'; slug: string }
   | { type: 'goto-page'; pageId: number }
   | { type: 'wait'; ms: number };
 
@@ -48,6 +52,9 @@ async function executeStep(step: Action): Promise<void> {
       // Open the channel in the PC's default browser — same machine that's
       // running OBS/streaming, so the host can put it on screen.
       return execUrl(`https://twitch.tv/${step.login}`);
+    case 'kick': return getKick().execute(step.op, { text: step.text });
+    case 'kick-streamer':
+      return execUrl(`https://kick.com/${step.slug}`);
     case 'goto-page':
       // Navigation is handled entirely on the phone — server has nothing to do.
       return;

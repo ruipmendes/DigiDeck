@@ -72,6 +72,9 @@ export type PublicButton = {
   /** Set when the button's action targets a Twitch streamer.
    *  Phone uses this to render a thumbnail. */
   streamerLogin?: string;
+  /** Set when the button's action targets a Kick streamer.
+   *  Phone uses this to render a thumbnail. */
+  kickStreamerSlug?: string;
   /** Set when the button (or any step) is a goto-page action. Phone handles navigation locally. */
   gotoPageId?: number;
 };
@@ -201,6 +204,10 @@ export function toPublic(layout: Layout): PublicLayout {
         if (streamer && streamer.type === 'twitch-streamer' && streamer.login) {
           out.streamerLogin = streamer.login.trim().toLowerCase();
         }
+        const kickStreamer = steps.find((a) => a.type === 'kick-streamer');
+        if (kickStreamer && kickStreamer.type === 'kick-streamer' && kickStreamer.slug) {
+          out.kickStreamerSlug = kickStreamer.slug.trim().toLowerCase();
+        }
         const goto = steps.find((a) => a.type === 'goto-page');
         if (goto && goto.type === 'goto-page') {
           out.gotoPageId = goto.pageId;
@@ -228,6 +235,23 @@ export function collectStreamerLogins(layout: Layout): string[] {
   return [...set];
 }
 
+/** Collect every kick-streamer slug referenced in the layout (deduped, lowercased). */
+export function collectKickStreamerSlugs(layout: Layout): string[] {
+  const set = new Set<string>();
+  for (const page of layout.pages) {
+    for (const t of page.buttons) {
+      if (t.kind !== 'button') continue;
+      const steps = Array.isArray(t.action) ? t.action : [t.action];
+      for (const a of steps) {
+        if (a.type === 'kick-streamer' && a.slug) {
+          set.add(a.slug.trim().toLowerCase());
+        }
+      }
+    }
+  }
+  return [...set];
+}
+
 export function findTile(layout: Layout, id: number): Tile | undefined {
   for (const page of layout.pages) {
     for (const t of page.buttons) {
@@ -247,7 +271,7 @@ export function watchLayout(onChange: () => void): () => void {
   return () => w.close();
 }
 
-const VALID_ACTION_TYPES = new Set(['hotkey', 'text', 'launch', 'url', 'script', 'volume', 'mic', 'obs', 'streamlabs', 'twitch', 'twitch-streamer', 'goto-page', 'wait']);
+const VALID_ACTION_TYPES = new Set(['hotkey', 'text', 'launch', 'url', 'script', 'volume', 'mic', 'obs', 'streamlabs', 'twitch', 'twitch-streamer', 'kick', 'kick-streamer', 'goto-page', 'wait']);
 
 export function validateLayout(input: unknown): Layout {
   if (!input || typeof input !== 'object') throw new Error('layout must be an object');

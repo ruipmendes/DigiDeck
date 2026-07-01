@@ -3,7 +3,9 @@ import type { Tile, Layout } from './layout.js';
 import type { ObsStatus } from './integrations/obs.js';
 import type { StreamlabsStatus } from './integrations/streamlabs.js';
 import type { TwitchStatus } from './integrations/twitch.js';
+import type { KickStatus } from './integrations/kick.js';
 import { getStreamers } from './integrations/twitch-streamers.js';
+import { getKickStreamers } from './integrations/kick-streamers.js';
 import { getMic } from './actions/mic.js';
 
 export type ButtonState = {
@@ -27,18 +29,19 @@ export function computeButtonStates(
   obs: ObsStatus,
   twitch: TwitchStatus,
   streamlabs: StreamlabsStatus,
+  kick: KickStatus,
 ): ButtonState[] {
   const out: ButtonState[] = [];
   for (const page of layout.pages) {
     for (const tile of page.buttons) {
-      const s = computeOne(tile, obs, twitch, streamlabs);
+      const s = computeOne(tile, obs, twitch, streamlabs, kick);
       if (s) out.push(s);
     }
   }
   return out;
 }
 
-function computeOne(t: Tile, obs: ObsStatus, twitch: TwitchStatus, streamlabs: StreamlabsStatus): ButtonState | null {
+function computeOne(t: Tile, obs: ObsStatus, twitch: TwitchStatus, streamlabs: StreamlabsStatus, kick: KickStatus): ButtonState | null {
   if (t.kind === 'blank') return null;
   if (t.kind === 'slider') {
     const provider = t.provider ?? 'obs';
@@ -59,7 +62,7 @@ function computeOne(t: Tile, obs: ObsStatus, twitch: TwitchStatus, streamlabs: S
   let live: boolean | undefined;
 
   for (const step of steps) {
-    const s = computeStepState(step, obs, twitch, streamlabs);
+    const s = computeStepState(step, obs, twitch, streamlabs, kick);
     if (!s) continue;
     if (s.unavailable) unavailable = true;
     if (active === undefined && s.active !== undefined) {
@@ -91,7 +94,7 @@ type StepState = {
   live?: boolean;
 };
 
-function computeStepState(a: Action, obs: ObsStatus, twitch: TwitchStatus, streamlabs: StreamlabsStatus): StepState | null {
+function computeStepState(a: Action, obs: ObsStatus, twitch: TwitchStatus, streamlabs: StreamlabsStatus, kick: KickStatus): StepState | null {
   if (a.type === 'obs') {
     const unavailable = obs.state !== 'connected';
     let active: boolean | undefined;
@@ -182,6 +185,16 @@ function computeStepState(a: Action, obs: ObsStatus, twitch: TwitchStatus, strea
 
   if (a.type === 'twitch-streamer') {
     const info = getStreamers().get(a.login);
+    if (!info) return null;
+    return { thumbnail: info.profileImageUrl, live: info.live };
+  }
+
+  if (a.type === 'kick') {
+    return { unavailable: kick.state !== 'connected' };
+  }
+
+  if (a.type === 'kick-streamer') {
+    const info = getKickStreamers().get(a.slug);
     if (!info) return null;
     return { thumbnail: info.profileImageUrl, live: info.live };
   }

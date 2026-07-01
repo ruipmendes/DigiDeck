@@ -11,6 +11,8 @@ export type Button = {
   hasLongPress?: boolean;
   /** Set on Twitch streamer buttons. Phone uses it to render a thumbnail. */
   streamerLogin?: string;
+  /** Set on Kick streamer buttons. Phone uses it to render a thumbnail. */
+  kickStreamerSlug?: string;
   /** Set when the button's action contains a goto-page step. Phone navigates locally on press. */
   gotoPageId?: number;
 };

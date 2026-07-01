@@ -342,7 +342,8 @@ function ButtonTileView({
   // on tiles that never enter the "active" state — otherwise picking an
   // accent on a plain Hotkey button has no visible effect.
   const restingBorder = tile.accentColor ?? '#2a2a2a';
-  const isStreamer = !!tile.streamerLogin;
+  const isStreamer = !!tile.streamerLogin || !!tile.kickStreamerSlug;
+  const isKickStreamer = !!tile.kickStreamerSlug;
   const thumbnail = state?.thumbnail;
   const live = state?.live;
   const hasImage = !!tile.image && !isStreamer;
@@ -463,7 +464,9 @@ function ButtonTileView({
                 style={{
                   width: 56, height: 56, borderRadius: '50%', objectFit: 'cover',
                   filter: live ? 'none' : 'grayscale(100%) brightness(0.7)',
-                  border: live ? '2px solid #a855f7' : '2px solid #374151',
+                  border: live
+                    ? `2px solid ${isKickStreamer ? '#53fc18' : '#a855f7'}`
+                    : '2px solid #374151',
                   transition: 'filter 0.2s, border-color 0.2s',
                 }}
               />

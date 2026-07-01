@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
 import { WebSocketServer, WebSocket } from 'ws';
-import { loadOrInitLayout, reloadLayout, toPublic, watchLayout, findTile, collectStreamerLogins, LAYOUT_FILE } from './layout.js';
+import { loadOrInitLayout, reloadLayout, toPublic, watchLayout, findTile, collectStreamerLogins, collectKickStreamerSlugs, LAYOUT_FILE } from './layout.js';
 import { executeAction } from './actions/types.js';
 import { handleRequest } from './http.js';
 import { loadOrInitConfig, saveConfig, CONFIG_FILE } from './config.js';
@@ -11,6 +11,8 @@ import { getObs } from './integrations/obs.js';
 import { getStreamlabs } from './integrations/streamlabs.js';
 import { getTwitch } from './integrations/twitch.js';
 import { getStreamers } from './integrations/twitch-streamers.js';
+import { getKick } from './integrations/kick.js';
+import { getKickStreamers } from './integrations/kick-streamers.js';
 import { getMic } from './actions/mic.js';
 import { computeButtonStates, type ButtonState } from './states.js';
 import { startTray, stopTray, updateTrayMenu, type TrayMenu } from './tray.js';
@@ -59,6 +61,18 @@ const streamers = getStreamers();
 streamers.setLogins(collectStreamerLogins(layout));
 streamers.start();
 
+const kick = getKick();
+kick.setConfig(serverConfig.integrations.kick);
+kick.setSaveCallback(async (cfg) => {
+  serverConfig.integrations.kick = cfg;
+  await saveConfig(serverConfig);
+});
+void kick.start();
+
+const kickStreamers = getKickStreamers();
+kickStreamers.setSlugs(collectKickStreamerSlugs(layout));
+kickStreamers.start();
+
 const mic = getMic();
 mic.start();
 
@@ -69,6 +83,7 @@ function currentTrayMenu(): TrayMenu {
     obs:        !!serverConfig.integrations.obs.enabled,
     streamlabs: !!serverConfig.integrations.streamlabs.enabled,
     twitch:     !!serverConfig.integrations.twitch.enabled,
+    kick:       !!serverConfig.integrations.kick.enabled,
   };
 }
 
@@ -117,7 +132,7 @@ function broadcastLayout() {
 }
 
 function broadcastStates() {
-  const states = computeButtonStates(activeLayout(), obs.status(), twitch.status(), streamlabs.status());
+  const states = computeButtonStates(activeLayout(), obs.status(), twitch.status(), streamlabs.status(), kick.status());
   const data = JSON.stringify({ type: 'states', states } satisfies ServerMsg);
   for (const ws of wss.clients) {
     if (ws.readyState === ws.OPEN) ws.send(data);
@@ -138,6 +153,11 @@ twitch.onChange(() => {
   if (twitch.status().state === 'connected') streamers.refresh();
 });
 streamers.onChange(scheduleStateBroadcast);
+kick.onChange(() => {
+  scheduleStateBroadcast();
+  if (kick.status().state === 'connected') kickStreamers.refresh();
+});
+kickStreamers.onChange(scheduleStateBroadcast);
 mic.onChange(scheduleStateBroadcast);
 
 watchLayout(async () => {
@@ -146,6 +166,7 @@ watchLayout(async () => {
     const total = layout.pages.reduce((n, p) => n + p.buttons.length, 0);
     console.log(`[layout reloaded] ${layout.pages.length} pages, ${total} buttons`);
     streamers.setLogins(collectStreamerLogins(layout));
+    kickStreamers.setSlugs(collectKickStreamerSlugs(layout));
     broadcastLayout();
     scheduleStateBroadcast();
   } catch (err) {
@@ -162,7 +183,7 @@ wss.on('connection', (ws: WebSocket) => {
   ));
   ws.send(JSON.stringify({
     type: 'states',
-    states: computeButtonStates(activeLayout(), obs.status(), twitch.status(), streamlabs.status()),
+    states: computeButtonStates(activeLayout(), obs.status(), twitch.status(), streamlabs.status(), kick.status()),
   } satisfies ServerMsg));
 
   ws.on('message', async (data) => {
@@ -265,6 +286,7 @@ startTray({
     const total = layout.pages.reduce((n, p) => n + p.buttons.length, 0);
     console.log(`[tray] reloaded layout: ${layout.pages.length} pages, ${total} buttons`);
     streamers.setLogins(collectStreamerLogins(layout));
+    kickStreamers.setSlugs(collectKickStreamerSlugs(layout));
     broadcastLayout();
     scheduleStateBroadcast();
   },
@@ -279,6 +301,10 @@ startTray({
   onRestartStreamlabs: async () => {
     console.log('[tray] restarting Streamlabs connection');
     await streamlabs.restart();
+  },
+  onRestartKick: async () => {
+    console.log('[tray] restarting Kick connection');
+    await kick.restart();
   },
   onCheckForUpdates: async () => {
     console.log('[tray] checking for updates');
@@ -370,10 +396,12 @@ function psString(s: string): string {
 async function shutdown() {
   stopTray();
   streamers.stop();
+  kickStreamers.stop();
   mic.stop();
   await obs.stop();
   await streamlabs.stop();
   await twitch.stop();
+  await kick.stop();
   stopMdns();
   httpServer.close();
   process.exit(0);

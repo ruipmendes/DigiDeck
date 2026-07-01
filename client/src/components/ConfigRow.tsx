@@ -11,7 +11,7 @@ import { ColorPicker } from './ColorPicker';
 import { AppearancePopover, AppearanceSection } from './AppearancePopover';
 import * as api from '../lib/api';
 
-export type IntegrationStatus = { obs: boolean; twitch: boolean; streamlabs: boolean };
+export type IntegrationStatus = { obs: boolean; twitch: boolean; streamlabs: boolean; kick: boolean };
 
 type Props = {
   button: Tile;
@@ -385,6 +385,8 @@ function summarizeAction(a: Action): string {
     case 'streamlabs':       return a.params?.sceneName ? `Streamlabs · ${a.op} (${a.params.sceneName})` : `Streamlabs · ${a.op}`;
     case 'twitch':           return a.text ? `Twitch · "${ellipsis(a.text, 20)}"` : 'Twitch chat';
     case 'twitch-streamer':  return a.login ? `Streamer · ${a.login}` : 'Twitch streamer';
+    case 'kick':             return a.text ? `Kick · "${ellipsis(a.text, 20)}"` : 'Kick chat';
+    case 'kick-streamer':    return a.slug ? `Kick · ${a.slug}` : 'Kick streamer';
     case 'goto-page':        return `Go to page ${a.pageId}`;
     case 'wait':             return `Wait ${a.ms}ms`;
   }

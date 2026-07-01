@@ -51,10 +51,11 @@ export function ConfigApp() {
       return next;
     });
   }
-  const [integrationStatus, setIntegrationStatus] = useState<{ obs: boolean; twitch: boolean; streamlabs: boolean }>({
+  const [integrationStatus, setIntegrationStatus] = useState<{ obs: boolean; twitch: boolean; streamlabs: boolean; kick: boolean }>({
     obs: false,
     twitch: false,
     streamlabs: false,
+    kick: false,
   });
   const importInputRef = useRef<HTMLInputElement>(null);
 
@@ -64,16 +65,18 @@ export function ConfigApp() {
     let alive = true;
     async function load() {
       try {
-        const [obs, twitch, streamlabs] = await Promise.all([
+        const [obs, twitch, streamlabs, kick] = await Promise.all([
           api.getObsState().catch(() => null),
           api.getTwitchState().catch(() => null),
           api.getStreamlabsState().catch(() => null),
+          api.getKickState().catch(() => null),
         ]);
         if (!alive) return;
         setIntegrationStatus({
           obs: !!obs?.config.enabled,
           twitch: !!twitch?.config.enabled,
           streamlabs: !!streamlabs?.config.enabled,
+          kick: !!kick?.config.enabled,
         });
       } catch { /* harmless */ }
     }

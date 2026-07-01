@@ -9,6 +9,8 @@ export type ObsActionParams = { sceneName?: string; inputName?: string; sourceNa
 
 export type TwitchOp = 'chat';
 
+export type KickOp = 'chat';
+
 export type MicOp = 'toggle-mute' | 'mute' | 'unmute';
 
 export type StreamlabsOp =
@@ -34,6 +36,8 @@ export type Action =
   | { type: 'streamlabs'; op: StreamlabsOp; params?: StreamlabsActionParams }
   | { type: 'twitch'; op: TwitchOp; text: string }
   | { type: 'twitch-streamer'; login: string }
+  | { type: 'kick'; op: KickOp; text: string }
+  | { type: 'kick-streamer'; slug: string }
   | { type: 'goto-page'; pageId: number }
   | { type: 'wait'; ms: number };
 
@@ -135,6 +139,8 @@ export function defaultAction(type: ActionType): Action {
     case 'streamlabs': return { type: 'streamlabs', op: 'toggle-record' };
     case 'twitch': return { type: 'twitch', op: 'chat', text: '' };
     case 'twitch-streamer': return { type: 'twitch-streamer', login: '' };
+    case 'kick': return { type: 'kick', op: 'chat', text: '' };
+    case 'kick-streamer': return { type: 'kick-streamer', slug: '' };
     case 'goto-page': return { type: 'goto-page', pageId: 0 };
     case 'wait': return { type: 'wait', ms: 200 };
   }

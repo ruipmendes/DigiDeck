@@ -376,3 +376,66 @@ export async function reconnectTwitch(): Promise<TwitchState_API> {
   if (!res.ok) throw new Error(`reconnect failed: ${res.status}`);
   return res.json();
 }
+
+// ─── Kick ───────────────────────────────────────────────────────
+
+export type KickState =
+  | 'disabled' | 'not-configured' | 'needs-auth'
+  | 'connecting' | 'connected' | 'error';
+
+export type KickStatus = {
+  state: KickState;
+  error?: string;
+  slug?: string;
+  channel?: string;
+};
+
+export type KickPublicConfig = {
+  enabled: boolean;
+  clientId: string;
+  hasSecret: boolean;
+  hasRefreshToken: boolean;
+  slug: string;
+};
+
+export type KickState_API = { config: KickPublicConfig; status: KickStatus };
+
+export async function getKickState(): Promise<KickState_API> {
+  const res = await fetch('/api/integrations/kick');
+  if (!res.ok) throw new Error(`GET kick failed: ${res.status}`);
+  return res.json();
+}
+
+export async function putKickConfig(c: { enabled: boolean; clientId: string; clientSecret?: string }): Promise<KickState_API> {
+  const res = await fetch('/api/integrations/kick/config', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(c),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(body || `PUT kick config failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function getKickAuthorize(): Promise<{ url: string }> {
+  const res = await fetch('/api/integrations/kick/authorize');
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(body || `authorize failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function disconnectKick(): Promise<KickState_API> {
+  const res = await fetch('/api/integrations/kick/disconnect', { method: 'POST' });
+  if (!res.ok) throw new Error(`disconnect failed: ${res.status}`);
+  return res.json();
+}
+
+export async function reconnectKick(): Promise<KickState_API> {
+  const res = await fetch('/api/integrations/kick/reconnect', { method: 'POST' });
+  if (!res.ok) throw new Error(`reconnect failed: ${res.status}`);
+  return res.json();
+}

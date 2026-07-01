@@ -6,7 +6,7 @@ import * as api from '../lib/api';
 import { HotkeyInput } from './HotkeyInput';
 
 type PageRef = { id: number; name: string };
-export type IntegrationStatus = { obs: boolean; twitch: boolean; streamlabs: boolean };
+export type IntegrationStatus = { obs: boolean; twitch: boolean; streamlabs: boolean; kick: boolean };
 
 type Props = {
   action: ButtonAction;
@@ -190,6 +190,8 @@ const ACTION_GROUPS: ActionGroup[] = [
       { value: 'streamlabs',      label: 'Streamlabs Desktop' },
       { value: 'twitch',          label: 'Twitch chat' },
       { value: 'twitch-streamer', label: 'Twitch streamer' },
+      { value: 'kick',            label: 'Kick chat' },
+      { value: 'kick-streamer',   label: 'Kick streamer' },
     ],
   },
   {
@@ -221,6 +223,7 @@ function isActionTypeAvailable(type: ActionType, status: IntegrationStatus | und
   if (type === 'obs') return status.obs;
   if (type === 'streamlabs') return status.streamlabs;
   if (type === 'twitch' || type === 'twitch-streamer') return status.twitch;
+  if (type === 'kick' || type === 'kick-streamer') return status.kick;
   return true;
 }
 
@@ -386,6 +389,31 @@ function Body({ action, onChange, pages }: StepEditorProps) {
           />
           <span style={{ fontSize: 11, color: '#6b7280' }}>
             Tap on the phone opens twitch.tv/{action.login || '<login>'}. Thumbnail + live state require Twitch connected.
+          </span>
+        </div>
+      );
+    case 'kick':
+      return (
+        <input
+          value={action.text}
+          onChange={(e) => onChange({ type: 'kick', op: 'chat', text: e.target.value })}
+          placeholder="!command or chat message (e.g. !discord)"
+          style={inputStyle}
+        />
+      );
+    case 'kick-streamer':
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <input
+            value={action.slug}
+            onChange={(e) => onChange({ type: 'kick-streamer', slug: e.target.value.trim().toLowerCase() })}
+            placeholder="streamer slug (e.g. adin)"
+            spellCheck={false}
+            autoCapitalize="none"
+            style={inputStyle}
+          />
+          <span style={{ fontSize: 11, color: '#6b7280' }}>
+            Tap on the phone opens kick.com/{action.slug || '<slug>'}. Thumbnail + live state require Kick connected.
           </span>
         </div>
       );
