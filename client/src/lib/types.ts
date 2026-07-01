@@ -46,6 +46,8 @@ export type ActionType = Action['type'];
 /** A button's action is either a single step or an ordered sequence of steps. */
 export type ButtonAction = Action | Action[];
 
+export type ImageFit = 'cover' | 'fill' | 'contain';
+
 export type Button = {
   kind: 'button';
   id: number;
@@ -53,6 +55,8 @@ export type Button = {
   icon?: string;
   /** Uploaded image filename (server-side, under %APPDATA%/digi-deck/images/). Wins over `icon`. */
   image?: string;
+  /** How to fit the image inside the tile. Defaults to 'cover'. */
+  imageFit?: ImageFit;
   /** Hex color override for active-state border / flash / source dot. */
   accentColor?: string;
   action: ButtonAction;

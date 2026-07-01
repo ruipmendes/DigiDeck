@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 
+export type ImageFit = 'cover' | 'fill' | 'contain';
+
 export type Button = {
   kind: 'button';
   id: number;
   label: string;
   icon?: string;
   image?: string;
+  imageFit?: ImageFit;
   accentColor?: string;
   /** Server tells us the button has a long-press action; opt into hold detection. */
   hasLongPress?: boolean;

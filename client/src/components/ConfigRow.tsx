@@ -105,6 +105,12 @@ function NonBlankConfigRow({ button, pages, currentPageId, layout, integrationSt
                   ? api.imageReferenceCount(layout, button.image, { tileId: button.id }) > 0
                   : false
               }
+              imageFit={button.kind === 'button' ? button.imageFit : undefined}
+              onFitChange={
+                button.kind === 'button'
+                  ? (imageFit) => onChange({ imageFit } as Partial<Tile>)
+                  : undefined
+              }
             />
           </AppearanceSection>
           <AppearanceSection label="Accent color">

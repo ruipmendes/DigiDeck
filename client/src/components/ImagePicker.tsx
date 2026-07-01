@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { ImagePlus, X, Replace } from 'lucide-react';
 import * as api from '../lib/api';
+import type { ImageFit } from '../lib/types';
 
 type Props = {
   value?: string;
@@ -8,9 +9,19 @@ type Props = {
   /** True if at least one OTHER tile/page also references `value`.
    *  When false and the image is being removed/replaced, we offer to delete the file. */
   referencedElsewhere: boolean;
+  /** When both `imageFit` and `onFitChange` are provided, a fit-mode picker
+   *  (cover/fill/contain) appears under the thumbnail once an image is set. */
+  imageFit?: ImageFit;
+  onFitChange?: (fit: ImageFit) => void;
 };
 
-export function ImagePicker({ value, onChange, referencedElsewhere }: Props) {
+const FIT_OPTIONS: { value: ImageFit; label: string; hint: string }[] = [
+  { value: 'cover',   label: 'cover',   hint: 'fill the tile, may crop edges' },
+  { value: 'fill',    label: 'fill',    hint: 'stretch to fill (may distort)' },
+  { value: 'contain', label: 'contain', hint: 'fit whole image, may show letterbox' },
+];
+
+export function ImagePicker({ value, onChange, referencedElsewhere, imageFit, onFitChange }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -77,7 +88,7 @@ export function ImagePicker({ value, onChange, referencedElsewhere }: Props) {
             src={api.imageUrl(value)}
             alt=""
             draggable={false}
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            style={{ width: '100%', height: '100%', objectFit: imageFit ?? 'cover' }}
           />
           <button
             type="button"
@@ -120,6 +131,32 @@ export function ImagePicker({ value, onChange, referencedElsewhere }: Props) {
           <ImagePlus size={18} />
           <span>image</span>
         </button>
+      )}
+      {value && onFitChange && (
+        <div style={{ display: 'flex', gap: 4, marginTop: 2 }}>
+          {FIT_OPTIONS.map((o) => {
+            const active = (imageFit ?? 'cover') === o.value;
+            return (
+              <button
+                key={o.value}
+                type="button"
+                onClick={() => onFitChange(o.value)}
+                title={o.hint}
+                style={{
+                  padding: '2px 6px',
+                  background: active ? '#3b82f6' : '#0a0a0a',
+                  border: `1px solid ${active ? '#3b82f6' : '#374151'}`,
+                  borderRadius: 4,
+                  color: active ? '#fff' : '#9ca3af',
+                  fontSize: 10,
+                  cursor: 'pointer',
+                }}
+              >
+                {o.label}
+              </button>
+            );
+          })}
+        </div>
       )}
       {busy && <span style={{ fontSize: 9, color: '#9ca3af' }}>uploading…</span>}
       {error && <span style={{ fontSize: 9, color: '#ef4444', maxWidth: 80, textAlign: 'center' }}>{error}</span>}

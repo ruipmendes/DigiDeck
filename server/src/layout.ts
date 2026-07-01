@@ -2,6 +2,8 @@ import { promises as fs, watch } from 'node:fs';
 import { join } from 'node:path';
 import type { ButtonAction } from './actions/types.js';
 
+export type ImageFit = 'cover' | 'fill' | 'contain';
+
 export type Button = {
   kind: 'button';
   id: number;
@@ -9,6 +11,8 @@ export type Button = {
   icon?: string;
   /** Uploaded image filename (stored under %APPDATA%/digi-deck/images/). Wins over `icon` when set. */
   image?: string;
+  /** How to fit the image inside the tile. Defaults to 'cover'. */
+  imageFit?: ImageFit;
   /** Hex color string (e.g. "#3b82f6") that overrides the active-state border + flash. */
   accentColor?: string;
   action: ButtonAction;
@@ -65,6 +69,7 @@ export type PublicButton = {
   label: string;
   icon?: string;
   image?: string;
+  imageFit?: ImageFit;
   accentColor?: string;
   /** True when the button has a configured long-press action.
    *  Phone uses this to opt into press-hold detection (otherwise it fires instantly on touch). */
@@ -197,7 +202,7 @@ export function toPublic(layout: Layout): PublicLayout {
         if (t.kind === 'slider') {
           return { kind: 'slider', id: t.id, label: t.label, icon: t.icon, image: t.image, accentColor: t.accentColor, provider: t.provider, inputName: t.inputName };
         }
-        const out: PublicButton = { kind: 'button', id: t.id, label: t.label, icon: t.icon, image: t.image, accentColor: t.accentColor };
+        const out: PublicButton = { kind: 'button', id: t.id, label: t.label, icon: t.icon, image: t.image, imageFit: t.imageFit, accentColor: t.accentColor };
         if (t.longPressAction !== undefined) out.hasLongPress = true;
         const steps = Array.isArray(t.action) ? t.action : [t.action];
         const streamer = steps.find((a) => a.type === 'twitch-streamer');
@@ -346,6 +351,13 @@ function validateImageField(value: unknown, where: string): void {
   }
 }
 
+function validateImageFitField(value: unknown, where: string): void {
+  if (value === undefined || value === null || value === '') return;
+  if (value !== 'cover' && value !== 'fill' && value !== 'contain') {
+    throw new Error(`${where}: imageFit must be one of cover/fill/contain (got: ${JSON.stringify(value)})`);
+  }
+}
+
 /** Accepts undefined/null/empty (means "no override") or a hex color like #abc or #aabbcc. */
 function validateColorField(value: unknown, where: string, field: string): void {
   if (value === undefined || value === null || value === '') return;
@@ -374,6 +386,7 @@ function validateButtons(input: unknown[], seenIds: Set<number>): Tile[] {
     if (typeof tile.label !== 'string') throw new Error(`tile ${tile.id}: label must be a string`);
     if (tile.icon !== undefined && typeof tile.icon !== 'string') throw new Error(`tile ${tile.id}: icon must be a string`);
     validateImageField(tile.image, `tile ${tile.id}`);
+    validateImageFitField(tile.imageFit, `tile ${tile.id}`);
     validateColorField(tile.accentColor, `tile ${tile.id}`, 'accentColor');
 
     if (kind === 'slider') {
