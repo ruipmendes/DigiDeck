@@ -25,7 +25,7 @@ try {
   Write-Info "Project folder: $root"
   Write-Info "Install log:    $logPath"
 
-  # ─── 1. Sanity check ────────────────────────────────────────────
+  # --- 1. Sanity check --------------------------------------------
   Write-Step 'Verifying project layout'
   if (-not (Test-Path "$root\server\package.json") -or -not (Test-Path "$root\client\package.json")) {
     Write-Fail "Couldn't find server\ and client\ next to this script."
@@ -34,7 +34,7 @@ try {
   }
   Write-Ok 'OK'
 
-  # ─── 2. Node.js ─────────────────────────────────────────────────
+  # --- 2. Node.js -------------------------------------------------
   Write-Step 'Checking Node.js'
 
   function Refresh-Path {
@@ -70,19 +70,19 @@ try {
   }
   Write-Ok 'OK'
 
-  # ─── 3. Server deps ─────────────────────────────────────────────
+  # --- 3. Server deps ---------------------------------------------
   Write-Step 'Installing server dependencies'
   Push-Location "$root\server"
   try { npm install --no-audit --no-fund } finally { Pop-Location }
   Write-Ok 'Server deps installed'
 
-  # ─── 4. Client deps ─────────────────────────────────────────────
+  # --- 4. Client deps ---------------------------------------------
   Write-Step 'Installing client dependencies'
   Push-Location "$root\client"
   try { npm install --no-audit --no-fund } finally { Pop-Location }
   Write-Ok 'Client deps installed'
 
-  # ─── 5. Production builds ───────────────────────────────────────
+  # --- 5. Production builds ---------------------------------------
   # Server is run as `node dist/index.js` (not tsx watch) for production,
   # and the built client lives at client/dist/ which the server serves
   # as static files. Single Node process at runtime; no Vite running
@@ -97,7 +97,7 @@ try {
   try { npm run build } finally { Pop-Location }
   Write-Ok 'Client built'
 
-  # ─── 6. Version stamp (best effort) ─────────────────────────────
+  # --- 6. Version stamp (best effort) -----------------------------
   Write-Step 'Recording installed version'
   $sha = $null
   try {
@@ -122,7 +122,7 @@ try {
     Write-Warn 'Could not determine current commit (no git, GitHub unreachable, or repo private). Update check will say "unknown local version".'
   }
 
-  # ─── 7. Desktop shortcut ────────────────────────────────────────
+  # --- 7. Desktop shortcut ----------------------------------------
   Write-Step 'Creating desktop shortcut'
   $desktop  = [Environment]::GetFolderPath('Desktop')
   $lnkPath  = Join-Path $desktop 'Digi Deck.lnk'
@@ -138,7 +138,7 @@ try {
   $shortcut.Save()
   Write-Ok "Shortcut: $lnkPath"
 
-  # ─── 8. Optional launch ─────────────────────────────────────────
+  # --- 8. Optional launch -----------------------------------------
   Write-Host ''
   Write-Host 'Install complete.' -ForegroundColor Green
   Write-Host ''

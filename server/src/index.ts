@@ -21,7 +21,7 @@ import type { Layout, PublicLayout } from './layout.js';
 import {
   getPreview, previewInfo, setPreviewListener, startPreviewWatchdog,
 } from './templates.js';
-import { checkForUpdate, type UpdateCheck } from './updates.js';
+import { checkForUpdate, canApplyInPlace, applyScriptPath, type UpdateCheck } from './updates.js';
 
 const PORT = 8765;
 
@@ -308,8 +308,11 @@ startTray({
   },
   onCheckForUpdates: async () => {
     console.log('[tray] checking for updates');
-    const result = await checkForUpdate();
-    showUpdateDialog(result);
+    const [result, applyAvailable] = await Promise.all([
+      checkForUpdate(),
+      canApplyInPlace(),
+    ]);
+    showUpdateDialog(result, applyAvailable);
   },
   onQuit: async () => {
     console.log('[tray] quit requested');
@@ -317,17 +320,37 @@ startTray({
   },
 }, currentTrayMenu());
 
-function showUpdateDialog(result: UpdateCheck): void {
-  const { title, body, openRepo, icon } = renderUpdateDialog(result);
+function showUpdateDialog(result: UpdateCheck, applyAvailable: boolean): void {
+  const rendered = renderUpdateDialog(result, applyAvailable);
+  const { title, body, mode, icon } = rendered;
+
+  // Button mapping per mode:
+  //   'apply-or-open' (three buttons):  Yes = Apply now, No = Open GitHub, Cancel = Later
+  //   'open-only'    (two buttons):     Yes = Open GitHub, No = Later
+  //   'info'         (one button):      OK
+  const buttonsKind =
+    mode === 'apply-or-open' ? 'YesNoCancel' :
+    mode === 'open-only' ? 'YesNo' :
+    'OK';
+
   const psLines: string[] = [
     "Add-Type -AssemblyName System.Windows.Forms",
-    `$buttons = [System.Windows.Forms.MessageBoxButtons]::${openRepo ? 'YesNo' : 'OK'}`,
+    `$buttons = [System.Windows.Forms.MessageBoxButtons]::${buttonsKind}`,
     `$icon = [System.Windows.Forms.MessageBoxIcon]::${icon}`,
     `$result = [System.Windows.Forms.MessageBox]::Show(${psString(body)}, ${psString(title)}, $buttons, $icon)`,
   ];
-  if (openRepo) {
+  if (mode === 'apply-or-open') {
+    psLines.push(
+      `if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {`,
+      `  Start-Process powershell.exe -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File',${psString(applyScriptPath())}`,
+      `} elseif ($result -eq [System.Windows.Forms.DialogResult]::No) {`,
+      `  Start-Process ${psString(result.url)}`,
+      `}`,
+    );
+  } else if (mode === 'open-only') {
     psLines.push(`if ($result -eq [System.Windows.Forms.DialogResult]::Yes) { Start-Process ${psString(result.url)} }`);
   }
+
   const script = psLines.join('\n');
   const encoded = Buffer.from(script, 'utf16le').toString('base64');
   spawn('powershell.exe', ['-NoProfile', '-WindowStyle', 'Hidden', '-EncodedCommand', encoded], {
@@ -337,7 +360,9 @@ function showUpdateDialog(result: UpdateCheck): void {
   }).unref();
 }
 
-function renderUpdateDialog(r: UpdateCheck): { title: string; body: string; openRepo: boolean; icon: 'Information' | 'Warning' | 'Error' } {
+type DialogMode = 'info' | 'open-only' | 'apply-or-open';
+
+function renderUpdateDialog(r: UpdateCheck, applyAvailable: boolean): { title: string; body: string; mode: DialogMode; icon: 'Information' | 'Warning' | 'Error' } {
   const releaseLabel = (tag: string | null) => tag ?? 'latest commit';
   switch (r.status) {
     case 'up-to-date':
@@ -346,7 +371,7 @@ function renderUpdateDialog(r: UpdateCheck): { title: string; body: string; open
         body: r.tag
           ? `You're on the latest release: ${r.tag}.`
           : `You're up to date with main.\n\nCommit: ${r.localSha.slice(0, 7)}`,
-        openRepo: false,
+        mode: 'info',
         icon: 'Information',
       };
     case 'update-available': {
@@ -357,10 +382,19 @@ function renderUpdateDialog(r: UpdateCheck): { title: string; body: string; open
         ? `\n\nYou're ${r.ahead} commit${r.ahead === 1 ? '' : 's'} behind.`
         : '';
       const localLine = r.localSha ? `\n\nLocal:  ${r.localSha.slice(0, 7)}` : '';
+      const shaBlock = `${headline}${aheadLine}${localLine}\nRemote: ${r.remoteSha.slice(0, 7)}`;
+      if (applyAvailable) {
+        return {
+          title: 'Digi Deck — Update available',
+          body: `${shaBlock}\n\nApply now?  (Yes = pull + rebuild + restart, No = open GitHub, Cancel = later)`,
+          mode: 'apply-or-open',
+          icon: 'Information',
+        };
+      }
       return {
         title: 'Digi Deck — Update available',
-        body: `${headline}${aheadLine}${localLine}\nRemote: ${r.remoteSha.slice(0, 7)}\n\nOpen GitHub to download the update?`,
-        openRepo: true,
+        body: `${shaBlock}\n\nOpen GitHub to download the update?`,
+        mode: 'open-only',
         icon: 'Information',
       };
     }
@@ -368,21 +402,21 @@ function renderUpdateDialog(r: UpdateCheck): { title: string; body: string; open
       return {
         title: 'Digi Deck — Dev build',
         body: `You're running ahead of the latest release (${releaseLabel(r.tag)}) by ${r.ahead} commit${r.ahead === 1 ? '' : 's'}.\n\nLocal:  ${r.localSha.slice(0, 7)}\nRelease: ${r.remoteSha.slice(0, 7)}\n\nNo update needed.`,
-        openRepo: false,
+        mode: 'info',
         icon: 'Information',
       };
     case 'unknown-local':
       return {
         title: 'Digi Deck — Update check',
         body: `Couldn't determine the local version. The latest ${r.tag ? `release is ${r.tag}` : `commit is ${r.remoteSha.slice(0, 7)}`}.\n\nOpen GitHub to see what's new?`,
-        openRepo: true,
+        mode: 'open-only',
         icon: 'Warning',
       };
     case 'error':
       return {
         title: 'Digi Deck — Update check failed',
         body: `Couldn't reach GitHub:\n${r.message}`,
-        openRepo: false,
+        mode: 'info',
         icon: 'Error',
       };
   }

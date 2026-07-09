@@ -1,4 +1,4 @@
-# Digi Deck launcher (production mode — single Node process).
+# Digi Deck launcher (production mode -- single Node process).
 # - Builds the server and client if their dist/ folders are missing.
 # - Starts `node dist/index.js`, which serves both the API + WebSocket
 #   AND the built client as static files (port 8765, single port).
@@ -28,19 +28,19 @@ function Test-Port {
   }
 }
 
-# ── Build if needed ─────────────────────────────────────────────
+# -- Build if needed ---------------------------------------------
 if (-not (Test-Path "$root\server\dist\index.js")) {
-  Write-Host 'Server dist/ missing — building...' -ForegroundColor Cyan
+  Write-Host 'Server dist/ missing -- building...' -ForegroundColor Cyan
   Push-Location "$root\server"
   try { npm run build } finally { Pop-Location }
 }
 if (-not (Test-Path "$root\client\dist\index.html")) {
-  Write-Host 'Client dist/ missing — building...' -ForegroundColor Cyan
+  Write-Host 'Client dist/ missing -- building...' -ForegroundColor Cyan
   Push-Location "$root\client"
   try { npm run build } finally { Pop-Location }
 }
 
-# ── Start the server (one process, BelowNormal priority) ───────
+# -- Start the server (one process, BelowNormal priority) -------
 if (-not (Test-Port 8765)) {
   Write-Host 'Starting digi-deck server (port 8765)...' -ForegroundColor Cyan
   $psi = New-Object System.Diagnostics.ProcessStartInfo
@@ -53,7 +53,7 @@ if (-not (Test-Port 8765)) {
   Start-Sleep -Milliseconds 200
   try { $proc.PriorityClass = 'BelowNormal' } catch { }
 
-  # Wait for the server to start listening (up to 20s — a built node start is ~1s).
+  # Wait for the server to start listening (up to 20s -- a built node start is ~1s).
   $deadline = (Get-Date).AddSeconds(20)
   while ((Get-Date) -lt $deadline) {
     if (Test-Port 8765) { break }
@@ -63,7 +63,7 @@ if (-not (Test-Port 8765)) {
   Write-Host 'Server already running on :8765' -ForegroundColor DarkGray
 }
 
-# ── Open the config page ────────────────────────────────────────
+# -- Open the config page ----------------------------------------
 $configUrl = 'http://localhost:8765/config'
 
 # Is the config tab already open in any browser window?
@@ -76,7 +76,7 @@ try {
 } catch {}
 
 if ($configOpen) {
-  Write-Host 'Config tab already open in a browser — leaving it alone.' -ForegroundColor Yellow
+  Write-Host 'Config tab already open in a browser -- leaving it alone.' -ForegroundColor Yellow
   exit 0
 }
 
