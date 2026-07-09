@@ -308,11 +308,12 @@ startTray({
   },
   onCheckForUpdates: async () => {
     console.log('[tray] checking for updates');
-    const [result, applyAvailable] = await Promise.all([
+    const [result, applyAvailable, applyScript] = await Promise.all([
       checkForUpdate(),
       canApplyInPlace(),
+      applyScriptPath(),
     ]);
-    showUpdateDialog(result, applyAvailable);
+    showUpdateDialog(result, applyAvailable, applyScript);
   },
   onQuit: async () => {
     console.log('[tray] quit requested');
@@ -320,7 +321,7 @@ startTray({
   },
 }, currentTrayMenu());
 
-function showUpdateDialog(result: UpdateCheck, applyAvailable: boolean): void {
+function showUpdateDialog(result: UpdateCheck, applyAvailable: boolean, applyScript: string): void {
   const rendered = renderUpdateDialog(result, applyAvailable);
   const { title, body, mode, icon } = rendered;
 
@@ -342,7 +343,7 @@ function showUpdateDialog(result: UpdateCheck, applyAvailable: boolean): void {
   if (mode === 'apply-or-open') {
     psLines.push(
       `if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {`,
-      `  Start-Process powershell.exe -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File',${psString(applyScriptPath())}`,
+      `  Start-Process powershell.exe -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File',${psString(applyScript)}`,
       `} elseif ($result -eq [System.Windows.Forms.DialogResult]::No) {`,
       `  Start-Process ${psString(result.url)}`,
       `}`,

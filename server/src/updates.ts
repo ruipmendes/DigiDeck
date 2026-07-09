@@ -9,22 +9,26 @@ const __dirname = dirname(__filename);
 // Two levels up reaches the repo root in both cases.
 const REPO_ROOT = resolve(__dirname, '../..');
 const VERSION_FILE = join(REPO_ROOT, '.digi-deck-version');
-const APPLY_SCRIPT = join(REPO_ROOT, 'apply-update.ps1');
+const APPLY_GIT_SCRIPT = join(REPO_ROOT, 'apply-update.ps1');
+const APPLY_ZIP_SCRIPT = join(REPO_ROOT, 'apply-update-zip.ps1');
 
-/** Absolute path to apply-update.ps1 (may or may not exist on disk). */
-export function applyScriptPath(): string { return APPLY_SCRIPT; }
+async function hasGitClone(): Promise<boolean> {
+  return fs.stat(join(REPO_ROOT, '.git')).then(() => true, () => false);
+}
 
-/** True when Apply-now is available: we have a `.git` dir AND the apply script. */
+/**
+ * Picks the right update script based on how this install was created:
+ *   - git clone  -> apply-update.ps1 (pull + rebuild)
+ *   - zip download -> apply-update-zip.ps1 (download main.zip + reinstall)
+ */
+export async function applyScriptPath(): Promise<string> {
+  return (await hasGitClone()) ? APPLY_GIT_SCRIPT : APPLY_ZIP_SCRIPT;
+}
+
+/** True when an in-place Apply is available: the matching script exists on disk. */
 export async function canApplyInPlace(): Promise<boolean> {
-  try {
-    const [gitDir, script] = await Promise.all([
-      fs.stat(join(REPO_ROOT, '.git')).then(() => true, () => false),
-      fs.stat(APPLY_SCRIPT).then(() => true, () => false),
-    ]);
-    return gitDir && script;
-  } catch {
-    return false;
-  }
+  const script = await applyScriptPath();
+  return fs.stat(script).then(() => true, () => false);
 }
 
 const GITHUB_OWNER = 'ruipmendes';

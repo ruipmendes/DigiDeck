@@ -7,6 +7,8 @@
 # Works regardless of where the folder lives (DigiDeck-main, digi-deck, anywhere).
 # A transcript of the run is written to %TEMP%\digi-deck-install.log.
 
+param([switch]$NoLaunch)
+
 $ErrorActionPreference = 'Stop'
 
 $root    = $PSScriptRoot
@@ -142,11 +144,15 @@ try {
   Write-Host ''
   Write-Host 'Install complete.' -ForegroundColor Green
   Write-Host ''
-  $answer = Read-Host 'Launch Digi Deck now? [Y/n]'
-  if ($answer -ne 'n' -and $answer -ne 'N') {
-    & "$root\start.ps1"
+  if ($NoLaunch) {
+    Write-Info 'Skipping launch (-NoLaunch).'
   } else {
-    Write-Info 'You can launch it later from the Desktop shortcut.'
+    $answer = Read-Host 'Launch Digi Deck now? [Y/n]'
+    if ($answer -ne 'n' -and $answer -ne 'N') {
+      & "$root\start.ps1"
+    } else {
+      Write-Info 'You can launch it later from the Desktop shortcut.'
+    }
   }
 }
 catch {
