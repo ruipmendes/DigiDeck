@@ -6,6 +6,17 @@ A single Node process runs on the PC (port 8765) — it owns the layout file, ex
 
 ---
 
+## tl;dr
+
+1. Download [**main.zip**](https://github.com/ruipmendes/DigiDeck/archive/refs/heads/main.zip). Right-click it → *Properties* → tick **Unblock** → OK.
+2. Extract it (anywhere — `C:\Users\<you>\` works fine). You'll get a `DigiDeck-main\` folder.
+3. Double-click **install.bat** inside it. Installs Node.js if missing, builds, creates a Desktop shortcut, and launches. First run takes 2–3 min.
+4. In the config UI that opens → **Pair phone** → scan the QR from your phone's camera. Done.
+
+To update later: tray icon → *Check for updates* → **Apply**.
+
+---
+
 ## Shell convention used in this guide
 
 Each command block below is labelled with where to run it:
