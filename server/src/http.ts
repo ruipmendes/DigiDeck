@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { networkInterfaces } from 'node:os';
 import type { Layout } from './layout.js';
 import { saveLayout, validateLayout } from './layout.js';
-import { authorize, isLocalhost } from './auth.js';
+import { authorize, isLocalhost, isAllowedHost, isAllowedOrigin } from './auth.js';
 import { saveConfig, type ServerConfig } from './config.js';
 import { getObs, DEFAULT_OBS_CONFIG, type ObsConfig } from './integrations/obs.js';
 import { getStreamlabs, DEFAULT_STREAMLABS_CONFIG, type StreamlabsConfig } from './integrations/streamlabs.js';
@@ -60,6 +60,26 @@ type Ctx = {
 export async function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: Ctx): Promise<void> {
   const pathname = (req.url ?? '/').split('?')[0];
   const token = () => ctx.getServerConfig().token;
+
+  // Origin + Host allowlist for every /api/* route.
+  // - Blocks CSRF (e.g. cross-origin text/plain POST to /api/layout/import that
+  //   would otherwise skip preflight and be accepted as JSON).
+  // - Blocks DNS rebinding (evil.com rebound to 127.0.0.1 fails the Host check).
+  // Static assets are unaffected — <img> tags on other origins still load fine.
+  if (pathname.startsWith('/api')) {
+    const hostHeader = typeof req.headers.host === 'string' ? req.headers.host : undefined;
+    const originHeader = typeof req.headers.origin === 'string' ? req.headers.origin : undefined;
+    if (!isAllowedHost(hostHeader)) {
+      console.warn(`[auth] ${req.method} ${pathname} rejected: bad host ${hostHeader}`);
+      forbidden(res, 'bad host');
+      return;
+    }
+    if (!isAllowedOrigin(originHeader)) {
+      console.warn(`[auth] ${req.method} ${pathname} rejected: bad origin ${originHeader}`);
+      forbidden(res, 'bad origin');
+      return;
+    }
+  }
 
   if (pathname === '/api/layout' && req.method === 'GET') {
     if (!authorize(req, token())) return unauthorized(res);
@@ -701,6 +721,10 @@ function json(res: ServerResponse, status: number, body: unknown): void {
 
 function unauthorized(res: ServerResponse): void {
   json(res, 401, { error: 'unauthorized' });
+}
+
+function forbidden(res: ServerResponse, message: string): void {
+  json(res, 403, { error: message });
 }
 
 async function readJsonBody(req: IncomingMessage): Promise<unknown> {

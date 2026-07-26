@@ -4,7 +4,7 @@ import { loadOrInitLayout, reloadLayout, toPublic, watchLayout, findTile, collec
 import { executeAction } from './actions/types.js';
 import { handleRequest } from './http.js';
 import { loadOrInitConfig, saveConfig, CONFIG_FILE } from './config.js';
-import { authorize, isLocalhost } from './auth.js';
+import { authorize, isLocalhost, isAllowedHost, isAllowedOrigin } from './auth.js';
 import { startMdns, stopMdns } from './mdns.js';
 import { migrateAppData } from './migrations.js';
 import { getObs } from './integrations/obs.js';
@@ -111,6 +111,20 @@ const httpServer = createServer((req, res) => {
 const wss = new WebSocketServer({
   server: httpServer,
   verifyClient: (info, cb) => {
+    // Origin + Host allowlist first — these block Cross-Site WebSocket
+    // Hijacking (a browser tab on evil.com opening ws://localhost:8765 to
+    // press our tiles) and DNS rebinding (attacker's domain rebound to
+    // 127.0.0.1 — passes source-IP checks but Host still reads as evil.com).
+    if (!isAllowedOrigin(info.origin)) {
+      console.warn(`[auth] WS rejected: bad origin ${info.origin}`);
+      cb(false, 403, 'forbidden');
+      return;
+    }
+    if (!isAllowedHost(info.req.headers.host)) {
+      console.warn(`[auth] WS rejected: bad host ${info.req.headers.host}`);
+      cb(false, 403, 'forbidden');
+      return;
+    }
     if (isLocalhost(info.req) || authorize(info.req, serverConfig.token)) {
       cb(true);
     } else {
