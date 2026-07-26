@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Video, RefreshCw, ChevronDown, ChevronRight } from 'lucide-react';
 import * as api from '../lib/api';
 import type { ObsConfig, ObsStatus } from '../lib/api';
+import { friendlyError } from '../lib/errors';
 
 export function ObsPanel() {
   const [config, setConfig] = useState<ObsConfig | null>(null);
@@ -109,9 +110,19 @@ export function ObsPanel() {
         )}
       </div>
 
-      {status?.error && status.state !== 'connected' && (
-        <div style={{ fontSize: 12, color: '#f87171', marginTop: 8, marginLeft: 26 }}>{status.error}</div>
-      )}
+      {status?.error && status.state !== 'connected' && (() => {
+        const f = friendlyError(status.error, 'obs');
+        return (
+          <div style={{ marginTop: 8, marginLeft: 26 }}>
+            <div style={{ fontSize: 12, color: '#f87171' }}>{f.message}</div>
+            {f.detail && (
+              <div style={{ fontSize: 10, color: '#6b7280', marginTop: 2, fontFamily: 'monospace' }}>
+                {f.detail}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {expanded && config && (
         <div style={{ marginTop: 14, marginLeft: 26, display: 'flex', flexDirection: 'column', gap: 10 }}>
