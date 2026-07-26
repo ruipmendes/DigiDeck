@@ -11,6 +11,7 @@ import { defaultTile, nextButtonId, nextPageId } from './lib/types';
 import { ConfigRow } from './components/ConfigRow';
 import { PairingModal } from './components/PairingModal';
 import { IntegrationsPanel } from './components/IntegrationsPanel';
+import { SecurityPanel } from './components/SecurityPanel';
 import { IconPicker } from './components/IconPicker';
 import { ImagePicker } from './components/ImagePicker';
 import { ColorPicker } from './components/ColorPicker';
@@ -161,10 +162,13 @@ export function ConfigApp() {
   }, []);
 
   useEffect(() => {
-    api.getLayout()
+    // Bootstrap the auth token via /api/pairing (localhost-only on the server)
+    // if this browser doesn't already have one. Subsequent API calls include
+    // it as Authorization: Bearer <token>.
+    api.bootstrapTokenIfNeeded()
+      .then(() => api.getLayout())
       .then((l) => {
         setLayout(l);
-        // Prefer the persisted page if it still exists, else fall back to the first page.
         setActivePageId((prev) => {
           if (prev !== null && l.pages.some((p) => p.id === prev)) return prev;
           return l.pages[0]?.id ?? null;
@@ -379,6 +383,7 @@ export function ConfigApp() {
       )}
 
       <IntegrationsPanel />
+      <SecurityPanel />
 
       {!layout ? (
         <div style={{ opacity: 0.6 }}>Loading layout…</div>

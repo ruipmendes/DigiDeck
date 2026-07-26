@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
 import { WebSocketServer, WebSocket } from 'ws';
 import { loadOrInitLayout, reloadLayout, toPublic, watchLayout, findTile, collectStreamerLogins, collectKickStreamerSlugs, LAYOUT_FILE } from './layout.js';
-import { executeAction } from './actions/types.js';
+import { executeAction, setShellActionsGate } from './actions/types.js';
 import { handleRequest } from './http.js';
 import { loadOrInitConfig, saveConfig, CONFIG_FILE } from './config.js';
 import { authorize, isLocalhost, isAllowedHost, isAllowedOrigin } from './auth.js';
@@ -40,6 +40,32 @@ const serverConfig = await loadOrInitConfig();
 let layout: Layout = await loadOrInitLayout();
 console.log(`layout: ${LAYOUT_FILE} (${layout.pages.length} pages, ${layout.pages.reduce((n, p) => n + p.buttons.length, 0)} buttons)`);
 console.log(`config: ${CONFIG_FILE} (token loaded)`);
+
+// Migrate the shell-actions toggle on first run: if the field is unset,
+// choose a value that preserves current behavior — enable when the layout
+// already uses script/launch tiles, disable otherwise.
+if (serverConfig.security.allowShellActions === null) {
+  const usesShell = layoutUsesShellActions(layout);
+  serverConfig.security.allowShellActions = usesShell;
+  await saveConfig(serverConfig);
+  console.log(`[security] shell-actions default set to ${usesShell} (based on existing layout)`);
+}
+setShellActionsGate(() => !!serverConfig.security.allowShellActions);
+
+function layoutUsesShellActions(l: Layout): boolean {
+  for (const page of l.pages) {
+    for (const tile of page.buttons) {
+      if (tile.kind !== 'button') continue;
+      const steps = Array.isArray(tile.action) ? tile.action : [tile.action];
+      if (steps.some((s) => s.type === 'script' || s.type === 'launch')) return true;
+      if (tile.longPressAction) {
+        const longSteps = Array.isArray(tile.longPressAction) ? tile.longPressAction : [tile.longPressAction];
+        if (longSteps.some((s) => s.type === 'script' || s.type === 'launch')) return true;
+      }
+    }
+  }
+  return false;
+}
 
 const obs = getObs();
 obs.setConfig(serverConfig.integrations.obs);

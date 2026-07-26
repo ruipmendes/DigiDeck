@@ -37,9 +37,23 @@ export function timingSafeTokenEqual(a: string | undefined | null, b: string | u
   return timingSafeEqual(ab, bb);
 }
 
+/**
+ * Token-only authorization. Prior versions bypassed the token when the request
+ * came from 127.0.0.1 — this defense-in-depth removal means the config UI must
+ * bootstrap a token via `/api/pairing` (which is still localhost-gated) before
+ * hitting anything else.
+ */
 export function authorize(req: IncomingMessage, expectedToken: string): boolean {
-  if (isLocalhost(req)) return true;
   return timingSafeTokenEqual(extractToken(req), expectedToken);
+}
+
+/**
+ * Both a localhost source AND a valid token. Used for state-mutating endpoints
+ * that should only ever be triggered from the local config UI (integration
+ * config PUTs, OAuth kickoff, browse-file, etc.).
+ */
+export function authorizeLocalhost(req: IncomingMessage, expectedToken: string): boolean {
+  return isLocalhost(req) && authorize(req, expectedToken);
 }
 
 /**

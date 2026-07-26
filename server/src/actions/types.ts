@@ -35,14 +35,27 @@ export type Action =
 /** A button's action is either a single step or an ordered sequence. */
 export type ButtonAction = Action | Action[];
 
+/** Optional gate injected at server startup. When present and returning false,
+ *  `script` and `launch` steps refuse to fire with a user-visible error. */
+let shellActionsAllowed: (() => boolean) | null = null;
+export function setShellActionsGate(gate: () => boolean): void { shellActionsAllowed = gate; }
+
 /** Run one action step. */
 async function executeStep(step: Action): Promise<void> {
   switch (step.type) {
     case 'hotkey': return execHotkey(step.keys);
     case 'text':   return execText(step.text);
-    case 'launch': return execLaunch(step.path, step.args, step.cwd);
+    case 'launch':
+      if (shellActionsAllowed && !shellActionsAllowed()) {
+        throw new Error('Launch actions are disabled. Enable in Config → Integrations → Security.');
+      }
+      return execLaunch(step.path, step.args, step.cwd);
     case 'url':    return execUrl(step.url);
-    case 'script': return execScript(step.script);
+    case 'script':
+      if (shellActionsAllowed && !shellActionsAllowed()) {
+        throw new Error('Script actions are disabled. Enable in Config → Integrations → Security.');
+      }
+      return execScript(step.script);
     case 'volume': return execVolume({ delta: step.delta, mute: step.mute });
     case 'mic':    return getMic().execute(step.op);
     case 'obs':    return getObs().execute(step.op, step.params);

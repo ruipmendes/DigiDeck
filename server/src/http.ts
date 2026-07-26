@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { networkInterfaces } from 'node:os';
 import type { Layout } from './layout.js';
 import { saveLayout, validateLayout } from './layout.js';
-import { authorize, isLocalhost, isAllowedHost, isAllowedOrigin } from './auth.js';
+import { authorize, authorizeLocalhost, isLocalhost, isAllowedHost, isAllowedOrigin } from './auth.js';
 import { saveConfig, type ServerConfig } from './config.js';
 import { getObs, DEFAULT_OBS_CONFIG, type ObsConfig } from './integrations/obs.js';
 import { getStreamlabs, DEFAULT_STREAMLABS_CONFIG, type StreamlabsConfig } from './integrations/streamlabs.js';
@@ -197,6 +197,9 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse, c
     return;
   }
   if (pathname === '/api/pairing' && req.method === 'GET') {
+    // Bootstrap-only: the config UI has no token yet the first time it opens.
+    // Origin + Host allowlist (see top of handleRequest) blocks the rebinding
+    // and cross-origin attack paths that used to make this dangerous.
     if (!isLocalhost(req)) return unauthorized(res);
     json(res, 200, buildPairing(token()));
     return;
@@ -283,7 +286,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse, c
     return;
   }
   if (pathname === '/api/integrations/obs/config' && req.method === 'PUT') {
-    if (!isLocalhost(req)) return unauthorized(res);
+    if (!authorizeLocalhost(req, token())) return unauthorized(res);
     try {
       const body = await readJsonBody(req);
       const obsCfg = validateObsConfig(body);
@@ -300,7 +303,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse, c
     return;
   }
   if (pathname === '/api/integrations/obs/reconnect' && req.method === 'POST') {
-    if (!isLocalhost(req)) return unauthorized(res);
+    if (!authorizeLocalhost(req, token())) return unauthorized(res);
     await getObs().restart();
     json(res, 200, { config: ctx.getServerConfig().integrations.obs, status: getObs().status() });
     return;
@@ -316,7 +319,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse, c
     return;
   }
   if (pathname === '/api/integrations/streamlabs/config' && req.method === 'PUT') {
-    if (!isLocalhost(req)) return unauthorized(res);
+    if (!authorizeLocalhost(req, token())) return unauthorized(res);
     try {
       const body = await readJsonBody(req);
       const slCfg = validateStreamlabsConfig(body, ctx.getServerConfig().integrations.streamlabs);
@@ -336,7 +339,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse, c
     return;
   }
   if (pathname === '/api/integrations/streamlabs/reconnect' && req.method === 'POST') {
-    if (!isLocalhost(req)) return unauthorized(res);
+    if (!authorizeLocalhost(req, token())) return unauthorized(res);
     await getStreamlabs().restart();
     json(res, 200, {
       config: publicStreamlabsConfig(ctx.getServerConfig().integrations.streamlabs),
@@ -355,7 +358,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse, c
     return;
   }
   if (pathname === '/api/integrations/twitch/config' && req.method === 'PUT') {
-    if (!isLocalhost(req)) return unauthorized(res);
+    if (!authorizeLocalhost(req, token())) return unauthorized(res);
     try {
       const body = await readJsonBody(req);
       const twitchCfg = validateTwitchConfig(body, ctx.getServerConfig().integrations.twitch);
@@ -379,7 +382,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse, c
     return;
   }
   if (pathname === '/api/integrations/twitch/authorize' && req.method === 'GET') {
-    if (!isLocalhost(req)) return unauthorized(res);
+    if (!authorizeLocalhost(req, token())) return unauthorized(res);
     try {
       const url = getTwitch().buildAuthorizeUrl();
       json(res, 200, { url });
@@ -421,7 +424,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse, c
     return;
   }
   if (pathname === '/api/integrations/twitch/disconnect' && req.method === 'POST') {
-    if (!isLocalhost(req)) return unauthorized(res);
+    if (!authorizeLocalhost(req, token())) return unauthorized(res);
     await getTwitch().disconnectIntegration();
     json(res, 200, {
       config: publicTwitchConfig(ctx.getServerConfig().integrations.twitch),
@@ -430,12 +433,35 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse, c
     return;
   }
   if (pathname === '/api/integrations/twitch/reconnect' && req.method === 'POST') {
-    if (!isLocalhost(req)) return unauthorized(res);
+    if (!authorizeLocalhost(req, token())) return unauthorized(res);
     await getTwitch().restart();
     json(res, 200, {
       config: publicTwitchConfig(ctx.getServerConfig().integrations.twitch),
       status: getTwitch().status(),
     });
+    return;
+  }
+
+  // ─── Security ─────────────────────────────────────────────────
+  if (pathname === '/api/security' && req.method === 'GET') {
+    if (!authorize(req, token())) return unauthorized(res);
+    json(res, 200, { config: ctx.getServerConfig().security });
+    return;
+  }
+  if (pathname === '/api/security/config' && req.method === 'PUT') {
+    if (!authorizeLocalhost(req, token())) return unauthorized(res);
+    try {
+      const body = await readJsonBody(req);
+      if (!body || typeof body !== 'object') throw new Error('invalid security config');
+      const o = body as Record<string, unknown>;
+      const cfg = ctx.getServerConfig();
+      cfg.security.allowShellActions =
+        typeof o.allowShellActions === 'boolean' ? o.allowShellActions : false;
+      await saveConfig(cfg);
+      json(res, 200, { config: cfg.security });
+    } catch (err) {
+      json(res, 400, { error: (err as Error).message });
+    }
     return;
   }
 
@@ -449,7 +475,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse, c
     return;
   }
   if (pathname === '/api/integrations/kick/config' && req.method === 'PUT') {
-    if (!isLocalhost(req)) return unauthorized(res);
+    if (!authorizeLocalhost(req, token())) return unauthorized(res);
     try {
       const body = await readJsonBody(req);
       const kickCfg = validateKickConfig(body, ctx.getServerConfig().integrations.kick);
@@ -473,7 +499,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse, c
     return;
   }
   if (pathname === '/api/integrations/kick/authorize' && req.method === 'GET') {
-    if (!isLocalhost(req)) return unauthorized(res);
+    if (!authorizeLocalhost(req, token())) return unauthorized(res);
     try {
       const url = getKick().buildAuthorizeUrl();
       json(res, 200, { url });
@@ -514,7 +540,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse, c
     return;
   }
   if (pathname === '/api/integrations/kick/disconnect' && req.method === 'POST') {
-    if (!isLocalhost(req)) return unauthorized(res);
+    if (!authorizeLocalhost(req, token())) return unauthorized(res);
     await getKick().disconnectIntegration();
     json(res, 200, {
       config: publicKickConfig(ctx.getServerConfig().integrations.kick),
@@ -523,7 +549,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse, c
     return;
   }
   if (pathname === '/api/integrations/kick/reconnect' && req.method === 'POST') {
-    if (!isLocalhost(req)) return unauthorized(res);
+    if (!authorizeLocalhost(req, token())) return unauthorized(res);
     await getKick().restart();
     json(res, 200, {
       config: publicKickConfig(ctx.getServerConfig().integrations.kick),

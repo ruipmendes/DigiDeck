@@ -29,6 +29,16 @@ export function GridApp() {
     document.title = 'Digi Deck';
   }, []);
 
+  // On localhost (PC preview), bootstrap the token via /api/pairing if this
+  // browser doesn't have one yet. On the phone (non-localhost), bootstrap is
+  // a no-op and the existing NotPaired flow handles it.
+  useEffect(() => {
+    if (token || !isLocalHostBrowser()) return;
+    api.bootstrapTokenIfNeeded().then((t) => {
+      if (t) setToken(t);
+    }).catch(() => { /* fall through to NotPaired */ });
+  }, [token]);
+
   usePreviewHeartbeat(!!preview);
 
   async function handleExitPreview() {

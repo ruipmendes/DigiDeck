@@ -19,9 +19,23 @@ export type IntegrationsConfig = {
   kick: KickConfig;
 };
 
+export type SecurityConfig = {
+  /**
+   * Whether `script` (PowerShell) and `launch` actions may fire.
+   * `null` means "never explicitly set" — server infers a safe value on startup
+   * based on whether the current layout already relies on them.
+   */
+  allowShellActions: boolean | null;
+};
+
+export const DEFAULT_SECURITY_CONFIG: SecurityConfig = {
+  allowShellActions: null,
+};
+
 export type ServerConfig = {
   token: string;
   integrations: IntegrationsConfig;
+  security: SecurityConfig;
 };
 
 function withDefaults(parsed: Partial<ServerConfig> | null | undefined): ServerConfig {
@@ -35,6 +49,12 @@ function withDefaults(parsed: Partial<ServerConfig> | null | undefined): ServerC
       twitch:     { ...DEFAULT_TWITCH_CONFIG,     ...parsed?.integrations?.twitch },
       streamlabs: { ...DEFAULT_STREAMLABS_CONFIG, ...parsed?.integrations?.streamlabs },
       kick:       { ...DEFAULT_KICK_CONFIG,       ...parsed?.integrations?.kick },
+    },
+    security: {
+      allowShellActions:
+        parsed?.security && typeof parsed.security.allowShellActions === 'boolean'
+          ? parsed.security.allowShellActions
+          : null,
     },
   };
 }

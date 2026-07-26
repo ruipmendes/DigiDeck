@@ -1,14 +1,50 @@
 import type { Layout, Page } from './types';
-import { getStoredToken } from './token';
+import { getStoredToken, storeToken } from './token';
+
+/**
+ * Every /api/* call goes through this wrapper. It adds an Authorization: Bearer
+ * header when a token is stored — the server no longer bypasses auth on
+ * localhost, so the config UI must have the token to hit anything except the
+ * bootstrap /api/pairing endpoint below.
+ */
+async function apiFetch(input: string, init?: RequestInit): Promise<Response> {
+  const token = getStoredToken();
+  const headers = new Headers(init?.headers);
+  if (token && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+  return fetch(input, { ...init, headers });
+}
+
+/**
+ * On the config UI's first load (running at localhost:8765/config), no token
+ * exists in localStorage yet. Fetch it once from /api/pairing (which stays
+ * localhost-gated on the server as the bootstrap route), then use it for every
+ * subsequent call. Safe no-op when a token is already present.
+ */
+export async function bootstrapTokenIfNeeded(): Promise<string | null> {
+  const existing = getStoredToken();
+  if (existing) return existing;
+  try {
+    const res = await apiFetch('/api/pairing');
+    if (!res.ok) return null;
+    const data = (await res.json()) as { token?: string };
+    if (typeof data.token !== 'string' || !data.token) return null;
+    storeToken(data.token);
+    return data.token;
+  } catch {
+    return null;
+  }
+}
 
 export async function getLayout(): Promise<Layout> {
-  const res = await fetch('/api/layout');
+  const res = await apiFetch('/api/layout');
   if (!res.ok) throw new Error(`GET /api/layout failed: ${res.status}`);
   return res.json();
 }
 
 export async function putLayout(layout: Layout): Promise<void> {
-  const res = await fetch('/api/layout', {
+  const res = await apiFetch('/api/layout', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(layout),
@@ -25,13 +61,13 @@ export type TemplateMeta = { name: string; title: string; description: string };
 export type PreviewInfo = { name: string; title: string };
 
 export async function listTemplates(): Promise<{ templates: TemplateMeta[]; preview: PreviewInfo | null }> {
-  const res = await fetch('/api/templates');
+  const res = await apiFetch('/api/templates');
   if (!res.ok) throw new Error(`templates list failed: ${res.status}`);
   return res.json();
 }
 
 export async function getTemplate(name: string): Promise<unknown> {
-  const res = await fetch(`/api/templates/${encodeURIComponent(name)}`);
+  const res = await apiFetch(`/api/templates/${encodeURIComponent(name)}`);
   if (!res.ok) {
     let msg = `template fetch failed: ${res.status}`;
     try { msg = (await res.json()).error ?? msg; } catch { /* keep default */ }
@@ -41,7 +77,7 @@ export async function getTemplate(name: string): Promise<unknown> {
 }
 
 export async function startTemplatePreview(name: string, title: string, bundle: unknown): Promise<void> {
-  const res = await fetch('/api/templates/preview', {
+  const res = await apiFetch('/api/templates/preview', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, title, bundle }),
@@ -54,21 +90,21 @@ export async function startTemplatePreview(name: string, title: string, bundle: 
 }
 
 export async function heartbeatPreview(): Promise<boolean> {
-  const res = await fetch('/api/templates/preview/heartbeat', { method: 'POST' });
+  const res = await apiFetch('/api/templates/preview/heartbeat', { method: 'POST' });
   return res.ok;
 }
 
 export async function exitPreview(): Promise<void> {
-  await fetch('/api/templates/preview', { method: 'DELETE' });
+  await apiFetch('/api/templates/preview', { method: 'DELETE' });
 }
 
 /** Best-effort cleanup when the tab closes — uses fetch with keepalive so it can ship after unload. */
 export function exitPreviewBeacon(): void {
-  void fetch('/api/templates/preview', { method: 'DELETE', keepalive: true });
+  void apiFetch('/api/templates/preview', { method: 'DELETE', keepalive: true });
 }
 
 export async function applyPreview(): Promise<Layout> {
-  const res = await fetch('/api/templates/apply', { method: 'POST' });
+  const res = await apiFetch('/api/templates/apply', { method: 'POST' });
   if (!res.ok) {
     let msg = `apply failed: ${res.status}`;
     try { msg = (await res.json()).error ?? msg; } catch { /* keep default */ }
@@ -80,7 +116,7 @@ export async function applyPreview(): Promise<Layout> {
 
 /** Download the current layout (with embedded images) as a JSON file. */
 export async function exportLayoutBundle(): Promise<void> {
-  const res = await fetch('/api/layout/export');
+  const res = await apiFetch('/api/layout/export');
   if (!res.ok) throw new Error(`export failed: ${res.status}`);
   const blob = await res.blob();
   const stamp = new Date().toISOString().slice(0, 10);
@@ -99,7 +135,7 @@ export async function importLayoutBundle(file: File): Promise<Layout> {
   const text = await file.text();
   let body: unknown;
   try { body = JSON.parse(text); } catch { throw new Error('not a valid JSON file'); }
-  const res = await fetch('/api/layout/import', {
+  const res = await apiFetch('/api/layout/import', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -123,7 +159,7 @@ export async function browseForFile(opts?: {
   initialDir?: string;
   filter?: string;
 }): Promise<string | null> {
-  const res = await fetch('/api/system/browse-file', {
+  const res = await apiFetch('/api/system/browse-file', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(opts ?? {}),
@@ -139,7 +175,7 @@ export async function browseForFile(opts?: {
 
 export async function uploadImage(file: File): Promise<{ filename: string }> {
   const buf = await file.arrayBuffer();
-  const res = await fetch('/api/images', {
+  const res = await apiFetch('/api/images', {
     method: 'POST',
     headers: { 'Content-Type': file.type || 'application/octet-stream' },
     body: buf,
@@ -153,7 +189,7 @@ export async function uploadImage(file: File): Promise<{ filename: string }> {
 }
 
 export async function deleteImage(filename: string): Promise<void> {
-  const res = await fetch(`/api/images/file/${encodeURIComponent(filename)}`, { method: 'DELETE' });
+  const res = await apiFetch(`/api/images/file/${encodeURIComponent(filename)}`, { method: 'DELETE' });
   if (!res.ok && res.status !== 404) {
     throw new Error(`delete failed: ${res.status}`);
   }
@@ -208,7 +244,7 @@ export function pageImages(page: Page): string[] {
 export type Pairing = { token: string; urls: string[] };
 
 export async function getPairing(): Promise<Pairing> {
-  const res = await fetch('/api/pairing');
+  const res = await apiFetch('/api/pairing');
   if (!res.ok) throw new Error(`GET /api/pairing failed: ${res.status}`);
   return res.json();
 }
@@ -237,13 +273,13 @@ export type ObsStatus = {
 export type ObsState_API = { config: ObsConfig; status: ObsStatus };
 
 export async function getObsState(): Promise<ObsState_API> {
-  const res = await fetch('/api/integrations/obs');
+  const res = await apiFetch('/api/integrations/obs');
   if (!res.ok) throw new Error(`GET /api/integrations/obs failed: ${res.status}`);
   return res.json();
 }
 
 export async function putObsConfig(config: ObsConfig): Promise<ObsState_API> {
-  const res = await fetch('/api/integrations/obs/config', {
+  const res = await apiFetch('/api/integrations/obs/config', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(config),
@@ -256,7 +292,7 @@ export async function putObsConfig(config: ObsConfig): Promise<ObsState_API> {
 }
 
 export async function reconnectObs(): Promise<ObsState_API> {
-  const res = await fetch('/api/integrations/obs/reconnect', { method: 'POST' });
+  const res = await apiFetch('/api/integrations/obs/reconnect', { method: 'POST' });
   if (!res.ok) throw new Error(`reconnect failed: ${res.status}`);
   return res.json();
 }
@@ -292,13 +328,13 @@ export type StreamlabsPublicConfig = {
 export type StreamlabsState_API = { config: StreamlabsPublicConfig; status: StreamlabsStatus };
 
 export async function getStreamlabsState(): Promise<StreamlabsState_API> {
-  const res = await fetch('/api/integrations/streamlabs');
+  const res = await apiFetch('/api/integrations/streamlabs');
   if (!res.ok) throw new Error(`GET /api/integrations/streamlabs failed: ${res.status}`);
   return res.json();
 }
 
 export async function putStreamlabsConfig(c: { enabled: boolean; host: string; port: number; token?: string }): Promise<StreamlabsState_API> {
-  const res = await fetch('/api/integrations/streamlabs/config', {
+  const res = await apiFetch('/api/integrations/streamlabs/config', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(c),
@@ -311,7 +347,7 @@ export async function putStreamlabsConfig(c: { enabled: boolean; host: string; p
 }
 
 export async function reconnectStreamlabs(): Promise<StreamlabsState_API> {
-  const res = await fetch('/api/integrations/streamlabs/reconnect', { method: 'POST' });
+  const res = await apiFetch('/api/integrations/streamlabs/reconnect', { method: 'POST' });
   if (!res.ok) throw new Error(`reconnect failed: ${res.status}`);
   return res.json();
 }
@@ -338,13 +374,13 @@ export type TwitchPublicConfig = {
 export type TwitchState_API = { config: TwitchPublicConfig; status: TwitchStatus };
 
 export async function getTwitchState(): Promise<TwitchState_API> {
-  const res = await fetch('/api/integrations/twitch');
+  const res = await apiFetch('/api/integrations/twitch');
   if (!res.ok) throw new Error(`GET twitch failed: ${res.status}`);
   return res.json();
 }
 
 export async function putTwitchConfig(c: { enabled: boolean; clientId: string; clientSecret?: string }): Promise<TwitchState_API> {
-  const res = await fetch('/api/integrations/twitch/config', {
+  const res = await apiFetch('/api/integrations/twitch/config', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(c),
@@ -357,7 +393,7 @@ export async function putTwitchConfig(c: { enabled: boolean; clientId: string; c
 }
 
 export async function getTwitchAuthorize(): Promise<{ url: string }> {
-  const res = await fetch('/api/integrations/twitch/authorize');
+  const res = await apiFetch('/api/integrations/twitch/authorize');
   if (!res.ok) {
     const body = await res.text();
     throw new Error(body || `authorize failed: ${res.status}`);
@@ -366,15 +402,40 @@ export async function getTwitchAuthorize(): Promise<{ url: string }> {
 }
 
 export async function disconnectTwitch(): Promise<TwitchState_API> {
-  const res = await fetch('/api/integrations/twitch/disconnect', { method: 'POST' });
+  const res = await apiFetch('/api/integrations/twitch/disconnect', { method: 'POST' });
   if (!res.ok) throw new Error(`disconnect failed: ${res.status}`);
   return res.json();
 }
 
 export async function reconnectTwitch(): Promise<TwitchState_API> {
-  const res = await fetch('/api/integrations/twitch/reconnect', { method: 'POST' });
+  const res = await apiFetch('/api/integrations/twitch/reconnect', { method: 'POST' });
   if (!res.ok) throw new Error(`reconnect failed: ${res.status}`);
   return res.json();
+}
+
+// ─── Security ───────────────────────────────────────────────────
+
+export type SecurityConfig = { allowShellActions: boolean | null };
+
+export async function getSecurityConfig(): Promise<SecurityConfig> {
+  const res = await apiFetch('/api/security');
+  if (!res.ok) throw new Error(`GET /api/security failed: ${res.status}`);
+  const body = await res.json();
+  return body.config as SecurityConfig;
+}
+
+export async function putSecurityConfig(cfg: { allowShellActions: boolean }): Promise<SecurityConfig> {
+  const res = await apiFetch('/api/security/config', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(cfg),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(body || `PUT /api/security/config failed: ${res.status}`);
+  }
+  const out = await res.json();
+  return out.config as SecurityConfig;
 }
 
 // ─── Kick ───────────────────────────────────────────────────────
@@ -401,13 +462,13 @@ export type KickPublicConfig = {
 export type KickState_API = { config: KickPublicConfig; status: KickStatus };
 
 export async function getKickState(): Promise<KickState_API> {
-  const res = await fetch('/api/integrations/kick');
+  const res = await apiFetch('/api/integrations/kick');
   if (!res.ok) throw new Error(`GET kick failed: ${res.status}`);
   return res.json();
 }
 
 export async function putKickConfig(c: { enabled: boolean; clientId: string; clientSecret?: string }): Promise<KickState_API> {
-  const res = await fetch('/api/integrations/kick/config', {
+  const res = await apiFetch('/api/integrations/kick/config', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(c),
@@ -420,7 +481,7 @@ export async function putKickConfig(c: { enabled: boolean; clientId: string; cli
 }
 
 export async function getKickAuthorize(): Promise<{ url: string }> {
-  const res = await fetch('/api/integrations/kick/authorize');
+  const res = await apiFetch('/api/integrations/kick/authorize');
   if (!res.ok) {
     const body = await res.text();
     throw new Error(body || `authorize failed: ${res.status}`);
@@ -429,13 +490,13 @@ export async function getKickAuthorize(): Promise<{ url: string }> {
 }
 
 export async function disconnectKick(): Promise<KickState_API> {
-  const res = await fetch('/api/integrations/kick/disconnect', { method: 'POST' });
+  const res = await apiFetch('/api/integrations/kick/disconnect', { method: 'POST' });
   if (!res.ok) throw new Error(`disconnect failed: ${res.status}`);
   return res.json();
 }
 
 export async function reconnectKick(): Promise<KickState_API> {
-  const res = await fetch('/api/integrations/kick/reconnect', { method: 'POST' });
+  const res = await apiFetch('/api/integrations/kick/reconnect', { method: 'POST' });
   if (!res.ok) throw new Error(`reconnect failed: ${res.status}`);
   return res.json();
 }
