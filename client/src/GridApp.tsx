@@ -81,7 +81,13 @@ export function GridApp() {
   }
 
   return (
-    <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12, height: '100%' }}>
+    <div style={{
+      paddingTop:    'max(16px, env(safe-area-inset-top))',
+      paddingRight:  'max(16px, env(safe-area-inset-right))',
+      paddingBottom: 'max(16px, env(safe-area-inset-bottom))',
+      paddingLeft:   'max(16px, env(safe-area-inset-left))',
+      display: 'flex', flexDirection: 'column', gap: 12, height: '100%',
+    }}>
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <strong style={{ fontSize: 16 }}>
           Digi Deck

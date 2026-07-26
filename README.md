@@ -378,11 +378,17 @@ You can copy this folder to another machine to migrate everything, or delete it 
 
 ## Possible next steps
 
-- Phone-side action-failure feedback (right now a failed action looks identical to a successful one — only the server log knows).
-- mDNS-based auto-discovery on the phone (skip the QR rescan after the first pairing).
-- More starter templates (gamer / podcaster / music-producer presets).
-- More integrations — Spotify, Philips Hue, Discord.
-- Native mobile apps.
+Currently pinned:
+
+- **mDNS auto-discovery on the phone** — the server already advertises via mDNS; phone-side consumption is the missing piece so the QR doesn't need re-scanning after IP changes.
+- **More starter templates** — gamer / podcaster / music-producer preset bundles.
+- **Discord RPC integration** — deterministic mute / deafen + state indicator, matching the OBS mic UX.
+- **HTTPS/WSS with a self-signed cert** — closes the LAN-sniffing gap; needs a trust flow so first-time pairing doesn't hit browser cert warnings.
+
+Reach ideas:
+
+- More integrations — Spotify, Philips Hue.
+- Native mobile shell (Capacitor) — currently a PWA, works well on Android; iOS would benefit from proper haptic feedback and a nicer install flow.
 
 ---
 

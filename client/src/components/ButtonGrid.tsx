@@ -243,9 +243,9 @@ function ActionFailureToast({ message, onDismiss }: { message: string; onDismiss
       onClick={onDismiss}
       style={{
         position: 'fixed',
-        left: 16,
-        right: 16,
-        bottom: 16,
+        left:   'max(16px, env(safe-area-inset-left))',
+        right:  'max(16px, env(safe-area-inset-right))',
+        bottom: 'max(16px, env(safe-area-inset-bottom))',
         background: '#7f1d1d',
         border: '1px solid #b91c1c',
         borderRadius: 8,
