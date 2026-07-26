@@ -46,6 +46,7 @@ const STATIC_MIME: Record<string, string> = {
   '.woff': 'font/woff',
   '.woff2': 'font/woff2',
   '.txt':  'text/plain; charset=utf-8',
+  '.webmanifest': 'application/manifest+json',
 };
 
 type Ctx = {
