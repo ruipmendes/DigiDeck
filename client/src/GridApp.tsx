@@ -6,7 +6,10 @@ import { readUrlTokenAndStore, getStoredToken, clearToken } from './lib/token';
 import * as api from './lib/api';
 
 const STORAGE_KEY = 'digi-deck:ws_url';
-const defaultUrl = () => `ws://${window.location.hostname}:8765`;
+const defaultUrl = () => {
+  const wsScheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
+  return `${wsScheme}://${window.location.hostname}:8765`;
+};
 
 function isLocalHostBrowser(): boolean {
   const h = window.location.hostname;
@@ -18,9 +21,16 @@ export function GridApp() {
     const fromUrl = readUrlTokenAndStore();
     return fromUrl ?? getStoredToken();
   });
-  const [url, setUrl] = useState<string>(
-    () => localStorage.getItem(STORAGE_KEY) ?? defaultUrl(),
-  );
+  const [url, setUrl] = useState<string>(() => {
+    // Discard a cached ws:// URL when the page loaded over https:// (browsers
+    // block mixed content) and vice-versa. Otherwise upgrading HTTPS on the
+    // server would strand every paired phone until the user manually edits.
+    const stored = localStorage.getItem(STORAGE_KEY);
+    const wantWss = window.location.protocol === 'https:';
+    const storedIsWss = stored?.startsWith('wss://');
+    if (stored && wantWss === !!storedIsWss) return stored;
+    return defaultUrl();
+  });
   const [draft, setDraft] = useState<string | null>(null);
   const { status, layout, preview, lastAck, lastNack, buttonStates, press, sliderValue, sliderMute } = useMacroWS(url, token);
   const [previewError, setPreviewError] = useState<string | null>(null);

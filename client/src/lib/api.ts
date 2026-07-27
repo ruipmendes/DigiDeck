@@ -415,7 +415,22 @@ export async function reconnectTwitch(): Promise<TwitchState_API> {
 
 // ─── Security ───────────────────────────────────────────────────
 
-export type SecurityConfig = { allowShellActions: boolean | null };
+export type SecurityConfig = { allowShellActions: boolean | null; httpsEnabled: boolean };
+
+export function certDownloadUrl(): string {
+  const t = getStoredToken();
+  return t ? `/api/security/cert?token=${encodeURIComponent(t)}` : '/api/security/cert';
+}
+
+export async function installCertTrust(): Promise<{ installed: boolean; output: string }> {
+  const res = await apiFetch('/api/security/install-trust', { method: 'POST' });
+  if (!res.ok) {
+    let msg = `install trust failed: ${res.status}`;
+    try { msg = (await res.json()).error ?? msg; } catch { /* keep default */ }
+    throw new Error(msg);
+  }
+  return res.json();
+}
 
 export async function getSecurityConfig(): Promise<SecurityConfig> {
   const res = await apiFetch('/api/security');
@@ -424,7 +439,7 @@ export async function getSecurityConfig(): Promise<SecurityConfig> {
   return body.config as SecurityConfig;
 }
 
-export async function putSecurityConfig(cfg: { allowShellActions: boolean }): Promise<SecurityConfig> {
+export async function putSecurityConfig(cfg: { allowShellActions?: boolean; httpsEnabled?: boolean }): Promise<SecurityConfig> {
   const res = await apiFetch('/api/security/config', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },

@@ -64,7 +64,16 @@ if (-not (Test-Port 8765)) {
 }
 
 # -- Open the config page ----------------------------------------
-$configUrl = 'http://localhost:8765/config'
+# Scheme follows the server's HTTPS toggle if it's on.
+$scheme = 'http'
+$cfgPath = Join-Path $env:APPDATA 'digi-deck\config.json'
+if (Test-Path $cfgPath) {
+  try {
+    $cfg = Get-Content $cfgPath -Raw | ConvertFrom-Json
+    if ($cfg.security -and $cfg.security.httpsEnabled) { $scheme = 'https' }
+  } catch { }
+}
+$configUrl = "${scheme}://localhost:8765/config"
 
 # Is the config tab already open in any browser window?
 $configOpen = $false

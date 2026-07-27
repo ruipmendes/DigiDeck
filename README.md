@@ -175,6 +175,32 @@ The auth token is stored in `%APPDATA%\digi-deck\config.json` on the PC and in y
 
 ---
 
+## HTTPS / WSS (optional)
+
+Digi Deck defaults to plain HTTP over your LAN. The pairing token stops anyone without it from controlling your deck — but on **shared Wi-Fi** (cafés, hotels, LAN parties, dorms) a passive sniffer can lift the token off the wire. If your Wi-Fi is trusted (your own home network), the default is fine. If not, opt into HTTPS:
+
+**Config → Security → Encrypt traffic (HTTPS)** → confirm → **quit and restart the server** (tray → *Quit*, then *start.ps1*). The server generates a self-signed cert at `%APPDATA%\digi-deck\https\` on first enable and listens over TLS.
+
+### Expect a "not secure" warning — it's cosmetic
+
+Because the cert is self-signed (not issued by a public CA), every browser will flag it on first connect: strikethrough `https`, "connection is not private", etc. What matters:
+
+- **Traffic is encrypted** ✅ — the actual threat (LAN sniffing your token) is closed.
+- **Identity isn't publicly verifiable** ⚠️ — but *you* generated the cert on your own PC, so identity verification is a non-issue on your own LAN. The scary wording is Chrome's blanket label for *any* self-signed cert, not a real problem.
+
+### Removing the warning (optional)
+
+- **This PC — Chrome / Edge**: Config → Security → **Trust for Chrome / Edge**. One click, no admin, adds the cert to your `CurrentUser\Root` store. Restart the browser.
+- **This PC — Firefox**: uses its own cert store. Either click through once (persists per profile), or `about:config` → `security.enterprise_roots.enabled` = `true` to trust the Windows store.
+- **Phones (simplest)**: tap through Chrome/Safari's *Advanced → Proceed anyway* once per site. Per-site exception, works on every device.
+- **Phones (proper CA trust)**: Config → Security → **Download cert** and install as a *CA certificate* (not "VPN / app" or "Wi-Fi certificate" — those want a private key). Android in particular is fussy about direct-file taps; the reliable path is Settings → Security → Encryption & credentials → *Install a certificate* → *CA certificate*.
+
+### If you use Twitch or Kick
+
+Add `https://localhost:8765/api/integrations/<twitch|kick>/callback` to your Twitch/Kick app's OAuth Redirect URIs before re-authorizing under HTTPS.
+
+---
+
 ## Customizing buttons
 
 **Config UI** ([http://localhost:8765/config](http://localhost:8765/config)): drag the ≡ handle to reorder, click the icon to change it, edit label and action, click **Save**. Connected phones get the new layout within ~200 ms.

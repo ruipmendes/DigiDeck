@@ -26,10 +26,17 @@ export type SecurityConfig = {
    * based on whether the current layout already relies on them.
    */
   allowShellActions: boolean | null;
+  /**
+   * When true the server listens over HTTPS/WSS on the same port (self-signed
+   * cert generated at %APPDATA%/digi-deck/https/). Default off — flipping this
+   * requires re-pairing every phone and updating OAuth redirect URIs.
+   */
+  httpsEnabled: boolean;
 };
 
 export const DEFAULT_SECURITY_CONFIG: SecurityConfig = {
   allowShellActions: null,
+  httpsEnabled: false,
 };
 
 export type ServerConfig = {
@@ -55,6 +62,10 @@ function withDefaults(parsed: Partial<ServerConfig> | null | undefined): ServerC
         parsed?.security && typeof parsed.security.allowShellActions === 'boolean'
           ? parsed.security.allowShellActions
           : null,
+      httpsEnabled:
+        parsed?.security && typeof parsed.security.httpsEnabled === 'boolean'
+          ? parsed.security.httpsEnabled
+          : false,
     },
   };
 }

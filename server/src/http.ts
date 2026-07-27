@@ -202,7 +202,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse, c
     // Origin + Host allowlist (see top of handleRequest) blocks the rebinding
     // and cross-origin attack paths that used to make this dangerous.
     if (!isLocalhost(req)) return unauthorized(res);
-    json(res, 200, buildPairing(token()));
+    const scheme = ctx.getServerConfig().security.httpsEnabled ? 'https' : 'http';
+    json(res, 200, buildPairing(token(), scheme));
     return;
   }
 
@@ -456,12 +457,56 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse, c
       if (!body || typeof body !== 'object') throw new Error('invalid security config');
       const o = body as Record<string, unknown>;
       const cfg = ctx.getServerConfig();
-      cfg.security.allowShellActions =
-        typeof o.allowShellActions === 'boolean' ? o.allowShellActions : false;
+      // Only overwrite fields explicitly present in the request so a partial
+      // update (e.g. toggling just httpsEnabled) doesn't clobber other flags.
+      if (typeof o.allowShellActions === 'boolean') cfg.security.allowShellActions = o.allowShellActions;
+      if (typeof o.httpsEnabled === 'boolean') cfg.security.httpsEnabled = o.httpsEnabled;
       await saveConfig(cfg);
       json(res, 200, { config: cfg.security });
     } catch (err) {
       json(res, 400, { error: (err as Error).message });
+    }
+    return;
+  }
+  // One-click install of the .cer into the current user's Windows Root store.
+  // Non-admin — writes to CurrentUser\Root which Chrome + Edge read.
+  if (pathname === '/api/security/install-trust' && req.method === 'POST') {
+    if (!authorizeLocalhost(req, token())) return unauthorized(res);
+    try {
+      const { installCertTrust } = await import('./https-cert.js');
+      const result = await installCertTrust();
+      json(res, 200, { installed: true, output: result.output });
+    } catch (err) {
+      console.error('[https] install trust failed:', (err as Error).message);
+      json(res, 500, { error: (err as Error).message });
+    }
+    return;
+  }
+
+  // Downloadable public cert (DER-encoded .cer) so users can install trust
+  // on their phones once HTTPS is enabled. NO auth: the cert is public info
+  // — every TLS handshake serves it — so gating it just prevents phones from
+  // fetching it on their own. Origin/Host allowlist at the top of
+  // handleRequest still limits it to callers on this server's LAN.
+  // Generates the cert on demand so it's downloadable even before the server
+  // has been restarted into HTTPS mode.
+  if (pathname === '/api/security/cert' && req.method === 'GET') {
+    try {
+      const { ensureCert } = await import('./https-cert.js');
+      const cerPath = await ensureCert();
+      const s = await stat(cerPath);
+      res.writeHead(200, {
+        'Content-Type': 'application/x-x509-ca-cert',
+        'Content-Length': String(s.size),
+        // `.crt` (not `.cer`) makes Android open the file with the CA-cert
+        // install picker rather than the "VPN / app" picker that demands a
+        // private key. Same DER-encoded content either way.
+        'Content-Disposition': 'attachment; filename="digi-deck.crt"',
+      });
+      createReadStream(cerPath).pipe(res);
+    } catch (err) {
+      console.error('[https] cert download failed:', (err as Error).message);
+      json(res, 500, { error: (err as Error).message });
     }
     return;
   }
@@ -612,12 +657,12 @@ async function sendFile(res: ServerResponse, filePath: string): Promise<boolean>
   return true;
 }
 
-function buildPairing(token: string) {
+function buildPairing(token: string, scheme: 'http' | 'https') {
   const urls: string[] = [];
   for (const list of Object.values(networkInterfaces())) {
     for (const ni of list ?? []) {
       if (ni.family === 'IPv4' && !ni.internal) {
-        urls.push(`http://${ni.address}:8765/?token=${encodeURIComponent(token)}`);
+        urls.push(`${scheme}://${ni.address}:8765/?token=${encodeURIComponent(token)}`);
       }
     }
   }

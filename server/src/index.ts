@@ -1,5 +1,7 @@
-import { createServer } from 'node:http';
+import { createServer as createHttpServer } from 'node:http';
+import { createServer as createHttpsServer } from 'node:https';
 import { WebSocketServer, WebSocket } from 'ws';
+import { loadOrGenerateCert } from './https-cert.js';
 import { loadOrInitLayout, reloadLayout, toPublic, watchLayout, findTile, collectStreamerLogins, collectKickStreamerSlugs, LAYOUT_FILE } from './layout.js';
 import { executeAction, setShellActionsGate } from './actions/types.js';
 import { handleRequest } from './http.js';
@@ -113,7 +115,7 @@ function currentTrayMenu(): TrayMenu {
   };
 }
 
-const httpServer = createServer((req, res) => {
+const requestHandler = (req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse) => {
   handleRequest(req, res, {
     getLayout: () => layout,
     getServerConfig: () => serverConfig,
@@ -132,7 +134,26 @@ const httpServer = createServer((req, res) => {
         res.end('internal error');
       }
     });
-});
+};
+
+// HTTPS is opt-in. When enabled, we listen with a self-signed cert generated
+// on demand and cached under %APPDATA%. If cert generation blows up we log and
+// fall back to plain HTTP so the app still boots rather than becoming
+// unreachable — the SecurityPanel status makes the fallback visible.
+const httpServer = await createServerForConfig();
+
+async function createServerForConfig() {
+  if (serverConfig.security.httpsEnabled) {
+    try {
+      const { pfx, passphrase } = await loadOrGenerateCert();
+      console.log('[https] listening with self-signed cert');
+      return createHttpsServer({ pfx, passphrase }, requestHandler);
+    } catch (err) {
+      console.error('[https] cert setup failed, falling back to HTTP:', (err as Error).message);
+    }
+  }
+  return createHttpServer(requestHandler);
+}
 
 const wss = new WebSocketServer({
   server: httpServer,
@@ -310,7 +331,7 @@ startPreviewWatchdog();
 
 httpServer.listen(PORT, () => {
   console.log(`digi-deck server listening on :${PORT}`);
-  console.log(`Open config UI on PC:  http://localhost:${PORT}/config`);
+  console.log(`Open config UI on PC:  ${configUrl()}`);
 });
 
 startMdns(PORT);
@@ -319,8 +340,13 @@ function openInDefaultBrowser(url: string): void {
   spawn('cmd', ['/c', 'start', '""', url], { detached: true, stdio: 'ignore' }).unref();
 }
 
+function configUrl(): string {
+  const scheme = serverConfig.security.httpsEnabled ? 'https' : 'http';
+  return `${scheme}://localhost:${PORT}/config`;
+}
+
 startTray({
-  onOpen: () => openInDefaultBrowser(`http://localhost:${PORT}/config`),
+  onOpen: () => openInDefaultBrowser(configUrl()),
   onReload: async () => {
     layout = await reloadLayout();
     const total = layout.pages.reduce((n, p) => n + p.buttons.length, 0);
