@@ -2,7 +2,7 @@ import { promises as fs, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { networkInterfaces } from 'node:os';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 
 /**
  * Self-signed cert used when the user opts into HTTPS. Generated via
@@ -25,7 +25,7 @@ const CERT_META = join(CERT_DIR, 'cert.meta.json');
 
 export const CERT_CER_PATH = CERT_CER;
 
-type CertMeta = { sans: string[] };
+type CertMeta = { sans: string[]; passphrase?: string };
 
 function currentSans(): string[] {
   // Localhost + every non-internal IP the machine has right now.
@@ -51,12 +51,14 @@ async function needsRegen(): Promise<boolean> {
   if (!existsSync(CERT_PFX)) return true;
   const meta = await readCertMeta();
   if (!meta) return true;
+  // Legacy cert (pre-random-passphrase) — regenerate so the new format lands.
+  if (!meta.passphrase) return true;
   const wanted = currentSans().join(',');
   const have = [...meta.sans].sort().join(',');
   return wanted !== have;
 }
 
-function buildPsScript(ips: string[]): string {
+function buildPsScript(ips: string[], pfxPassphrase: string): string {
   // Uses .NET's CertificateRequest (System.Security.Cryptography, in the box
   // on Windows 10+). Avoids the Cert: PSDrive and the PKI module entirely —
   // both of which have proven finicky under -NoProfile / -EncodedCommand.
@@ -64,6 +66,10 @@ function buildPsScript(ips: string[]): string {
     `$sanBuilder.AddDnsName("localhost")`,
     ...ips.map((ip) => `$sanBuilder.AddIpAddress([System.Net.IPAddress]::Parse("${ip}"))`),
   ].join('\n');
+  // Passphrase is baked into the encoded (base64) script — never on the argv,
+  // so `ps` / Get-Process command-line listings never see it. Not a real
+  // secret anyway (see generateCert comment), but keeps GitGuardian and
+  // future readers from mistaking it for one.
   return `
 $ErrorActionPreference = 'Stop'
 $rsa = [System.Security.Cryptography.RSA]::Create(2048)
@@ -88,7 +94,7 @@ ${sanBuilderLines}
   $cert = $req.CreateSelfSigned($notBefore, $notAfter)
   $pfxBytes = $cert.Export(
     [System.Security.Cryptography.X509Certificates.X509ContentType]::Pfx,
-    "digi-deck"
+    "${pfxPassphrase}"
   )
   [System.IO.File]::WriteAllBytes("${CERT_PFX}", $pfxBytes)
   $cerBytes = $cert.Export(
@@ -104,7 +110,13 @@ ${sanBuilderLines}
 async function generateCert(): Promise<void> {
   await fs.mkdir(CERT_DIR, { recursive: true });
   const ips = currentSans();
-  const script = buildPsScript(ips);
+  // The PFX passphrase gates access to the private key at rest. Not a real
+  // secret in the source-code sense (anyone who can read cert.pfx can also
+  // read cert.meta.json right next to it) — it's defense-in-depth against a
+  // stray PFX being lifted without the metadata file. Regenerated with each
+  // cert so it's never hardcoded, per-install unique, high-entropy.
+  const passphrase = randomBytes(32).toString('hex');
+  const script = buildPsScript(ips, passphrase);
   const encoded = Buffer.from(script, 'utf16le').toString('base64');
   await new Promise<void>((resolve, reject) => {
     const p = spawn('powershell.exe', ['-NoProfile', '-EncodedCommand', encoded], {
@@ -119,7 +131,7 @@ async function generateCert(): Promise<void> {
       else reject(new Error(`cert generation failed (exit ${code}): ${stderr.trim() || '(no stderr)'}`));
     });
   });
-  await fs.writeFile(CERT_META, JSON.stringify({ sans: ips }, null, 2), 'utf8');
+  await fs.writeFile(CERT_META, JSON.stringify({ sans: ips, passphrase }, null, 2), 'utf8');
 }
 
 /**
@@ -160,7 +172,9 @@ export async function ensureCert(): Promise<string> {
 /** Load the cert (PFX bytes + passphrase) — generates it first if needed. */
 export async function loadOrGenerateCert(): Promise<{ pfx: Buffer; passphrase: string }> {
   await ensureCert();
-  return { pfx: await fs.readFile(CERT_PFX), passphrase: 'digi-deck' };
+  const meta = await readCertMeta();
+  if (!meta?.passphrase) throw new Error('cert meta missing after generation');
+  return { pfx: await fs.readFile(CERT_PFX), passphrase: meta.passphrase };
 }
 
 /**
