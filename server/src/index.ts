@@ -15,6 +15,7 @@ import { getTwitch } from './integrations/twitch.js';
 import { getStreamers } from './integrations/twitch-streamers.js';
 import { getKick } from './integrations/kick.js';
 import { getKickStreamers } from './integrations/kick-streamers.js';
+import { getIntegrations } from './integrations/base.js';
 import { getMic } from './actions/mic.js';
 import { computeButtonStates, type ButtonState } from './states.js';
 import { startTray, stopTray, updateTrayMenu, type TrayMenu } from './tray.js';
@@ -69,33 +70,28 @@ function layoutUsesShellActions(l: Layout): boolean {
   return false;
 }
 
+// Trigger singleton creation so each integration registers itself in the
+// central registry (see integrations/base.ts). Every downstream loop over
+// `getIntegrations()` depends on this.
 const obs = getObs();
-obs.setConfig(serverConfig.integrations.obs);
-void obs.start();
-
 const streamlabs = getStreamlabs();
-streamlabs.setConfig(serverConfig.integrations.streamlabs);
-void streamlabs.start();
-
 const twitch = getTwitch();
-twitch.setConfig(serverConfig.integrations.twitch);
-twitch.setSaveCallback(async (cfg) => {
-  serverConfig.integrations.twitch = cfg;
-  await saveConfig(serverConfig);
-});
-void twitch.start();
+const kick = getKick();
 
+// Uniform lifecycle wiring — applyConfig / attachSave / start — so adding a
+// fifth integration is one manifest + register call, not another N lines here.
+for (const i of getIntegrations()) {
+  i.applyConfig(serverConfig.integrations);
+  i.attachSave?.(serverConfig, () => saveConfig(serverConfig));
+  void i.start();
+}
+
+// Streamer pollers (Twitch + Kick) are supporting services layered on top
+// of their base integrations. They stay explicit — they poll independently
+// and don't participate in the integration lifecycle contract.
 const streamers = getStreamers();
 streamers.setLogins(collectStreamerLogins(layout));
 streamers.start();
-
-const kick = getKick();
-kick.setConfig(serverConfig.integrations.kick);
-kick.setSaveCallback(async (cfg) => {
-  serverConfig.integrations.kick = cfg;
-  await saveConfig(serverConfig);
-});
-void kick.start();
 
 const kickStreamers = getKickStreamers();
 kickStreamers.setSlugs(collectKickStreamerSlugs(layout));
@@ -107,12 +103,11 @@ mic.start();
 function activeLayout(): Layout { return getPreview()?.layout ?? layout; }
 
 function currentTrayMenu(): TrayMenu {
-  return {
-    obs:        !!serverConfig.integrations.obs.enabled,
-    streamlabs: !!serverConfig.integrations.streamlabs.enabled,
-    twitch:     !!serverConfig.integrations.twitch.enabled,
-    kick:       !!serverConfig.integrations.kick.enabled,
-  };
+  const items: TrayMenu = [];
+  for (const i of getIntegrations()) {
+    items.push({ name: i.manifest.name, displayName: i.manifest.displayName, enabled: i.isEnabled() });
+  }
+  return items;
 }
 
 const requestHandler = (req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse) => {
@@ -206,18 +201,19 @@ function scheduleStateBroadcast() {
   statesTimer = setTimeout(() => { statesTimer = null; broadcastStates(); }, 150);
 }
 
-obs.onChange(scheduleStateBroadcast);
-streamlabs.onChange(scheduleStateBroadcast);
+// Base wiring: every integration triggers a state broadcast on change.
+for (const i of getIntegrations()) i.onChange(scheduleStateBroadcast);
+
+// Extra: when Twitch or Kick just went to connected, refresh streamer thumbnails
+// so tiles pop within seconds instead of waiting for the next poll.
 twitch.onChange(() => {
-  scheduleStateBroadcast();
-  // Twitch just reconnected — refresh streamer info so thumbnails appear without waiting a minute.
   if (twitch.status().state === 'connected') streamers.refresh();
 });
-streamers.onChange(scheduleStateBroadcast);
 kick.onChange(() => {
-  scheduleStateBroadcast();
   if (kick.status().state === 'connected') kickStreamers.refresh();
 });
+
+streamers.onChange(scheduleStateBroadcast);
 kickStreamers.onChange(scheduleStateBroadcast);
 mic.onChange(scheduleStateBroadcast);
 
@@ -356,21 +352,14 @@ startTray({
     broadcastLayout();
     scheduleStateBroadcast();
   },
-  onRestartObs: async () => {
-    console.log('[tray] restarting OBS connection');
-    await obs.restart();
-  },
-  onRestartTwitch: async () => {
-    console.log('[tray] restarting Twitch connection');
-    await twitch.restart();
-  },
-  onRestartStreamlabs: async () => {
-    console.log('[tray] restarting Streamlabs connection');
-    await streamlabs.restart();
-  },
-  onRestartKick: async () => {
-    console.log('[tray] restarting Kick connection');
-    await kick.restart();
+  onRestart: async (name: string) => {
+    const integration = getIntegrations().find((i) => i.manifest.name === name);
+    if (!integration) {
+      console.warn(`[tray] restart requested for unknown integration: ${name}`);
+      return;
+    }
+    console.log(`[tray] restarting ${integration.manifest.displayName} connection`);
+    await integration.restart();
   },
   onCheckForUpdates: async () => {
     console.log('[tray] checking for updates');
@@ -499,10 +488,7 @@ async function shutdown() {
   streamers.stop();
   kickStreamers.stop();
   mic.stop();
-  await obs.stop();
-  await streamlabs.stop();
-  await twitch.stop();
-  await kick.stop();
+  await Promise.all(getIntegrations().map((i) => i.stop()));
   stopMdns();
   httpServer.close();
   process.exit(0);

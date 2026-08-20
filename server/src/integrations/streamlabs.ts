@@ -22,6 +22,15 @@
 
 import { WebSocket } from 'ws';
 import { randomBytes } from 'node:crypto';
+import type { IntegrationsConfig } from '../config.js';
+import { registerIntegration, type IntegrationLifecycle, type IntegrationManifest } from './base.js';
+
+export const STREAMLABS_MANIFEST: IntegrationManifest = {
+  name: 'streamlabs',
+  displayName: 'Streamlabs Desktop',
+  actionTypes: ['streamlabs'],
+  hasOAuth: false,
+};
 
 export type StreamlabsConfig = {
   enabled: boolean;
@@ -95,7 +104,11 @@ type SlobsAudioSource = {
 };
 type RpcResolver = { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: NodeJS.Timeout };
 
-class StreamlabsClient {
+class StreamlabsClient implements IntegrationLifecycle {
+  readonly manifest = STREAMLABS_MANIFEST;
+  isEnabled(): boolean { return this.cfg.enabled; }
+  applyConfig(all: IntegrationsConfig): void { this.setConfig(all.streamlabs); }
+
   private cfg: StreamlabsConfig = { ...DEFAULT_STREAMLABS_CONFIG };
   private state: StreamlabsState = 'disabled';
   private err: string | undefined;
@@ -738,6 +751,9 @@ function sameVolumeMap(a: Map<string, number>, b: Map<string, number>): boolean 
 
 let _instance: StreamlabsClient | null = null;
 export function getStreamlabs(): StreamlabsClient {
-  if (!_instance) _instance = new StreamlabsClient();
+  if (!_instance) {
+    _instance = new StreamlabsClient();
+    registerIntegration(_instance);
+  }
   return _instance;
 }

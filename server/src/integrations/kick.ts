@@ -1,4 +1,13 @@
 import { createHash, randomBytes } from 'node:crypto';
+import type { IntegrationsConfig, ServerConfig } from '../config.js';
+import { registerIntegration, type IntegrationLifecycle, type IntegrationManifest } from './base.js';
+
+export const KICK_MANIFEST: IntegrationManifest = {
+  name: 'kick',
+  displayName: 'Kick',
+  actionTypes: ['kick', 'kick-streamer'],
+  hasOAuth: true,
+};
 
 export type KickConfig = {
   enabled: boolean;
@@ -42,7 +51,17 @@ const SCOPES = ['user:read', 'channel:read', 'chat:write'];
 
 type PendingAuth = { verifier: string; expires: number };
 
-class KickClient {
+class KickClient implements IntegrationLifecycle {
+  readonly manifest = KICK_MANIFEST;
+  isEnabled(): boolean { return this.cfg.enabled; }
+  applyConfig(all: IntegrationsConfig): void { this.setConfig(all.kick); }
+  attachSave(config: ServerConfig, save: () => Promise<void>): void {
+    this.setSaveCallback(async (cfg) => {
+      config.integrations.kick = cfg;
+      await save();
+    });
+  }
+
   private cfg: KickConfig = { ...DEFAULT_KICK_CONFIG };
   private err: string | undefined;
   private internal: 'idle' | 'connecting' | 'connected' | 'error' = 'idle';
@@ -304,6 +323,9 @@ class KickClient {
 
 let _instance: KickClient | null = null;
 export function getKick(): KickClient {
-  if (!_instance) _instance = new KickClient();
+  if (!_instance) {
+    _instance = new KickClient();
+    registerIntegration(_instance);
+  }
   return _instance;
 }

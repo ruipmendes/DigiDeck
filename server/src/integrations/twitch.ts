@@ -1,5 +1,14 @@
 import { WebSocket } from 'ws';
 import { randomBytes } from 'node:crypto';
+import type { IntegrationsConfig, ServerConfig } from '../config.js';
+import { registerIntegration, type IntegrationLifecycle, type IntegrationManifest } from './base.js';
+
+export const TWITCH_MANIFEST: IntegrationManifest = {
+  name: 'twitch',
+  displayName: 'Twitch',
+  actionTypes: ['twitch', 'twitch-streamer'],
+  hasOAuth: true,
+};
 
 export type TwitchConfig = {
   enabled: boolean;
@@ -35,7 +44,17 @@ const REDIRECT_URI = 'http://localhost:8765/api/integrations/twitch/callback';
 const SCOPES = ['chat:edit', 'chat:read'];
 const IRC_URL = 'wss://irc-ws.chat.twitch.tv:443';
 
-class TwitchClient {
+class TwitchClient implements IntegrationLifecycle {
+  readonly manifest = TWITCH_MANIFEST;
+  isEnabled(): boolean { return this.cfg.enabled; }
+  applyConfig(all: IntegrationsConfig): void { this.setConfig(all.twitch); }
+  attachSave(config: ServerConfig, save: () => Promise<void>): void {
+    this.setSaveCallback(async (cfg) => {
+      config.integrations.twitch = cfg;
+      await save();
+    });
+  }
+
   private cfg: TwitchConfig = { ...DEFAULT_TWITCH_CONFIG };
   private err: string | undefined;
   private internal: 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error' = 'idle';
@@ -366,6 +385,9 @@ class TwitchClient {
 
 let _instance: TwitchClient | null = null;
 export function getTwitch(): TwitchClient {
-  if (!_instance) _instance = new TwitchClient();
+  if (!_instance) {
+    _instance = new TwitchClient();
+    registerIntegration(_instance);
+  }
   return _instance;
 }

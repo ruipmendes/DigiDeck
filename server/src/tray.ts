@@ -3,39 +3,31 @@ import { spawn, type ChildProcess } from 'node:child_process';
 export type TrayActions = {
   onOpen: () => void;
   onReload: () => Promise<void> | void;
-  onRestartObs: () => Promise<void> | void;
-  onRestartTwitch: () => Promise<void> | void;
-  onRestartStreamlabs: () => Promise<void> | void;
-  onRestartKick: () => Promise<void> | void;
+  /** Called when the user picks any "Restart <X> connection" item; the picked integration's registry name is passed. */
+  onRestart: (integrationName: string) => Promise<void> | void;
   onCheckForUpdates: () => Promise<void> | void;
   onQuit: () => Promise<void> | void;
 };
 
-/** Which "Restart X connection" items the menu should include. Updated as integration config changes. */
-export type TrayMenu = {
-  obs: boolean;
-  streamlabs: boolean;
-  twitch: boolean;
-  kick: boolean;
-};
+/**
+ * Ordered list of integrations the tray knows about. Each entry drives one
+ * "Restart <displayName> connection" menu item when `enabled` is true. Built
+ * from the integration registry in index.ts — the tray itself no longer
+ * hardcodes any integration name.
+ */
+export type TrayMenu = Array<{ name: string; displayName: string; enabled: boolean }>;
 
 function buildPsScript(menu: TrayMenu): string {
   const restartItems: string[] = [];
-  if (menu.obs) {
-    restartItems.push(`$obsItem = $menu.Items.Add('Restart OBS connection')`);
-    restartItems.push(`$obsItem.Add_Click({ Send-Cmd 'RESTART_OBS' })`);
-  }
-  if (menu.streamlabs) {
-    restartItems.push(`$slItem = $menu.Items.Add('Restart Streamlabs connection')`);
-    restartItems.push(`$slItem.Add_Click({ Send-Cmd 'RESTART_STREAMLABS' })`);
-  }
-  if (menu.twitch) {
-    restartItems.push(`$twitchItem = $menu.Items.Add('Restart Twitch connection')`);
-    restartItems.push(`$twitchItem.Add_Click({ Send-Cmd 'RESTART_TWITCH' })`);
-  }
-  if (menu.kick) {
-    restartItems.push(`$kickItem = $menu.Items.Add('Restart Kick connection')`);
-    restartItems.push(`$kickItem.Add_Click({ Send-Cmd 'RESTART_KICK' })`);
+  let idx = 0;
+  for (const entry of menu) {
+    if (!entry.enabled) continue;
+    // Escape single quotes in displayName for the PS single-quoted string literal.
+    const label = entry.displayName.replace(/'/g, "''");
+    const varName = `$restartItem${idx++}`;
+    const cmd = `RESTART_${entry.name.toUpperCase()}`;
+    restartItems.push(`${varName} = $menu.Items.Add('Restart ${label} connection')`);
+    restartItems.push(`${varName}.Add_Click({ Send-Cmd '${cmd}' })`);
   }
   // Only emit the separator when at least one restart item exists, otherwise it dangles.
   const restartBlock = restartItems.length > 0
@@ -154,9 +146,7 @@ export function startTray(actions: TrayActions, menu: TrayMenu): void {
 export function updateTrayMenu(menu: TrayMenu): void {
   if (process.platform !== 'win32') return;
   if (!currentActions) return;
-  if (currentMenu && currentMenu.obs === menu.obs && currentMenu.streamlabs === menu.streamlabs && currentMenu.twitch === menu.twitch && currentMenu.kick === menu.kick) {
-    return;
-  }
+  if (currentMenu && sameMenu(currentMenu, menu)) return;
   currentMenu = menu;
   if (trayProc && !trayProc.killed) {
     try { trayProc.kill(); } catch { /* ignore */ }
@@ -166,27 +156,34 @@ export function updateTrayMenu(menu: TrayMenu): void {
   console.log(`[tray] refreshed menu (restart items: ${menuLabel(menu)})`);
 }
 
+function sameMenu(a: TrayMenu, b: TrayMenu): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i].name !== b[i].name) return false;
+    if (a[i].enabled !== b[i].enabled) return false;
+  }
+  return true;
+}
+
 function menuLabel(menu: TrayMenu): string {
-  const items: string[] = [];
-  if (menu.obs) items.push('obs');
-  if (menu.streamlabs) items.push('streamlabs');
-  if (menu.twitch) items.push('twitch');
-  if (menu.kick) items.push('kick');
+  const items = menu.filter((m) => m.enabled).map((m) => m.name);
   return items.length > 0 ? items.join(', ') : 'none';
 }
 
 async function dispatch(cmd: string, actions: TrayActions): Promise<void> {
   try {
     switch (cmd) {
-      case 'OPEN':           actions.onOpen(); break;
-      case 'RELOAD':         await actions.onReload(); break;
-      case 'RESTART_OBS':         await actions.onRestartObs(); break;
-      case 'RESTART_STREAMLABS':  await actions.onRestartStreamlabs(); break;
-      case 'RESTART_TWITCH':      await actions.onRestartTwitch(); break;
-      case 'RESTART_KICK':        await actions.onRestartKick(); break;
-      case 'CHECK_UPDATES':       await actions.onCheckForUpdates(); break;
-      case 'QUIT':                await actions.onQuit(); break;
-      default:               console.warn(`[tray] unknown command: ${cmd}`);
+      case 'OPEN':          actions.onOpen(); break;
+      case 'RELOAD':        await actions.onReload(); break;
+      case 'CHECK_UPDATES': await actions.onCheckForUpdates(); break;
+      case 'QUIT':          await actions.onQuit(); break;
+      default:
+        if (cmd.startsWith('RESTART_')) {
+          const name = cmd.slice('RESTART_'.length).toLowerCase();
+          await actions.onRestart(name);
+        } else {
+          console.warn(`[tray] unknown command: ${cmd}`);
+        }
     }
   } catch (err) {
     console.error(`[tray] action ${cmd} failed:`, (err as Error).message);

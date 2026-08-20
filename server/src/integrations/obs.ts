@@ -1,4 +1,13 @@
 import OBSWebSocket from 'obs-websocket-js';
+import type { IntegrationsConfig } from '../config.js';
+import { registerIntegration, type IntegrationLifecycle, type IntegrationManifest } from './base.js';
+
+export const OBS_MANIFEST: IntegrationManifest = {
+  name: 'obs',
+  displayName: 'OBS Studio',
+  actionTypes: ['obs'],
+  hasOAuth: false,
+};
 
 export type ObsConfig = {
   enabled: boolean;
@@ -47,7 +56,11 @@ export type ObsOp =
 
 export type ObsActionParams = { sceneName?: string; inputName?: string; sourceName?: string };
 
-class ObsClient {
+class ObsClient implements IntegrationLifecycle {
+  readonly manifest = OBS_MANIFEST;
+  isEnabled(): boolean { return this.cfg.enabled; }
+  applyConfig(all: IntegrationsConfig): void { this.setConfig(all.obs); }
+
   private obs = new OBSWebSocket();
   private state: ObsState = 'disabled';
   private err: string | undefined;
@@ -370,6 +383,9 @@ class ObsClient {
 
 let _instance: ObsClient | null = null;
 export function getObs(): ObsClient {
-  if (!_instance) _instance = new ObsClient();
+  if (!_instance) {
+    _instance = new ObsClient();
+    registerIntegration(_instance);
+  }
   return _instance;
 }
