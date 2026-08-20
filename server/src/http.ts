@@ -4,10 +4,7 @@ import type { Layout } from './layout.js';
 import { saveLayout, validateLayout } from './layout.js';
 import { authorize, authorizeLocalhost, isLocalhost, isAllowedHost, isAllowedOrigin } from './auth.js';
 import { saveConfig, type ServerConfig } from './config.js';
-import { getObs, DEFAULT_OBS_CONFIG, type ObsConfig } from './integrations/obs.js';
-import { getStreamlabs, DEFAULT_STREAMLABS_CONFIG, type StreamlabsConfig } from './integrations/streamlabs.js';
-import { getTwitch, type TwitchConfig } from './integrations/twitch.js';
-import { getKick, type KickConfig } from './integrations/kick.js';
+import { findIntegration } from './integrations/base.js';
 import {
   saveImage, imagePath, imageExists, deleteImage, imageMime, MAX_IMAGE_BYTES,
 } from './images.js';
@@ -281,168 +278,22 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse, c
     }
   }
 
-  // ─── OBS ──────────────────────────────────────────────────────
-  if (pathname === '/api/integrations/obs' && req.method === 'GET') {
-    if (!authorize(req, token())) return unauthorized(res);
-    json(res, 200, { config: ctx.getServerConfig().integrations.obs, status: getObs().status() });
-    return;
-  }
-  if (pathname === '/api/integrations/obs/config' && req.method === 'PUT') {
-    if (!authorizeLocalhost(req, token())) return unauthorized(res);
-    try {
-      const body = await readJsonBody(req);
-      const obsCfg = validateObsConfig(body);
-      const cfg = ctx.getServerConfig();
-      cfg.integrations.obs = obsCfg;
-      await saveConfig(cfg);
-      getObs().setConfig(obsCfg);
-      await getObs().restart();
-      ctx.onIntegrationsChanged();
-      json(res, 200, { config: cfg.integrations.obs, status: getObs().status() });
-    } catch (err) {
-      json(res, 400, { error: (err as Error).message });
+  // ─── Integrations (auto-generated from the registry) ─────────
+  // Any /api/integrations/<name>/... path is dispatched to the integration
+  // matching <name> in the registry. Adding a new integration = a manifest
+  // + IntegrationLifecycle impl; no touching this file.
+  if (pathname.startsWith('/api/integrations/')) {
+    const rest = pathname.slice('/api/integrations/'.length);
+    const slashIdx = rest.indexOf('/');
+    const name = slashIdx === -1 ? rest : rest.slice(0, slashIdx);
+    const action = slashIdx === -1 ? '' : rest.slice(slashIdx + 1);
+    const integration = findIntegration(name);
+    if (integration) {
+      const handled = await routeIntegration(req, res, ctx, token, integration, action);
+      if (handled) return;
     }
-    return;
-  }
-  if (pathname === '/api/integrations/obs/reconnect' && req.method === 'POST') {
-    if (!authorizeLocalhost(req, token())) return unauthorized(res);
-    await getObs().restart();
-    json(res, 200, { config: ctx.getServerConfig().integrations.obs, status: getObs().status() });
-    return;
   }
 
-  // ─── Streamlabs Desktop ───────────────────────────────────────
-  if (pathname === '/api/integrations/streamlabs' && req.method === 'GET') {
-    if (!authorize(req, token())) return unauthorized(res);
-    json(res, 200, {
-      config: publicStreamlabsConfig(ctx.getServerConfig().integrations.streamlabs),
-      status: getStreamlabs().status(),
-    });
-    return;
-  }
-  if (pathname === '/api/integrations/streamlabs/config' && req.method === 'PUT') {
-    if (!authorizeLocalhost(req, token())) return unauthorized(res);
-    try {
-      const body = await readJsonBody(req);
-      const slCfg = validateStreamlabsConfig(body, ctx.getServerConfig().integrations.streamlabs);
-      const cfg = ctx.getServerConfig();
-      cfg.integrations.streamlabs = slCfg;
-      await saveConfig(cfg);
-      getStreamlabs().setConfig(slCfg);
-      await getStreamlabs().restart();
-      ctx.onIntegrationsChanged();
-      json(res, 200, {
-        config: publicStreamlabsConfig(cfg.integrations.streamlabs),
-        status: getStreamlabs().status(),
-      });
-    } catch (err) {
-      json(res, 400, { error: (err as Error).message });
-    }
-    return;
-  }
-  if (pathname === '/api/integrations/streamlabs/reconnect' && req.method === 'POST') {
-    if (!authorizeLocalhost(req, token())) return unauthorized(res);
-    await getStreamlabs().restart();
-    json(res, 200, {
-      config: publicStreamlabsConfig(ctx.getServerConfig().integrations.streamlabs),
-      status: getStreamlabs().status(),
-    });
-    return;
-  }
-
-  // ─── Twitch ───────────────────────────────────────────────────
-  if (pathname === '/api/integrations/twitch' && req.method === 'GET') {
-    if (!authorize(req, token())) return unauthorized(res);
-    json(res, 200, {
-      config: publicTwitchConfig(ctx.getServerConfig().integrations.twitch),
-      status: getTwitch().status(),
-    });
-    return;
-  }
-  if (pathname === '/api/integrations/twitch/config' && req.method === 'PUT') {
-    if (!authorizeLocalhost(req, token())) return unauthorized(res);
-    try {
-      const body = await readJsonBody(req);
-      const twitchCfg = validateTwitchConfig(body, ctx.getServerConfig().integrations.twitch);
-      const cfg = ctx.getServerConfig();
-      cfg.integrations.twitch = twitchCfg;
-      await saveConfig(cfg);
-      getTwitch().setConfig(twitchCfg);
-      if (twitchCfg.enabled && twitchCfg.refreshToken) {
-        await getTwitch().restart();
-      } else {
-        await getTwitch().stop();
-      }
-      ctx.onIntegrationsChanged();
-      json(res, 200, {
-        config: publicTwitchConfig(cfg.integrations.twitch),
-        status: getTwitch().status(),
-      });
-    } catch (err) {
-      json(res, 400, { error: (err as Error).message });
-    }
-    return;
-  }
-  if (pathname === '/api/integrations/twitch/authorize' && req.method === 'GET') {
-    if (!authorizeLocalhost(req, token())) return unauthorized(res);
-    try {
-      const url = getTwitch().buildAuthorizeUrl();
-      json(res, 200, { url });
-    } catch (err) {
-      json(res, 400, { error: (err as Error).message });
-    }
-    return;
-  }
-  if (pathname === '/api/integrations/twitch/callback' && req.method === 'GET') {
-    // Hit by user's browser after Twitch OAuth redirect — must be from localhost.
-    if (!isLocalhost(req)) {
-      res.writeHead(403, { 'Content-Type': 'text/plain' });
-      res.end('forbidden');
-      return;
-    }
-    const url = new URL(req.url ?? '', 'http://localhost');
-    const code = url.searchParams.get('code');
-    const state = url.searchParams.get('state');
-    const oauthErr = url.searchParams.get('error');
-    if (oauthErr) {
-      htmlResponse(res, 200, callbackHtml('Authorization cancelled', oauthErr, false));
-      return;
-    }
-    if (!code || !state) {
-      htmlResponse(res, 400, callbackHtml('Bad request', 'Missing code or state.', false));
-      return;
-    }
-    try {
-      await getTwitch().handleCallback(code, state);
-      const username = getTwitch().status().username;
-      htmlResponse(res, 200, callbackHtml(
-        'Connected to Twitch',
-        username ? `Logged in as @${username}.` : 'Authorization complete.',
-        true,
-      ));
-    } catch (err) {
-      htmlResponse(res, 500, callbackHtml('Auth failed', (err as Error).message, false));
-    }
-    return;
-  }
-  if (pathname === '/api/integrations/twitch/disconnect' && req.method === 'POST') {
-    if (!authorizeLocalhost(req, token())) return unauthorized(res);
-    await getTwitch().disconnectIntegration();
-    json(res, 200, {
-      config: publicTwitchConfig(ctx.getServerConfig().integrations.twitch),
-      status: getTwitch().status(),
-    });
-    return;
-  }
-  if (pathname === '/api/integrations/twitch/reconnect' && req.method === 'POST') {
-    if (!authorizeLocalhost(req, token())) return unauthorized(res);
-    await getTwitch().restart();
-    json(res, 200, {
-      config: publicTwitchConfig(ctx.getServerConfig().integrations.twitch),
-      status: getTwitch().status(),
-    });
-    return;
-  }
 
   // ─── Security ─────────────────────────────────────────────────
   if (pathname === '/api/security' && req.method === 'GET') {
@@ -511,98 +362,6 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse, c
     return;
   }
 
-  // ─── Kick ─────────────────────────────────────────────────────
-  if (pathname === '/api/integrations/kick' && req.method === 'GET') {
-    if (!authorize(req, token())) return unauthorized(res);
-    json(res, 200, {
-      config: publicKickConfig(ctx.getServerConfig().integrations.kick),
-      status: getKick().status(),
-    });
-    return;
-  }
-  if (pathname === '/api/integrations/kick/config' && req.method === 'PUT') {
-    if (!authorizeLocalhost(req, token())) return unauthorized(res);
-    try {
-      const body = await readJsonBody(req);
-      const kickCfg = validateKickConfig(body, ctx.getServerConfig().integrations.kick);
-      const cfg = ctx.getServerConfig();
-      cfg.integrations.kick = kickCfg;
-      await saveConfig(cfg);
-      getKick().setConfig(kickCfg);
-      if (kickCfg.enabled && kickCfg.refreshToken) {
-        await getKick().restart();
-      } else {
-        await getKick().stop();
-      }
-      ctx.onIntegrationsChanged();
-      json(res, 200, {
-        config: publicKickConfig(cfg.integrations.kick),
-        status: getKick().status(),
-      });
-    } catch (err) {
-      json(res, 400, { error: (err as Error).message });
-    }
-    return;
-  }
-  if (pathname === '/api/integrations/kick/authorize' && req.method === 'GET') {
-    if (!authorizeLocalhost(req, token())) return unauthorized(res);
-    try {
-      const url = getKick().buildAuthorizeUrl();
-      json(res, 200, { url });
-    } catch (err) {
-      json(res, 400, { error: (err as Error).message });
-    }
-    return;
-  }
-  if (pathname === '/api/integrations/kick/callback' && req.method === 'GET') {
-    if (!isLocalhost(req)) {
-      res.writeHead(403, { 'Content-Type': 'text/plain' });
-      res.end('forbidden');
-      return;
-    }
-    const url = new URL(req.url ?? '', 'http://localhost');
-    const code = url.searchParams.get('code');
-    const state = url.searchParams.get('state');
-    const oauthErr = url.searchParams.get('error');
-    if (oauthErr) {
-      htmlResponse(res, 200, callbackHtml('Authorization cancelled', oauthErr, false));
-      return;
-    }
-    if (!code || !state) {
-      htmlResponse(res, 400, callbackHtml('Bad request', 'Missing code or state.', false));
-      return;
-    }
-    try {
-      await getKick().handleCallback(code, state);
-      const slug = getKick().status().slug;
-      htmlResponse(res, 200, callbackHtml(
-        'Connected to Kick',
-        slug ? `Logged in as ${slug}.` : 'Authorization complete.',
-        true,
-      ));
-    } catch (err) {
-      htmlResponse(res, 500, callbackHtml('Auth failed', (err as Error).message, false));
-    }
-    return;
-  }
-  if (pathname === '/api/integrations/kick/disconnect' && req.method === 'POST') {
-    if (!authorizeLocalhost(req, token())) return unauthorized(res);
-    await getKick().disconnectIntegration();
-    json(res, 200, {
-      config: publicKickConfig(ctx.getServerConfig().integrations.kick),
-      status: getKick().status(),
-    });
-    return;
-  }
-  if (pathname === '/api/integrations/kick/reconnect' && req.method === 'POST') {
-    if (!authorizeLocalhost(req, token())) return unauthorized(res);
-    await getKick().restart();
-    json(res, 200, {
-      config: publicKickConfig(ctx.getServerConfig().integrations.kick),
-      status: getKick().status(),
-    });
-    return;
-  }
 
   // ─── Static client (built SPA) ──────────────────────────────
   // Any non-/api request falls through to the built client at client/dist/.
@@ -614,6 +373,123 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse, c
 
   res.writeHead(404, { 'Content-Type': 'text/plain' });
   res.end('not found');
+}
+
+/**
+ * Handles every /api/integrations/<name>/<action> route by dispatching to
+ * methods on the integration lifecycle contract. Adding a new integration
+ * inherits all six standard endpoints for free.
+ *
+ *   GET  /                → { config, status }         (authorize)
+ *   PUT  /config          → validate + persist + apply (authorizeLocalhost)
+ *   POST /reconnect       → restart() + { config, status } (authorizeLocalhost)
+ *   GET  /authorize       → { url } (OAuth only, authorizeLocalhost)
+ *   GET  /callback        → HTML page (OAuth only, isLocalhost)
+ *   POST /disconnect      → clear tokens + { config, status } (OAuth only, authorizeLocalhost)
+ *
+ * Returns true when it produced a response for a known route; false when the
+ * path matched an integration name but not a recognised action, so the outer
+ * handler can 404.
+ */
+async function routeIntegration(
+  req: IncomingMessage,
+  res: ServerResponse,
+  ctx: Ctx,
+  token: () => string,
+  integration: import('./integrations/base.js').IntegrationLifecycle,
+  action: string,
+): Promise<boolean> {
+  const method = req.method;
+
+  const respondConfigStatus = (status = 200) => {
+    json(res, status, { config: integration.publicConfig(), status: integration.status() });
+  };
+
+  // GET /api/integrations/<name>
+  if (action === '' && method === 'GET') {
+    if (!authorize(req, token())) { unauthorized(res); return true; }
+    respondConfigStatus();
+    return true;
+  }
+
+  // PUT /api/integrations/<name>/config
+  if (action === 'config' && method === 'PUT') {
+    if (!authorizeLocalhost(req, token())) { unauthorized(res); return true; }
+    try {
+      const body = await readJsonBody(req);
+      await integration.applyConfigUpdate(body);
+      ctx.onIntegrationsChanged();
+      respondConfigStatus();
+    } catch (err) {
+      json(res, 400, { error: (err as Error).message });
+    }
+    return true;
+  }
+
+  // POST /api/integrations/<name>/reconnect
+  if (action === 'reconnect' && method === 'POST') {
+    if (!authorizeLocalhost(req, token())) { unauthorized(res); return true; }
+    await integration.restart();
+    respondConfigStatus();
+    return true;
+  }
+
+  // OAuth-only endpoints. Guard on the manifest so a non-OAuth integration
+  // getting hit at /authorize doesn't crash on the optional method call.
+  if (integration.manifest.hasOAuth) {
+    if (action === 'authorize' && method === 'GET') {
+      if (!authorizeLocalhost(req, token())) { unauthorized(res); return true; }
+      try {
+        const url = integration.buildAuthorizeUrl!();
+        json(res, 200, { url });
+      } catch (err) {
+        json(res, 400, { error: (err as Error).message });
+      }
+      return true;
+    }
+
+    if (action === 'callback' && method === 'GET') {
+      // Hit by the user's browser after the OAuth redirect back to us.
+      // The `state` param carries CSRF protection; auth is not possible here.
+      if (!isLocalhost(req)) {
+        res.writeHead(403, { 'Content-Type': 'text/plain' });
+        res.end('forbidden');
+        return true;
+      }
+      const url = new URL(req.url ?? '', 'http://localhost');
+      const code = url.searchParams.get('code');
+      const state = url.searchParams.get('state');
+      const oauthErr = url.searchParams.get('error');
+      if (oauthErr) {
+        htmlResponse(res, 200, callbackHtml('Authorization cancelled', oauthErr, false));
+        return true;
+      }
+      if (!code || !state) {
+        htmlResponse(res, 400, callbackHtml('Bad request', 'Missing code or state.', false));
+        return true;
+      }
+      try {
+        const outcome = await integration.handleCallback!(code, state);
+        htmlResponse(res, 200, callbackHtml(
+          `Connected to ${integration.manifest.displayName}`,
+          outcome.successMessage,
+          true,
+        ));
+      } catch (err) {
+        htmlResponse(res, 500, callbackHtml('Auth failed', (err as Error).message, false));
+      }
+      return true;
+    }
+
+    if (action === 'disconnect' && method === 'POST') {
+      if (!authorizeLocalhost(req, token())) { unauthorized(res); return true; }
+      await integration.disconnectIntegration!();
+      respondConfigStatus();
+      return true;
+    }
+  }
+
+  return false;
 }
 
 async function serveStaticOrSpa(res: ServerResponse, pathname: string): Promise<boolean> {
@@ -667,96 +543,6 @@ function buildPairing(token: string, scheme: 'http' | 'https') {
     }
   }
   return { token, urls };
-}
-
-function validateObsConfig(input: unknown): ObsConfig {
-  if (!input || typeof input !== 'object') throw new Error('invalid OBS config');
-  const o = input as Record<string, unknown>;
-  return {
-    enabled: !!o.enabled,
-    host: typeof o.host === 'string' && o.host.trim() ? o.host.trim() : DEFAULT_OBS_CONFIG.host,
-    port: typeof o.port === 'number' && o.port > 0 && o.port < 65536 ? Math.floor(o.port) : DEFAULT_OBS_CONFIG.port,
-    password: typeof o.password === 'string' ? o.password : '',
-  };
-}
-
-type PublicStreamlabsConfig = { enabled: boolean; host: string; port: number; hasToken: boolean };
-
-function publicStreamlabsConfig(cfg: StreamlabsConfig): PublicStreamlabsConfig {
-  return {
-    enabled: cfg.enabled,
-    host: cfg.host,
-    port: cfg.port,
-    hasToken: !!cfg.token,
-  };
-}
-
-function validateStreamlabsConfig(input: unknown, existing: StreamlabsConfig): StreamlabsConfig {
-  if (!input || typeof input !== 'object') throw new Error('invalid Streamlabs config');
-  const o = input as Record<string, unknown>;
-  return {
-    enabled: !!o.enabled,
-    host: typeof o.host === 'string' && o.host.trim() ? o.host.trim() : DEFAULT_STREAMLABS_CONFIG.host,
-    port: typeof o.port === 'number' && o.port > 0 && o.port < 65536 ? Math.floor(o.port) : DEFAULT_STREAMLABS_CONFIG.port,
-    // If `token` is omitted or empty, keep the existing one — UI never echoes the token back.
-    token: typeof o.token === 'string' && o.token.length > 0 ? o.token : existing.token,
-  };
-}
-
-function publicTwitchConfig(cfg: TwitchConfig): {
-  enabled: boolean; clientId: string; hasSecret: boolean; hasRefreshToken: boolean; username: string;
-} {
-  return {
-    enabled: cfg.enabled,
-    clientId: cfg.clientId,
-    hasSecret: !!cfg.clientSecret,
-    hasRefreshToken: !!cfg.refreshToken,
-    username: cfg.username,
-  };
-}
-
-function validateTwitchConfig(input: unknown, existing: TwitchConfig): TwitchConfig {
-  if (!input || typeof input !== 'object') throw new Error('invalid Twitch config');
-  const o = input as Record<string, unknown>;
-  return {
-    enabled: !!o.enabled,
-    clientId: typeof o.clientId === 'string' ? o.clientId.trim() : existing.clientId,
-    // If clientSecret omitted/empty, keep existing — UI never echoes the secret back.
-    clientSecret: typeof o.clientSecret === 'string' && o.clientSecret.length > 0
-      ? o.clientSecret
-      : existing.clientSecret,
-    // Refresh token and username are managed by the OAuth flow, not by this endpoint.
-    refreshToken: existing.refreshToken,
-    username: existing.username,
-  };
-}
-
-function publicKickConfig(cfg: KickConfig): {
-  enabled: boolean; clientId: string; hasSecret: boolean; hasRefreshToken: boolean; slug: string;
-} {
-  return {
-    enabled: cfg.enabled,
-    clientId: cfg.clientId,
-    hasSecret: !!cfg.clientSecret,
-    hasRefreshToken: !!cfg.refreshToken,
-    slug: cfg.slug,
-  };
-}
-
-function validateKickConfig(input: unknown, existing: KickConfig): KickConfig {
-  if (!input || typeof input !== 'object') throw new Error('invalid Kick config');
-  const o = input as Record<string, unknown>;
-  return {
-    enabled: !!o.enabled,
-    clientId: typeof o.clientId === 'string' ? o.clientId.trim() : existing.clientId,
-    clientSecret: typeof o.clientSecret === 'string' && o.clientSecret.length > 0
-      ? o.clientSecret
-      : existing.clientSecret,
-    // Managed by OAuth flow, not this endpoint.
-    refreshToken: existing.refreshToken,
-    slug: existing.slug,
-    broadcasterUserId: existing.broadcasterUserId,
-  };
 }
 
 function callbackHtml(title: string, body: string, success: boolean): string {

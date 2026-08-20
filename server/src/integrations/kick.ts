@@ -1,6 +1,36 @@
 import { createHash, randomBytes } from 'node:crypto';
 import type { IntegrationsConfig, ServerConfig } from '../config.js';
-import { registerIntegration, type IntegrationLifecycle, type IntegrationManifest } from './base.js';
+import { registerIntegration, type CallbackOutcome, type IntegrationLifecycle, type IntegrationManifest } from './base.js';
+
+export type PublicKickConfig = {
+  enabled: boolean; clientId: string; hasSecret: boolean; hasRefreshToken: boolean; slug: string;
+};
+
+export function publicKickConfig(cfg: KickConfig): PublicKickConfig {
+  return {
+    enabled: cfg.enabled,
+    clientId: cfg.clientId,
+    hasSecret: !!cfg.clientSecret,
+    hasRefreshToken: !!cfg.refreshToken,
+    slug: cfg.slug,
+  };
+}
+
+export function validateKickConfig(input: unknown, existing: KickConfig): KickConfig {
+  if (!input || typeof input !== 'object') throw new Error('invalid Kick config');
+  const o = input as Record<string, unknown>;
+  return {
+    enabled: !!o.enabled,
+    clientId: typeof o.clientId === 'string' ? o.clientId.trim() : existing.clientId,
+    clientSecret: typeof o.clientSecret === 'string' && o.clientSecret.length > 0
+      ? o.clientSecret
+      : existing.clientSecret,
+    // Managed by OAuth flow, not this endpoint.
+    refreshToken: existing.refreshToken,
+    slug: existing.slug,
+    broadcasterUserId: existing.broadcasterUserId,
+  };
+}
 
 export const KICK_MANIFEST: IntegrationManifest = {
   name: 'kick',
@@ -55,12 +85,29 @@ class KickClient implements IntegrationLifecycle {
   readonly manifest = KICK_MANIFEST;
   isEnabled(): boolean { return this.cfg.enabled; }
   applyConfig(all: IntegrationsConfig): void { this.setConfig(all.kick); }
-  attachSave(config: ServerConfig, save: () => Promise<void>): void {
+  attach(config: ServerConfig, save: () => Promise<void>): void {
+    this.serverConfig = config;
+    this.saveFn = save;
     this.setSaveCallback(async (cfg) => {
       config.integrations.kick = cfg;
       await save();
     });
   }
+  publicConfig(): PublicKickConfig { return publicKickConfig(this.cfg); }
+  async applyConfigUpdate(input: unknown): Promise<void> {
+    const validated = validateKickConfig(input, this.cfg);
+    if (!this.serverConfig || !this.saveFn) throw new Error('Kick integration not attached');
+    this.serverConfig.integrations.kick = validated;
+    await this.saveFn();
+    this.setConfig(validated);
+    if (validated.enabled && validated.refreshToken) {
+      await this.restart();
+    } else {
+      await this.stop();
+    }
+  }
+  private serverConfig: ServerConfig | undefined;
+  private saveFn: (() => Promise<void>) | undefined;
 
   private cfg: KickConfig = { ...DEFAULT_KICK_CONFIG };
   private err: string | undefined;
@@ -128,7 +175,7 @@ class KickClient implements IntegrationLifecycle {
     return `${AUTHORIZE_URL}?${params.toString()}`;
   }
 
-  async handleCallback(code: string, state: string): Promise<void> {
+  async handleCallback(code: string, state: string): Promise<CallbackOutcome> {
     const pending = this.pending.get(state);
     if (!pending || pending.expires < Date.now()) throw new Error('invalid or expired OAuth state');
     this.pending.delete(state);
@@ -160,6 +207,8 @@ class KickClient implements IntegrationLifecycle {
     this.err = undefined;
     await this.persistCfg();
     this.emitChange();
+    const s = this.cfg.slug;
+    return { successMessage: s ? `Logged in as ${s}.` : 'Authorization complete.' };
   }
 
   async disconnectIntegration(): Promise<void> {

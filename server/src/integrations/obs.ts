@@ -1,6 +1,17 @@
 import OBSWebSocket from 'obs-websocket-js';
-import type { IntegrationsConfig } from '../config.js';
+import type { IntegrationsConfig, ServerConfig } from '../config.js';
 import { registerIntegration, type IntegrationLifecycle, type IntegrationManifest } from './base.js';
+
+export function validateObsConfig(input: unknown): ObsConfig {
+  if (!input || typeof input !== 'object') throw new Error('invalid OBS config');
+  const o = input as Record<string, unknown>;
+  return {
+    enabled: !!o.enabled,
+    host: typeof o.host === 'string' && o.host.trim() ? o.host.trim() : DEFAULT_OBS_CONFIG.host,
+    port: typeof o.port === 'number' && o.port > 0 && o.port < 65536 ? Math.floor(o.port) : DEFAULT_OBS_CONFIG.port,
+    password: typeof o.password === 'string' ? o.password : '',
+  };
+}
 
 export const OBS_MANIFEST: IntegrationManifest = {
   name: 'obs',
@@ -60,6 +71,21 @@ class ObsClient implements IntegrationLifecycle {
   readonly manifest = OBS_MANIFEST;
   isEnabled(): boolean { return this.cfg.enabled; }
   applyConfig(all: IntegrationsConfig): void { this.setConfig(all.obs); }
+  attach(config: ServerConfig, save: () => Promise<void>): void {
+    this.serverConfig = config;
+    this.saveFn = save;
+  }
+  publicConfig(): ObsConfig { return this.cfg; }
+  async applyConfigUpdate(input: unknown): Promise<void> {
+    const validated = validateObsConfig(input);
+    if (!this.serverConfig || !this.saveFn) throw new Error('OBS integration not attached');
+    this.serverConfig.integrations.obs = validated;
+    await this.saveFn();
+    this.setConfig(validated);
+    await this.restart();
+  }
+  private serverConfig: ServerConfig | undefined;
+  private saveFn: (() => Promise<void>) | undefined;
 
   private obs = new OBSWebSocket();
   private state: ObsState = 'disabled';

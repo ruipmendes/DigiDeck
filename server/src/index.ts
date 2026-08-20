@@ -82,7 +82,7 @@ const kick = getKick();
 // fifth integration is one manifest + register call, not another N lines here.
 for (const i of getIntegrations()) {
   i.applyConfig(serverConfig.integrations);
-  i.attachSave?.(serverConfig, () => saveConfig(serverConfig));
+  i.attach(serverConfig, () => saveConfig(serverConfig));
   void i.start();
 }
 

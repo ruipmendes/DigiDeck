@@ -22,8 +22,31 @@
 
 import { WebSocket } from 'ws';
 import { randomBytes } from 'node:crypto';
-import type { IntegrationsConfig } from '../config.js';
+import type { IntegrationsConfig, ServerConfig } from '../config.js';
 import { registerIntegration, type IntegrationLifecycle, type IntegrationManifest } from './base.js';
+
+export type PublicStreamlabsConfig = { enabled: boolean; host: string; port: number; hasToken: boolean };
+
+export function publicStreamlabsConfig(cfg: StreamlabsConfig): PublicStreamlabsConfig {
+  return {
+    enabled: cfg.enabled,
+    host: cfg.host,
+    port: cfg.port,
+    hasToken: !!cfg.token,
+  };
+}
+
+export function validateStreamlabsConfig(input: unknown, existing: StreamlabsConfig): StreamlabsConfig {
+  if (!input || typeof input !== 'object') throw new Error('invalid Streamlabs config');
+  const o = input as Record<string, unknown>;
+  return {
+    enabled: !!o.enabled,
+    host: typeof o.host === 'string' && o.host.trim() ? o.host.trim() : DEFAULT_STREAMLABS_CONFIG.host,
+    port: typeof o.port === 'number' && o.port > 0 && o.port < 65536 ? Math.floor(o.port) : DEFAULT_STREAMLABS_CONFIG.port,
+    // If `token` is omitted or empty, keep the existing one — UI never echoes the token back.
+    token: typeof o.token === 'string' && o.token.length > 0 ? o.token : existing.token,
+  };
+}
 
 export const STREAMLABS_MANIFEST: IntegrationManifest = {
   name: 'streamlabs',
@@ -108,6 +131,21 @@ class StreamlabsClient implements IntegrationLifecycle {
   readonly manifest = STREAMLABS_MANIFEST;
   isEnabled(): boolean { return this.cfg.enabled; }
   applyConfig(all: IntegrationsConfig): void { this.setConfig(all.streamlabs); }
+  attach(config: ServerConfig, save: () => Promise<void>): void {
+    this.serverConfig = config;
+    this.saveFn = save;
+  }
+  publicConfig(): PublicStreamlabsConfig { return publicStreamlabsConfig(this.cfg); }
+  async applyConfigUpdate(input: unknown): Promise<void> {
+    const validated = validateStreamlabsConfig(input, this.cfg);
+    if (!this.serverConfig || !this.saveFn) throw new Error('Streamlabs integration not attached');
+    this.serverConfig.integrations.streamlabs = validated;
+    await this.saveFn();
+    this.setConfig(validated);
+    await this.restart();
+  }
+  private serverConfig: ServerConfig | undefined;
+  private saveFn: (() => Promise<void>) | undefined;
 
   private cfg: StreamlabsConfig = { ...DEFAULT_STREAMLABS_CONFIG };
   private state: StreamlabsState = 'disabled';

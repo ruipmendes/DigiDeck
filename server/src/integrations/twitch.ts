@@ -1,7 +1,37 @@
 import { WebSocket } from 'ws';
 import { randomBytes } from 'node:crypto';
 import type { IntegrationsConfig, ServerConfig } from '../config.js';
-import { registerIntegration, type IntegrationLifecycle, type IntegrationManifest } from './base.js';
+import { registerIntegration, type CallbackOutcome, type IntegrationLifecycle, type IntegrationManifest } from './base.js';
+
+export type PublicTwitchConfig = {
+  enabled: boolean; clientId: string; hasSecret: boolean; hasRefreshToken: boolean; username: string;
+};
+
+export function publicTwitchConfig(cfg: TwitchConfig): PublicTwitchConfig {
+  return {
+    enabled: cfg.enabled,
+    clientId: cfg.clientId,
+    hasSecret: !!cfg.clientSecret,
+    hasRefreshToken: !!cfg.refreshToken,
+    username: cfg.username,
+  };
+}
+
+export function validateTwitchConfig(input: unknown, existing: TwitchConfig): TwitchConfig {
+  if (!input || typeof input !== 'object') throw new Error('invalid Twitch config');
+  const o = input as Record<string, unknown>;
+  return {
+    enabled: !!o.enabled,
+    clientId: typeof o.clientId === 'string' ? o.clientId.trim() : existing.clientId,
+    // If clientSecret omitted/empty, keep existing — UI never echoes the secret back.
+    clientSecret: typeof o.clientSecret === 'string' && o.clientSecret.length > 0
+      ? o.clientSecret
+      : existing.clientSecret,
+    // Refresh token and username are managed by the OAuth flow, not by this endpoint.
+    refreshToken: existing.refreshToken,
+    username: existing.username,
+  };
+}
 
 export const TWITCH_MANIFEST: IntegrationManifest = {
   name: 'twitch',
@@ -48,12 +78,31 @@ class TwitchClient implements IntegrationLifecycle {
   readonly manifest = TWITCH_MANIFEST;
   isEnabled(): boolean { return this.cfg.enabled; }
   applyConfig(all: IntegrationsConfig): void { this.setConfig(all.twitch); }
-  attachSave(config: ServerConfig, save: () => Promise<void>): void {
+  attach(config: ServerConfig, save: () => Promise<void>): void {
+    this.serverConfig = config;
+    this.saveFn = save;
     this.setSaveCallback(async (cfg) => {
       config.integrations.twitch = cfg;
       await save();
     });
   }
+  publicConfig(): PublicTwitchConfig { return publicTwitchConfig(this.cfg); }
+  async applyConfigUpdate(input: unknown): Promise<void> {
+    const validated = validateTwitchConfig(input, this.cfg);
+    if (!this.serverConfig || !this.saveFn) throw new Error('Twitch integration not attached');
+    this.serverConfig.integrations.twitch = validated;
+    await this.saveFn();
+    this.setConfig(validated);
+    // OAuth quirk: only restart when we have credentials + a refresh token; otherwise
+    // stop (a config with no auth yet would just spin in retries).
+    if (validated.enabled && validated.refreshToken) {
+      await this.restart();
+    } else {
+      await this.stop();
+    }
+  }
+  private serverConfig: ServerConfig | undefined;
+  private saveFn: (() => Promise<void>) | undefined;
 
   private cfg: TwitchConfig = { ...DEFAULT_TWITCH_CONFIG };
   private err: string | undefined;
@@ -118,7 +167,7 @@ class TwitchClient implements IntegrationLifecycle {
     return `https://id.twitch.tv/oauth2/authorize?${params.toString()}`;
   }
 
-  async handleCallback(code: string, state: string): Promise<void> {
+  async handleCallback(code: string, state: string): Promise<CallbackOutcome> {
     const exp = this.pendingStates.get(state);
     if (!exp || exp < Date.now()) throw new Error('invalid or expired OAuth state');
     this.pendingStates.delete(state);
@@ -148,6 +197,8 @@ class TwitchClient implements IntegrationLifecycle {
 
     // Best-effort IRC connect; surface errors but don't throw
     await this.start();
+    const u = this.cfg.username;
+    return { successMessage: u ? `Logged in as @${u}.` : 'Authorization complete.' };
   }
 
   async disconnectIntegration(): Promise<void> {

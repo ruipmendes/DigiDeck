@@ -35,6 +35,9 @@ export interface IntegrationManifest {
  * integration-specific methods (execute, buildAuthorizeUrl, helixGet, etc.)
  * remain on the concrete class and are called directly by consumers.
  */
+/** Structure returned by `handleCallback` — success info that the auto-router turns into the HTML callback page. */
+export type CallbackOutcome = { successMessage: string };
+
 export interface IntegrationLifecycle {
   readonly manifest: IntegrationManifest;
   /** True when the user has flipped the integration on in config. */
@@ -42,16 +45,31 @@ export interface IntegrationLifecycle {
   /** Read this integration's field out of the full IntegrationsConfig and apply it. */
   applyConfig(all: IntegrationsConfig): void;
   /**
-   * OAuth integrations mutate their config (refresh tokens, username/slug on connect).
-   * Attach a persistence callback so those mutations survive restarts.
-   * Non-OAuth integrations may leave this as a no-op.
+   * Attach persistence: the integration keeps refs to the ServerConfig and a save function.
+   * OAuth integrations use this to persist token / username mutations; non-OAuth ones need
+   * it too now so `applyConfigUpdate()` can persist user-driven config changes.
    */
-  attachSave?(config: ServerConfig, save: () => Promise<void>): void;
+  attach(config: ServerConfig, save: () => Promise<void>): void;
   /** Register a callback fired on any state change — used for state broadcast + tray refresh. */
   onChange(cb: () => void): void;
   start(): Promise<void>;
   stop(): Promise<void>;
   restart(): Promise<void>;
+
+  // ─── Used by the auto-generated HTTP routes ────────────────────
+
+  /** Config shape returned by GET /api/integrations/<name> — redacts secrets where applicable. */
+  publicConfig(): unknown;
+  /** Extended status (state + integration-specific fields). Returned by GET /api/integrations/<name>. */
+  status(): { state: string; error?: string; [k: string]: unknown };
+  /** Validate + persist + apply + restart. Body comes straight from the PUT request. */
+  applyConfigUpdate(input: unknown): Promise<void>;
+
+  // ─── OAuth-only, guarded by manifest.hasOAuth === true ─────────
+
+  buildAuthorizeUrl?(): string;
+  handleCallback?(code: string, state: string): Promise<CallbackOutcome>;
+  disconnectIntegration?(): Promise<void>;
 }
 
 const registry: IntegrationLifecycle[] = [];
