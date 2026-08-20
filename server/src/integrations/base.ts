@@ -17,7 +17,10 @@
 
 import type { IntegrationsConfig, ServerConfig } from '../config.js';
 
-export type IntegrationName = 'obs' | 'streamlabs' | 'twitch' | 'kick';
+/** Kebab-case identifier used in config keys and API paths. Kept as a plain
+ *  string so scaffolded integrations don't require a matching literal-union
+ *  update — the registry rejects duplicates at runtime instead. */
+export type IntegrationName = string;
 
 export interface IntegrationManifest {
   /** Unique key. Matches the field name in IntegrationsConfig and the /api/integrations/<name> path. */

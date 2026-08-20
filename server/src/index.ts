@@ -15,6 +15,7 @@ import { getTwitch } from './integrations/twitch.js';
 import { getStreamers } from './integrations/twitch-streamers.js';
 import { getKick } from './integrations/kick.js';
 import { getKickStreamers } from './integrations/kick-streamers.js';
+// scaffold-integration: additional integration imports inserted above this line
 import { getIntegrations } from './integrations/base.js';
 import { getMic } from './actions/mic.js';
 import { computeButtonStates, type ButtonState } from './states.js';
@@ -77,6 +78,7 @@ const obs = getObs();
 const streamlabs = getStreamlabs();
 const twitch = getTwitch();
 const kick = getKick();
+// scaffold-integration: additional singleton calls inserted above this line
 
 // Uniform lifecycle wiring — applyConfig / attachSave / start — so adding a
 // fifth integration is one manifest + register call, not another N lines here.
