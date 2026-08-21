@@ -251,8 +251,17 @@ Each button is `{ id, label, icon?, action }`. Action shapes:
 { "type": "streamlabs", "op": "toggle-record" }
 { "type": "streamlabs", "op": "set-scene", "params": { "sceneName": "Gameplay" } }
 
-// Twitch chat.
+// Twitch — see the Twitch section below for all `op` values.
 { "type": "twitch", "op": "chat", "text": "!website" }
+{ "type": "twitch", "op": "toggle-shield-mode" }
+{ "type": "twitch", "op": "run-ad", "params": { "adLength": 60 } }
+{ "type": "twitch", "op": "chat-announcement", "text": "raid incoming!", "params": { "color": "purple" } }
+// Ask the target on tap — phone pops a dialog for `target` before firing.
+{ "type": "twitch", "op": "start-raid",
+  "prompts": [ { "field": "target", "label": "Streamer" } ] }
+// Preset poll — one press fires the full thing.
+{ "type": "twitch", "op": "create-poll",
+  "params": { "title": "Which map?", "choices": ["Nuke", "Mirage", "Inferno"], "duration": 60 } }
 
 // Twitch streamer thumbnail (requires Twitch connected).
 // Phone shows the streamer's profile photo — color when live, grayscale when offline —
