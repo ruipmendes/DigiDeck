@@ -261,7 +261,15 @@ function PressPromptModal({ prompts, onCancel, onConfirm }: {
   const [values, setValues] = useState<Record<string, string>>(() =>
     Object.fromEntries(prompts.map((p) => [p.field, ''])));
   const firstRef = useRef<HTMLInputElement>(null);
-  useEffect(() => { firstRef.current?.focus(); }, []);
+  // Backdrop cancel is armed on a delay: mobile fires a synthesized `click`
+  // ~10–300 ms after the touch that opened this modal, and that click would
+  // otherwise land on the freshly rendered backdrop and dismiss us instantly.
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    firstRef.current?.focus();
+    const t = setTimeout(() => setArmed(true), 400);
+    return () => clearTimeout(t);
+  }, []);
 
   const canSubmit = prompts.every((p) => values[p.field]?.trim().length > 0);
   function submit() {
@@ -275,7 +283,7 @@ function PressPromptModal({ prompts, onCancel, onConfirm }: {
     <div
       role="dialog"
       aria-modal="true"
-      onClick={onCancel}
+      onClick={armed ? onCancel : undefined}
       style={{
         position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -352,14 +360,15 @@ function ActionFailureToast({ message, onDismiss }: { message: string; onDismiss
         boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
         cursor: 'pointer',
         display: 'flex',
-        alignItems: 'center',
-        gap: 8,
+        flexDirection: 'column',
+        gap: 4,
       }}
     >
-      <span style={{ fontWeight: 700, color: '#fff' }}>Failed</span>
-      <span style={{ opacity: 0.5 }}>·</span>
-      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{message}</span>
-      <span style={{ opacity: 0.6, fontSize: 11 }}>tap to dismiss</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontWeight: 700, color: '#fff' }}>Failed</span>
+        <span style={{ opacity: 0.6, fontSize: 11, marginLeft: 'auto' }}>tap to dismiss</span>
+      </div>
+      <span style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{message}</span>
     </div>
   );
 }

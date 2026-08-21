@@ -227,7 +227,10 @@ export function toPublic(layout: Layout): PublicLayout {
         }
         const prompts: PublicPrompt[] = [];
         const seenFields = new Set<string>();
-        for (const s of steps) {
+        const longSteps = t.longPressAction
+          ? (Array.isArray(t.longPressAction) ? t.longPressAction : [t.longPressAction])
+          : [];
+        for (const s of [...steps, ...longSteps]) {
           if (s.type !== 'twitch' || !s.prompts?.length) continue;
           for (const p of s.prompts) {
             if (seenFields.has(p.field)) continue;
