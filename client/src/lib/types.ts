@@ -24,7 +24,9 @@ export type TwitchOp =
   | 'cancel-raid'
   | 'shoutout'
   | 'update-title'
-  | 'update-category';
+  | 'update-category'
+  | 'create-poll'
+  | 'create-prediction';
 
 export type TwitchAnnouncementColor = 'primary' | 'blue' | 'green' | 'orange' | 'purple';
 
@@ -36,6 +38,8 @@ export type TwitchActionParams = {
   target?: string;
   title?: string;
   gameName?: string;
+  choices?: string[];
+  outcomes?: string[];
 };
 
 export type TwitchPromptField = 'target' | 'title' | 'gameName';

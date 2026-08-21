@@ -341,7 +341,7 @@ Audio mixer slider tiles work for Streamlabs too — the slider editor exposes a
 
 ## Twitch integration
 
-Chat + a bundle of native Twitch controls: run an ad, snooze the next one, create a clip, drop a stream marker, toggle Shield Mode, toggle emote-only / sub-only / follower-only / slow chat modes, send a highlighted announcement, clear chat, start / cancel a raid, send a shoutout, update the stream title, and change the category — all from a button, no tabbing out of your game.
+Chat + a bundle of native Twitch controls: run an ad, snooze the next one, create a clip, drop a stream marker, toggle Shield Mode, toggle emote-only / sub-only / follower-only / slow chat modes, send a highlighted announcement, clear chat, start / cancel a raid, send a shoutout, update the stream title, change the category, and fire off polls and predictions — all from a button, no tabbing out of your game.
 
 **Prompt on tap.** For raids / shoutouts / title / category updates, the target is often something you decide in the moment. Each of those fields has an *Ask on tap* checkbox in the button editor — with it checked, the field is left blank in the config and the phone pops a small dialog when you press the tile, asking for the value before firing.
 

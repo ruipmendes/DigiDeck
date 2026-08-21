@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ArrowUp, ArrowDown, X, Plus, FolderOpen } from 'lucide-react';
-import type { Action, ActionType, ButtonAction, MicOp, ObsOp, StreamlabsOp, TwitchOp, TwitchAnnouncementColor, TwitchPrompt, TwitchPromptField } from '../lib/types';
+import type { Action, ActionType, ButtonAction, MicOp, ObsOp, StreamlabsOp, TwitchOp, TwitchActionParams, TwitchAnnouncementColor, TwitchPrompt, TwitchPromptField } from '../lib/types';
 import { defaultAction } from '../lib/types';
 import * as api from '../lib/api';
 import { HotkeyInput } from './HotkeyInput';
@@ -719,7 +719,7 @@ function ObsBody({ action, onChange }: { action: Extract<Action, { type: 'obs' }
   );
 }
 
-type TwitchNeeds = 'chat-text' | 'announcement' | 'run-ad' | 'marker' | 'follower-only' | 'slow-mode' | 'target' | 'title' | 'gameName' | null;
+type TwitchNeeds = 'chat-text' | 'announcement' | 'run-ad' | 'marker' | 'follower-only' | 'slow-mode' | 'target' | 'title' | 'gameName' | 'poll' | 'prediction' | null;
 type TwitchOpDef = { value: TwitchOp; label: string; needs: TwitchNeeds };
 type TwitchOpGroup = { label: string; options: TwitchOpDef[] };
 
@@ -769,6 +769,13 @@ const TWITCH_OP_GROUPS: TwitchOpGroup[] = [
       { value: 'shoutout',        label: 'Send shoutout…',        needs: 'target' },
       { value: 'update-title',    label: 'Update stream title…',  needs: 'title' },
       { value: 'update-category', label: 'Update category…',      needs: 'gameName' },
+    ],
+  },
+  {
+    label: 'Polls & predictions',
+    options: [
+      { value: 'create-poll',       label: 'Create poll…',       needs: 'poll' },
+      { value: 'create-prediction', label: 'Create prediction…', needs: 'prediction' },
     ],
   },
 ];
@@ -937,9 +944,97 @@ function TwitchBody({ action, onChange }: { action: Extract<Action, { type: 'twi
       {needs === 'title' && renderPromptableField('title')}
       {needs === 'gameName' && renderPromptableField('gameName')}
 
+      {(needs === 'poll' || needs === 'prediction') && (
+        <PollForm
+          kind={needs}
+          params={params}
+          onChange={(nextParams) => onChange({ ...action, params: nextParams })}
+        />
+      )}
+
       <span style={{ fontSize: 11, color: '#6b7280' }}>
         Requires Twitch connected with the new scopes. If a button says "insufficient permission", click <em>Disconnect</em> then <em>Connect to Twitch</em> on the Twitch panel.
       </span>
+    </div>
+  );
+}
+
+function PollForm({ kind, params, onChange }: {
+  kind: 'poll' | 'prediction';
+  params: TwitchActionParams;
+  onChange: (next: TwitchActionParams) => void;
+}) {
+  const isPoll = kind === 'poll';
+  const key: 'choices' | 'outcomes' = isPoll ? 'choices' : 'outcomes';
+  const min = 2;
+  const max = isPoll ? 5 : 10;
+  const titleCap = isPoll ? 60 : 45;
+  const defaultDuration = isPoll ? 60 : 120;
+  const items = (params[key] ?? ['', '']) as string[];
+  // Ensure at least two rows are always visible so the editor is never blank.
+  const rows = items.length < min ? [...items, ...Array(min - items.length).fill('')] : items;
+
+  const setItems = (next: string[]) => onChange({ ...params, [key]: next });
+  const updateItem = (i: number, v: string) => setItems(rows.map((r, idx) => (idx === i ? v : r)));
+  const addItem = () => { if (rows.length < max) setItems([...rows, '']); };
+  const removeItem = (i: number) => { if (rows.length > min) setItems(rows.filter((_, idx) => idx !== i)); };
+
+  const rowNoun = isPoll ? 'choice' : 'outcome';
+  const durationLabel = isPoll ? 'poll duration' : 'prediction window';
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <input
+        value={params.title ?? ''}
+        onChange={(e) => onChange({ ...params, title: e.target.value })}
+        placeholder={isPoll ? 'poll question (e.g. Which map?)' : 'prediction title (e.g. Will I clear this in 3 tries?)'}
+        maxLength={titleCap}
+        style={inputStyle}
+      />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {rows.map((v, i) => (
+          <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <input
+              value={v}
+              onChange={(e) => updateItem(i, e.target.value)}
+              placeholder={`${rowNoun} ${i + 1}`}
+              maxLength={25}
+              style={{ ...inputStyle, flex: 1 }}
+            />
+            <button
+              type="button"
+              onClick={() => removeItem(i)}
+              disabled={rows.length <= min}
+              aria-label={`remove ${rowNoun}`}
+              title={rows.length <= min ? `min ${min} ${rowNoun}s` : `remove ${rowNoun}`}
+              style={stepIconBtn(rows.length <= min)}
+            >
+              <X size={12} />
+            </button>
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={addItem}
+          disabled={rows.length >= max}
+          style={{ ...addStepBtnStyle, opacity: rows.length >= max ? 0.5 : 1 }}
+        >
+          <Plus size={12} /> add {rowNoun} {rows.length >= max && `(max ${max})`}
+        </button>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <input
+          type="number"
+          min={isPoll ? 15 : 1}
+          max={1800}
+          value={params.duration ?? defaultDuration}
+          onChange={(e) => onChange({ ...params, duration: Math.max(1, Math.min(1800, Number(e.target.value) || defaultDuration)) })}
+          style={{ ...inputStyle, width: 90 }}
+        />
+        <span style={{ fontSize: 12, color: '#9ca3af' }}>
+          seconds — {durationLabel} ({isPoll ? '15–1800' : '1–1800'})
+        </span>
+      </div>
     </div>
   );
 }

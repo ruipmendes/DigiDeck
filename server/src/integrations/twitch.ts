@@ -87,7 +87,9 @@ export type TwitchOp =
   | 'cancel-raid'
   | 'shoutout'
   | 'update-title'
-  | 'update-category';
+  | 'update-category'
+  | 'create-poll'
+  | 'create-prediction';
 
 /** Announcement highlight color. `primary` uses the broadcaster's channel color. */
 export type TwitchAnnouncementColor = 'primary' | 'blue' | 'green' | 'orange' | 'purple';
@@ -107,6 +109,10 @@ export type TwitchActionParams = {
   title?: string;
   /** New game/category name for `update-category` — resolved to id server-side. */
   gameName?: string;
+  /** Poll options for `create-poll` — 2 to 5 entries, each ≤25 chars. */
+  choices?: string[];
+  /** Prediction outcomes for `create-prediction` — 2 to 10 entries, each ≤25 chars. */
+  outcomes?: string[];
 };
 
 /** Runtime prompt shown on the phone before executing the action. Field names
@@ -128,6 +134,8 @@ const SCOPES = [
   'moderator:manage:chat_messages',
   'channel:manage:raids',
   'moderator:manage:shoutouts',
+  'channel:manage:polls',
+  'channel:manage:predictions',
 ];
 const IRC_URL = 'wss://irc-ws.chat.twitch.tv:443';
 
@@ -411,6 +419,8 @@ class TwitchClient implements IntegrationLifecycle {
       case 'shoutout':             return this.execShoutout(bid, params);
       case 'update-title':         return this.execUpdateTitle(bid, params);
       case 'update-category':      return this.execUpdateCategory(bid, params);
+      case 'create-poll':          return this.execCreatePoll(bid, params);
+      case 'create-prediction':    return this.execCreatePrediction(bid, params);
     }
     throw new Error(`unknown Twitch op: ${op as string}`);
   }
@@ -473,6 +483,48 @@ class TwitchClient implements IntegrationLifecycle {
       'PATCH', '/channels',
       { broadcaster_id: bid },
       { game_id: gameId },
+    );
+  }
+
+  private async execCreatePoll(bid: string, params: TwitchActionParams): Promise<void> {
+    const title = params.title?.trim();
+    if (!title) throw new Error('Poll: title required');
+    const choices = (params.choices ?? []).map((c) => c.trim()).filter(Boolean);
+    if (choices.length < 2 || choices.length > 5) {
+      throw new Error('Poll: 2 to 5 choices required');
+    }
+    // Twitch: 60 chars title, 25 chars per choice, duration 15–1800 s.
+    const duration = Math.max(15, Math.min(1800, Math.floor(params.duration ?? 60)));
+    await this.helixWrite(
+      'POST', '/polls',
+      undefined,
+      {
+        broadcaster_id: bid,
+        title: title.slice(0, 60),
+        choices: choices.map((c) => ({ title: c.slice(0, 25) })),
+        duration,
+      },
+    );
+  }
+
+  private async execCreatePrediction(bid: string, params: TwitchActionParams): Promise<void> {
+    const title = params.title?.trim();
+    if (!title) throw new Error('Prediction: title required');
+    const outcomes = (params.outcomes ?? []).map((o) => o.trim()).filter(Boolean);
+    if (outcomes.length < 2 || outcomes.length > 10) {
+      throw new Error('Prediction: 2 to 10 outcomes required');
+    }
+    // Twitch: 45 chars title, 25 chars per outcome, prediction_window 1–1800 s.
+    const predictionWindow = Math.max(1, Math.min(1800, Math.floor(params.duration ?? 120)));
+    await this.helixWrite(
+      'POST', '/predictions',
+      undefined,
+      {
+        broadcaster_id: bid,
+        title: title.slice(0, 45),
+        outcomes: outcomes.map((o) => ({ title: o.slice(0, 25) })),
+        prediction_window: predictionWindow,
+      },
     );
   }
 
