@@ -354,6 +354,25 @@ One-time setup:
 
 Create a button with action *Twitch chat* and text `!website` (or any message). The server keeps an IRC connection open, so chats fire instantly.
 
+**Twitch streamer tiles.** A separate action type — *Twitch streamer* — takes a login (e.g. `skullbizarre`). On the phone the tile renders the streamer's profile picture with a purple ring when live and grayscale when offline; tapping opens `twitch.tv/<login>` in the PC's default browser. Live/offline state polls every minute; the ring updates in place.
+
+---
+
+## Kick chat integration
+
+Same idea as Twitch, for Kick. Send chat to your own Kick channel, plus optional Kick-streamer thumbnail tiles.
+
+One-time setup:
+
+1. Visit [kick.com/settings/developer](https://kick.com/settings/developer) → *Create a new application*.
+2. **Redirect URI**: `http://localhost:8765/api/integrations/kick/callback` (add the `https://` variant too if you enable HTTPS later).
+3. Enable the **user:read**, **channel:read**, and **chat:write** scopes.
+4. Copy the **Client ID** and **Client Secret** after creating.
+5. In the config UI → **Kick chat** card → expand → paste Client ID + Secret → *Save credentials*.
+6. Click **Connect to Kick** → approve in the new tab → close when it says "Connected".
+
+Action types: *Kick chat* (sends `text` to your channel) and *Kick streamer* (opens `kick.com/<slug>` on tap). One quirk on the streamer tiles: Kick's OAuth API doesn't expose other users' profile pictures, so the tile falls back to the initial letter or, if you paste a custom URL in the action's *avatar URL* field, that image (right-click the streamer's avatar on kick.com → *Copy image address*). Live-stream thumbnails also render on the tile while the streamer is broadcasting.
+
 ---
 
 ## File and folder layout
@@ -368,15 +387,16 @@ digi-deck/
 │   │   ├── images.ts                  upload/serve/delete uploaded button images
 │   │   ├── templates.ts               starter templates + live preview state
 │   │   ├── templates/                 shipped template bundles (.json)
-│   │   ├── config.ts                  load/save config.json (token + integrations)
-│   │   ├── auth.ts                    token check + localhost bypass
-│   │   ├── http.ts                    REST endpoints
+│   │   ├── config.ts                  load/save config.json (token + integrations + security)
+│   │   ├── auth.ts                    token check + Origin/Host allowlist + constant-time compare
+│   │   ├── http.ts                    REST endpoints + auto-router for /api/integrations/*
+│   │   ├── https-cert.ts              self-signed cert generation for opt-in HTTPS
 │   │   ├── mdns.ts                    Bonjour service advertisement
 │   │   ├── tray.ts                    spawns hidden PowerShell NotifyIcon
 │   │   ├── states.ts                  computes per-button live state for the phone
 │   │   ├── updates.ts                 GitHub-based "check for updates" comparator
 │   │   ├── actions/                   one file per action type
-│   │   └── integrations/              obs.ts, streamlabs.ts, twitch.ts
+│   │   └── integrations/              base.ts (registry) + obs.ts, streamlabs.ts, twitch.ts, kick.ts
 │   └── package.json
 ├── client/                            ← Vite + React PWA (built to client/dist, served by the server at :8765)
 │   ├── src/
@@ -384,11 +404,19 @@ digi-deck/
 │   │   ├── ConfigApp.tsx              PC config view
 │   │   ├── ws.ts                      WebSocket hook
 │   │   ├── components/                ButtonGrid, ConfigRow, ActionEditor, ObsPanel,
-│   │   │                              StreamlabsPanel, TwitchPanel, ImagePicker,
-│   │   │                              TemplatesPanel, PreviewBanner, etc.
-│   │   └── lib/                       icons, api, types, token
+│   │   │                              StreamlabsPanel, TwitchPanel, KickPanel, SecurityPanel,
+│   │   │                              ImagePicker, TemplatesPanel, PreviewBanner, etc.
+│   │   └── lib/                       icons, api, types, token, errors
+│   ├── public/                        favicon + PWA manifest + icon.svg / icon-maskable.svg
 │   └── package.json
+├── scripts/
+│   └── scaffold-integration.mjs       generates the boilerplate for a new integration
 ├── start.ps1                          launcher used by the desktop shortcut
+├── install.ps1 / install.bat          initial-install wrapper (winget node, npm install, build)
+├── apply-update.ps1                   git-clone one-click updater (tray → Check for updates → Apply)
+├── apply-update-zip.ps1               zip-install variant of the same
+├── CONTRIBUTING.md                    how to add a new integration
+├── SECURITY.md                        private disclosure policy
 └── README.md
 ```
 
@@ -406,15 +434,31 @@ You can copy this folder to another machine to migrate everything, or delete it 
 
 Currently pinned:
 
+- **Discord RPC integration** — deterministic mute / deafen + state indicator, matching the OBS mic UX. The scaffolder generates the whole server-side skeleton in one command (see [CONTRIBUTING.md](CONTRIBUTING.md)).
 - **mDNS auto-discovery on the phone** — the server already advertises via mDNS; phone-side consumption is the missing piece so the QR doesn't need re-scanning after IP changes.
-- **More starter templates** — gamer / podcaster / music-producer preset bundles.
-- **Discord RPC integration** — deterministic mute / deafen + state indicator, matching the OBS mic UX.
-- **HTTPS/WSS with a self-signed cert** — closes the LAN-sniffing gap; needs a trust flow so first-time pairing doesn't hit browser cert warnings.
+- **More starter templates** — gamer / podcaster / music-producer preset bundles. Pure content, no new code.
+- **Cross-platform server** — currently Windows-only (PowerShell tray, native dialogs, `certutil` for cert trust, Windows Core Audio for mic mute). A best-effort Linux/macOS port would degrade the Windows-only pieces gracefully; full parity is a bigger project.
 
 Reach ideas:
 
 - More integrations — Spotify, Philips Hue.
 - Native mobile shell (Capacitor) — currently a PWA, works well on Android; iOS would benefit from proper haptic feedback and a nicer install flow.
+
+---
+
+## Contributing
+
+New integrations (Discord, Spotify, Home Assistant — whatever your setup needs) are meant to be cheap to add. The server side is registry-driven and auto-routed; a scaffolder generates the skeleton in one command:
+
+```sh
+node scripts/scaffold-integration.mjs discord --oauth --display "Discord RPC"
+```
+
+That drops a full working stub at `server/src/integrations/discord.ts`, patches `config.ts` and `index.ts`, and the auto-router immediately serves `/api/integrations/discord/{,config,reconnect,authorize,callback,disconnect}` — you fill in the protocol logic in the marked TODO blocks.
+
+Full walkthrough: [CONTRIBUTING.md](CONTRIBUTING.md).
+
+For security-adjacent issues, please use GitHub's private security advisories — see [SECURITY.md](SECURITY.md).
 
 ---
 
