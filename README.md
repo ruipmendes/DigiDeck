@@ -339,9 +339,9 @@ Audio mixer slider tiles work for Streamlabs too — the slider editor exposes a
 
 ---
 
-## Twitch chat integration
+## Twitch integration
 
-Send chat messages (including `!commands`) to your own Twitch channel from a button — no tabbing out of your game.
+Chat + a bundle of native Twitch controls: run an ad, snooze the next one, create a clip, drop a stream marker, toggle Shield Mode, toggle emote-only / sub-only / follower-only / slow chat modes, send a highlighted announcement, and clear chat — all from a button, no tabbing out of your game.
 
 One-time setup:
 
@@ -349,10 +349,12 @@ One-time setup:
 2. **OAuth Redirect URL**: `http://localhost:8765/api/integrations/twitch/callback` (exactly this — Twitch allows `http://localhost` as an exception to the HTTPS rule).
 3. Category: *Application Integration*. Click *Create*.
 4. Copy the **Client ID**; click *New Secret* and copy that too.
-5. In the config UI → **Twitch chat** card → expand → paste Client ID + Secret → *Save credentials*.
+5. In the config UI → **Twitch** card → expand → paste Client ID + Secret → *Save credentials*.
 6. Click **Connect to Twitch** → approve in the new tab → close it when it says "Connected".
 
-Create a button with action *Twitch chat* and text `!website` (or any message). The server keeps an IRC connection open, so chats fire instantly.
+Create a button with action *Twitch*, pick an op from the dropdown (Send chat message, Run ad, Toggle Shield Mode, etc.), fill in the op-specific field if any, and save. Chat runs through a persistent IRC connection for instant delivery; the rest go through the Helix API.
+
+**Upgrading?** If you connected Twitch before Tier 1 mod actions shipped, the new ops need extra OAuth scopes your existing token doesn't have. On first "insufficient permission" error, open the Twitch card → *Disconnect* → *Connect to Twitch* — one round-trip re-approves with the full scope set.
 
 **Twitch streamer tiles.** A separate action type — *Twitch streamer* — takes a login (e.g. `skullbizarre`). On the phone the tile renders the streamer's profile picture with a purple ring when live and grayscale when offline; tapping opens `twitch.tv/<login>` in the PC's default browser. Live/offline state polls every minute; the ring updates in place.
 

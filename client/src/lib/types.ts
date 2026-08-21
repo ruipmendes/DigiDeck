@@ -7,7 +7,28 @@ export type ObsOp =
 
 export type ObsActionParams = { sceneName?: string; inputName?: string; sourceName?: string };
 
-export type TwitchOp = 'chat';
+export type TwitchOp =
+  | 'chat'
+  | 'chat-announcement'
+  | 'run-ad'
+  | 'snooze-ad'
+  | 'create-clip'
+  | 'stream-marker'
+  | 'clear-chat'
+  | 'toggle-shield-mode'
+  | 'toggle-emote-only'
+  | 'toggle-sub-only'
+  | 'toggle-follower-only'
+  | 'toggle-slow-mode';
+
+export type TwitchAnnouncementColor = 'primary' | 'blue' | 'green' | 'orange' | 'purple';
+
+export type TwitchActionParams = {
+  text?: string;
+  color?: TwitchAnnouncementColor;
+  adLength?: number;
+  duration?: number;
+};
 
 export type KickOp = 'chat';
 
@@ -34,7 +55,7 @@ export type Action =
   | { type: 'mic'; op: MicOp }
   | { type: 'obs'; op: ObsOp; params?: ObsActionParams }
   | { type: 'streamlabs'; op: StreamlabsOp; params?: StreamlabsActionParams }
-  | { type: 'twitch'; op: TwitchOp; text: string }
+  | { type: 'twitch'; op: TwitchOp; text?: string; params?: TwitchActionParams }
   | { type: 'twitch-streamer'; login: string }
   | { type: 'kick'; op: KickOp; text: string }
   | { type: 'kick-streamer'; slug: string; avatarUrl?: string }

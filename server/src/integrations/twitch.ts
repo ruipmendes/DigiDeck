@@ -27,9 +27,10 @@ export function validateTwitchConfig(input: unknown, existing: TwitchConfig): Tw
     clientSecret: typeof o.clientSecret === 'string' && o.clientSecret.length > 0
       ? o.clientSecret
       : existing.clientSecret,
-    // Refresh token and username are managed by the OAuth flow, not by this endpoint.
+    // Refresh token, username, and broadcaster id are managed by the OAuth flow.
     refreshToken: existing.refreshToken,
     username: existing.username,
+    broadcasterUserId: existing.broadcasterUserId,
   };
 }
 
@@ -46,6 +47,7 @@ export type TwitchConfig = {
   clientSecret: string;
   refreshToken: string;
   username: string;
+  broadcasterUserId: string;
 };
 
 export const DEFAULT_TWITCH_CONFIG: TwitchConfig = {
@@ -54,6 +56,7 @@ export const DEFAULT_TWITCH_CONFIG: TwitchConfig = {
   clientSecret: '',
   refreshToken: '',
   username: '',
+  broadcasterUserId: '',
 };
 
 export type TwitchState =
@@ -67,11 +70,47 @@ export type TwitchStatus = {
   channel?: string;
 };
 
-export type TwitchOp = 'chat';
-export type TwitchActionParams = { text?: string };
+export type TwitchOp =
+  | 'chat'
+  | 'chat-announcement'
+  | 'run-ad'
+  | 'snooze-ad'
+  | 'create-clip'
+  | 'stream-marker'
+  | 'clear-chat'
+  | 'toggle-shield-mode'
+  | 'toggle-emote-only'
+  | 'toggle-sub-only'
+  | 'toggle-follower-only'
+  | 'toggle-slow-mode';
+
+/** Announcement highlight color. `primary` uses the broadcaster's channel color. */
+export type TwitchAnnouncementColor = 'primary' | 'blue' | 'green' | 'orange' | 'purple';
+
+export type TwitchActionParams = {
+  /** Message body for `chat` / `chat-announcement`; description for `stream-marker`. */
+  text?: string;
+  /** Highlight color for `chat-announcement`. */
+  color?: TwitchAnnouncementColor;
+  /** Length in seconds for `run-ad`. Twitch accepts 30/60/90/120/150/180. */
+  adLength?: number;
+  /** Minutes for `toggle-follower-only`, seconds for `toggle-slow-mode`. */
+  duration?: number;
+};
 
 const REDIRECT_URI = 'http://localhost:8765/api/integrations/twitch/callback';
-const SCOPES = ['chat:edit', 'chat:read'];
+const SCOPES = [
+  'chat:edit',
+  'chat:read',
+  'channel:edit:commercial',
+  'channel:manage:ads',
+  'clips:edit',
+  'channel:manage:broadcast',
+  'moderator:manage:announcements',
+  'moderator:manage:shield_mode',
+  'moderator:manage:chat_settings',
+  'moderator:manage:chat_messages',
+];
 const IRC_URL = 'wss://irc-ws.chat.twitch.tv:443';
 
 class TwitchClient implements IntegrationLifecycle {
@@ -191,7 +230,9 @@ class TwitchClient implements IntegrationLifecycle {
     this.accessTokenExpires = Date.now() + (data.expires_in - 60) * 1000;
     this.cfg.refreshToken = data.refresh_token;
 
-    this.cfg.username = await this.fetchUsername();
+    const self = await this.fetchSelf();
+    this.cfg.username = self.login;
+    this.cfg.broadcasterUserId = self.id;
     await this.persistCfg();
     this.emitChange();
 
@@ -209,6 +250,7 @@ class TwitchClient implements IntegrationLifecycle {
     }
     this.cfg.refreshToken = '';
     this.cfg.username = '';
+    this.cfg.broadcasterUserId = '';
     this.accessToken = null;
     this.accessTokenExpires = 0;
     this.internal = 'idle';
@@ -231,8 +273,10 @@ class TwitchClient implements IntegrationLifecycle {
     this.emitChange();
     try {
       await this.ensureAccessToken();
-      if (!this.cfg.username) {
-        this.cfg.username = await this.fetchUsername();
+      if (!this.cfg.username || !this.cfg.broadcasterUserId) {
+        const self = await this.fetchSelf();
+        this.cfg.username = self.login;
+        this.cfg.broadcasterUserId = self.id;
         await this.persistCfg();
       }
       await this.connectIrc();
@@ -289,8 +333,66 @@ class TwitchClient implements IntegrationLifecycle {
     return res.json() as Promise<T>;
   }
 
+  /** Authenticated non-GET call to Helix. Returns parsed JSON, or undefined for 204s. */
+  async helixWrite<T = unknown>(
+    method: 'POST' | 'PATCH' | 'PUT' | 'DELETE',
+    path: string,
+    params?: Record<string, string>,
+    body?: unknown,
+  ): Promise<T | undefined> {
+    if (!this.isReady()) throw new Error('Twitch not authorized');
+    await this.ensureAccessToken();
+    if (!this.accessToken) throw new Error('Twitch access token missing');
+
+    const url = new URL(`https://api.twitch.tv/helix${path}`);
+    if (params) for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${this.accessToken}`,
+      'Client-Id': this.cfg.clientId,
+    };
+    if (body !== undefined) headers['Content-Type'] = 'application/json';
+    const res = await fetch(url, {
+      method,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    if (!res.ok) {
+      let detail = '';
+      try {
+        const j = await res.json() as { message?: string };
+        if (j.message) detail = ` ${j.message}`;
+      } catch { detail = ` ${await res.text()}`; }
+      if (res.status === 401 || res.status === 403) {
+        throw new Error(`Twitch: insufficient permission (${res.status}${detail}) — click Disconnect then Connect on the Twitch panel to grant new scopes`);
+      }
+      throw new Error(`Twitch ${method} ${path}: ${res.status}${detail}`);
+    }
+    if (res.status === 204) return undefined;
+    const text = await res.text();
+    return text ? (JSON.parse(text) as T) : undefined;
+  }
+
   async execute(op: TwitchOp, params: TwitchActionParams = {}): Promise<void> {
-    if (op !== 'chat') throw new Error(`unknown Twitch op: ${op}`);
+    if (op === 'chat') return this.execChat(params);
+    if (!this.cfg.broadcasterUserId) throw new Error('Twitch: not authorized (reconnect Twitch)');
+    const bid = this.cfg.broadcasterUserId;
+    switch (op) {
+      case 'chat-announcement':    return this.execAnnouncement(bid, params);
+      case 'run-ad':               return this.execRunAd(bid, params);
+      case 'snooze-ad':            return this.execSnoozeAd(bid);
+      case 'create-clip':          return this.execCreateClip(bid);
+      case 'stream-marker':        return this.execStreamMarker(bid, params);
+      case 'clear-chat':           return this.execClearChat(bid);
+      case 'toggle-shield-mode':   return this.execToggleShield(bid);
+      case 'toggle-emote-only':    return this.execToggleBoolSetting(bid, 'emote_mode');
+      case 'toggle-sub-only':      return this.execToggleBoolSetting(bid, 'subscriber_mode');
+      case 'toggle-follower-only': return this.execToggleFollowerOnly(bid, params);
+      case 'toggle-slow-mode':     return this.execToggleSlowMode(bid, params);
+    }
+    throw new Error(`unknown Twitch op: ${op as string}`);
+  }
+
+  private async execChat(params: TwitchActionParams): Promise<void> {
     const text = params.text?.trim();
     if (!text) throw new Error('Twitch chat: text required');
     if (!this.cfg.username) throw new Error('Twitch: not authorized');
@@ -303,6 +405,115 @@ class TwitchClient implements IntegrationLifecycle {
       throw new Error(`Twitch IRC not connected (${this.internal})`);
     }
     this.ws.send(`PRIVMSG #${this.cfg.username} :${safe}\r\n`);
+  }
+
+  private async execAnnouncement(bid: string, params: TwitchActionParams): Promise<void> {
+    const text = params.text?.trim();
+    if (!text) throw new Error('Twitch announcement: text required');
+    const color: TwitchAnnouncementColor = params.color ?? 'primary';
+    await this.helixWrite(
+      'POST', '/chat/announcements',
+      { broadcaster_id: bid, moderator_id: bid },
+      { message: text.slice(0, 500), color },
+    );
+  }
+
+  private async execRunAd(bid: string, params: TwitchActionParams): Promise<void> {
+    const length = params.adLength ?? 30;
+    if (![30, 60, 90, 120, 150, 180].includes(length)) {
+      throw new Error('Twitch ad length must be 30/60/90/120/150/180 seconds');
+    }
+    await this.helixWrite(
+      'POST', '/channels/commercial',
+      undefined,
+      { broadcaster_id: bid, length },
+    );
+  }
+
+  private async execSnoozeAd(bid: string): Promise<void> {
+    await this.helixWrite('POST', '/channels/ads/schedule/snooze', { broadcaster_id: bid });
+  }
+
+  private async execCreateClip(bid: string): Promise<void> {
+    await this.helixWrite('POST', '/clips', { broadcaster_id: bid });
+  }
+
+  private async execStreamMarker(bid: string, params: TwitchActionParams): Promise<void> {
+    const description = params.text?.trim();
+    await this.helixWrite(
+      'POST', '/streams/markers',
+      undefined,
+      { user_id: bid, ...(description ? { description: description.slice(0, 140) } : {}) },
+    );
+  }
+
+  private async execClearChat(bid: string): Promise<void> {
+    await this.helixWrite(
+      'DELETE', '/moderation/chat',
+      { broadcaster_id: bid, moderator_id: bid },
+    );
+  }
+
+  private async execToggleShield(bid: string): Promise<void> {
+    const cur = await this.helixGet<{ data: Array<{ is_active: boolean }> }>(
+      '/moderation/shield_mode',
+      { broadcaster_id: bid, moderator_id: bid },
+    );
+    const active = !!cur.data?.[0]?.is_active;
+    await this.helixWrite(
+      'PUT', '/moderation/shield_mode',
+      { broadcaster_id: bid, moderator_id: bid },
+      { is_active: !active },
+    );
+  }
+
+  private async execToggleBoolSetting(bid: string, field: 'emote_mode' | 'subscriber_mode'): Promise<void> {
+    const cur = await this.helixGet<{ data: Array<Record<string, unknown>> }>(
+      '/chat/settings',
+      { broadcaster_id: bid, moderator_id: bid },
+    );
+    const active = !!cur.data?.[0]?.[field];
+    await this.helixWrite(
+      'PATCH', '/chat/settings',
+      { broadcaster_id: bid, moderator_id: bid },
+      { [field]: !active },
+    );
+  }
+
+  private async execToggleFollowerOnly(bid: string, params: TwitchActionParams): Promise<void> {
+    const cur = await this.helixGet<{ data: Array<{ follower_mode: boolean }> }>(
+      '/chat/settings',
+      { broadcaster_id: bid, moderator_id: bid },
+    );
+    const active = !!cur.data?.[0]?.follower_mode;
+    // Twitch's follower_mode_duration is 0–129600 minutes; default to 10 min.
+    const minutes = Math.max(0, Math.min(129600, Math.floor(params.duration ?? 10)));
+    const body = active
+      ? { follower_mode: false }
+      : { follower_mode: true, follower_mode_duration: minutes };
+    await this.helixWrite(
+      'PATCH', '/chat/settings',
+      { broadcaster_id: bid, moderator_id: bid },
+      body,
+    );
+  }
+
+  private async execToggleSlowMode(bid: string, params: TwitchActionParams): Promise<void> {
+    const cur = await this.helixGet<{ data: Array<{ slow_mode: boolean }> }>(
+      '/chat/settings',
+      { broadcaster_id: bid, moderator_id: bid },
+    );
+    const active = !!cur.data?.[0]?.slow_mode;
+    // Twitch's slow_mode_wait_time is 3–120 seconds; default to 30.
+    const seconds = Math.max(3, Math.min(120, Math.floor(params.duration ?? 30)));
+    const body = active
+      ? { slow_mode: false }
+      : { slow_mode: true, slow_mode_wait_time: seconds };
+    await this.helixWrite(
+      'PATCH', '/chat/settings',
+      { broadcaster_id: bid, moderator_id: bid },
+      body,
+    );
   }
 
   private async ensureAccessToken(): Promise<void> {
@@ -340,7 +551,7 @@ class TwitchClient implements IntegrationLifecycle {
     }
   }
 
-  private async fetchUsername(): Promise<string> {
+  private async fetchSelf(): Promise<{ login: string; id: string }> {
     if (!this.accessToken) throw new Error('no access token');
     const res = await fetch('https://api.twitch.tv/helix/users', {
       headers: {
@@ -349,9 +560,9 @@ class TwitchClient implements IntegrationLifecycle {
       },
     });
     if (!res.ok) throw new Error(`Helix users fetch failed: ${res.status}`);
-    const data = await res.json() as { data: Array<{ login: string }> };
+    const data = await res.json() as { data: Array<{ login: string; id: string }> };
     if (!data.data?.length) throw new Error('no Twitch user returned');
-    return data.data[0].login;
+    return { login: data.data[0].login, id: data.data[0].id };
   }
 
   private connectIrc(): Promise<void> {
