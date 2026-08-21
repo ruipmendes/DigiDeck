@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Volume2, VolumeX, ArrowLeft, Home } from 'lucide-react';
-import type { ButtonState, Layout, Tile } from '../ws';
+import type { ButtonState, Layout, PressPrompt, Tile } from '../ws';
 import { getIcon } from '../lib/icons';
 import { imageUrl } from '../lib/api';
 
@@ -21,7 +21,7 @@ type Props = {
   lastAck: { id: number; at: number } | null;
   lastNack: { id: number; error: string; at: number } | null;
   buttonStates: Map<number, ButtonState>;
-  onPress: (id: number, longPress?: boolean) => void;
+  onPress: (id: number, longPress?: boolean, promptValues?: Record<string, string>) => void;
   onSliderChange: (id: number, value: number) => void;
   onSliderMute: (id: number) => void;
 };
@@ -36,6 +36,7 @@ export function ButtonGrid({ layout, lastAck, lastNack, buttonStates, onPress, o
   // can briefly tint red while successful ones tint blue/accent.
   const [flash, setFlash] = useState<{ id: number; kind: 'ack' | 'nack' } | null>(null);
   const [toast, setToast] = useState<{ message: string; at: number } | null>(null);
+  const [prompt, setPrompt] = useState<{ tileId: number; longPress: boolean; prompts: PressPrompt[] } | null>(null);
   const [activePageId, setActivePageId] = useState<number>(() => {
     const stored = localStorage.getItem(PAGE_KEY);
     return stored !== null ? Number(stored) : 0;
@@ -163,6 +164,12 @@ export function ButtonGrid({ layout, lastAck, lastNack, buttonStates, onPress, o
     if (!longPress && t.kind === 'button' && t.gotoPageId !== undefined) {
       gotoPage(t.gotoPageId);
     }
+    // Prompt-at-press: if the tile declared any prompt fields, collect them
+    // in a modal first, then fire with the values echoed back to the server.
+    if (t.kind === 'button' && t.prompts?.length) {
+      setPrompt({ tileId: t.id, longPress, prompts: t.prompts });
+      return;
+    }
     // Send to server too: any other steps in a sequence still execute server-side.
     onPress(t.id, longPress);
   }
@@ -231,8 +238,96 @@ export function ButtonGrid({ layout, lastAck, lastNack, buttonStates, onPress, o
         )}
       </div>
       {toast && <ActionFailureToast message={toast.message} onDismiss={() => setToast(null)} />}
+      {prompt && (
+        <PressPromptModal
+          prompts={prompt.prompts}
+          onCancel={() => setPrompt(null)}
+          onConfirm={(values) => {
+            const p = prompt;
+            setPrompt(null);
+            onPress(p.tileId, p.longPress, values);
+          }}
+        />
+      )}
     </div>
   );
+}
+
+function PressPromptModal({ prompts, onCancel, onConfirm }: {
+  prompts: PressPrompt[];
+  onCancel: () => void;
+  onConfirm: (values: Record<string, string>) => void;
+}) {
+  const [values, setValues] = useState<Record<string, string>>(() =>
+    Object.fromEntries(prompts.map((p) => [p.field, ''])));
+  const firstRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { firstRef.current?.focus(); }, []);
+
+  const canSubmit = prompts.every((p) => values[p.field]?.trim().length > 0);
+  function submit() {
+    if (!canSubmit) return;
+    const trimmed: Record<string, string> = {};
+    for (const p of prompts) trimmed[p.field] = values[p.field].trim();
+    onConfirm(trimmed);
+  }
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      onClick={onCancel}
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        zIndex: 1000, padding: 16,
+      }}
+    >
+      <form
+        onClick={(e) => e.stopPropagation()}
+        onSubmit={(e) => { e.preventDefault(); submit(); }}
+        style={{
+          background: '#0a0a0a', border: '1px solid #1f2937', borderRadius: 10,
+          padding: 20, minWidth: 260, maxWidth: '90vw',
+          display: 'flex', flexDirection: 'column', gap: 12,
+        }}
+      >
+        {prompts.map((p, i) => (
+          <label key={p.field} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span style={{ fontSize: 13, color: '#d1d5db' }}>{p.label}</span>
+            <input
+              ref={i === 0 ? firstRef : undefined}
+              value={values[p.field] ?? ''}
+              onChange={(e) => setValues((v) => ({ ...v, [p.field]: e.target.value }))}
+              placeholder={p.placeholder}
+              autoCapitalize="none"
+              spellCheck={false}
+              style={{
+                padding: '10px 12px', background: '#111827', color: '#fff',
+                border: '1px solid #374151', borderRadius: 6, fontSize: 15,
+              }}
+            />
+          </label>
+        ))}
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
+          <button type="button" onClick={onCancel} style={dialogBtn(false)}>Cancel</button>
+          <button type="submit" disabled={!canSubmit} style={dialogBtn(true, !canSubmit)}>Send</button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function dialogBtn(primary: boolean, disabled = false): React.CSSProperties {
+  return {
+    padding: '8px 14px',
+    background: primary ? (disabled ? '#374151' : '#2563eb') : 'transparent',
+    color: primary ? '#fff' : '#d1d5db',
+    border: primary ? 'none' : '1px solid #374151',
+    borderRadius: 6,
+    fontSize: 14,
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    opacity: disabled ? 0.7 : 1,
+  };
 }
 
 function ActionFailureToast({ message, onDismiss }: { message: string; onDismiss: () => void }) {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ArrowUp, ArrowDown, X, Plus, FolderOpen } from 'lucide-react';
-import type { Action, ActionType, ButtonAction, MicOp, ObsOp, StreamlabsOp, TwitchOp, TwitchAnnouncementColor } from '../lib/types';
+import type { Action, ActionType, ButtonAction, MicOp, ObsOp, StreamlabsOp, TwitchOp, TwitchAnnouncementColor, TwitchPrompt, TwitchPromptField } from '../lib/types';
 import { defaultAction } from '../lib/types';
 import * as api from '../lib/api';
 import { HotkeyInput } from './HotkeyInput';
@@ -719,7 +719,7 @@ function ObsBody({ action, onChange }: { action: Extract<Action, { type: 'obs' }
   );
 }
 
-type TwitchNeeds = 'chat-text' | 'announcement' | 'run-ad' | 'marker' | 'follower-only' | 'slow-mode' | null;
+type TwitchNeeds = 'chat-text' | 'announcement' | 'run-ad' | 'marker' | 'follower-only' | 'slow-mode' | 'target' | 'title' | 'gameName' | null;
 type TwitchOpDef = { value: TwitchOp; label: string; needs: TwitchNeeds };
 type TwitchOpGroup = { label: string; options: TwitchOpDef[] };
 
@@ -761,7 +761,23 @@ const TWITCH_OP_GROUPS: TwitchOpGroup[] = [
       { value: 'toggle-slow-mode',     label: 'Toggle slow mode…',      needs: 'slow-mode' },
     ],
   },
+  {
+    label: 'Broadcast',
+    options: [
+      { value: 'start-raid',      label: 'Start raid…',           needs: 'target' },
+      { value: 'cancel-raid',     label: 'Cancel raid',           needs: null },
+      { value: 'shoutout',        label: 'Send shoutout…',        needs: 'target' },
+      { value: 'update-title',    label: 'Update stream title…',  needs: 'title' },
+      { value: 'update-category', label: 'Update category…',      needs: 'gameName' },
+    ],
+  },
 ];
+
+const PROMPT_META: Record<TwitchPromptField, { label: string; placeholder: string }> = {
+  target:   { label: 'Streamer',        placeholder: 'e.g. ninja (login, no @)' },
+  title:    { label: 'Stream title',    placeholder: 'e.g. Speedrunning Elden Ring' },
+  gameName: { label: 'Game / category', placeholder: 'e.g. Elden Ring' },
+};
 
 const TWITCH_OPS: TwitchOpDef[] = TWITCH_OP_GROUPS.flatMap((g) => g.options);
 
@@ -781,8 +797,52 @@ function TwitchBody({ action, onChange }: { action: Extract<Action, { type: 'twi
   const params = action.params ?? {};
 
   const setOp = (op: TwitchOp) => {
-    // Reset op-specific params on op change so stale values don't leak between ops.
-    onChange({ type: 'twitch', op, text: op === 'chat' ? (action.text ?? '') : undefined, params: undefined });
+    // Reset op-specific params + prompts on op change so stale values don't leak between ops.
+    onChange({ type: 'twitch', op, text: op === 'chat' ? (action.text ?? '') : undefined, params: undefined, prompts: undefined });
+  };
+
+  const promptFor = (field: TwitchPromptField): TwitchPrompt | undefined =>
+    action.prompts?.find((p) => p.field === field);
+
+  const setPromptEnabled = (field: TwitchPromptField, enabled: boolean) => {
+    const rest = (action.prompts ?? []).filter((p) => p.field !== field);
+    if (enabled) {
+      const meta = PROMPT_META[field];
+      const nextPrompts = [...rest, { field, label: meta.label, placeholder: meta.placeholder }];
+      const nextParams = { ...(action.params ?? {}) };
+      delete nextParams[field];
+      onChange({ ...action, params: Object.keys(nextParams).length ? nextParams : undefined, prompts: nextPrompts });
+    } else {
+      onChange({ ...action, prompts: rest.length ? rest : undefined });
+    }
+  };
+
+  const renderPromptableField = (field: TwitchPromptField) => {
+    const p = promptFor(field);
+    const meta = PROMPT_META[field];
+    const value = (params[field] as string | undefined) ?? '';
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {!p && (
+          <input
+            value={value}
+            onChange={(e) => onChange({ ...action, params: { ...params, [field]: e.target.value } })}
+            placeholder={meta.placeholder}
+            style={inputStyle}
+            spellCheck={false}
+            autoCapitalize="none"
+          />
+        )}
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#9ca3af' }}>
+          <input
+            type="checkbox"
+            checked={!!p}
+            onChange={(e) => setPromptEnabled(field, e.target.checked)}
+          />
+          Ask on tap {p && '— phone shows a dialog before firing'}
+        </label>
+      </div>
+    );
   };
 
   return (
@@ -872,6 +932,10 @@ function TwitchBody({ action, onChange }: { action: Extract<Action, { type: 'twi
           <span style={{ fontSize: 12, color: '#9ca3af' }}>seconds between messages when turning ON (3–120)</span>
         </div>
       )}
+
+      {needs === 'target' && renderPromptableField('target')}
+      {needs === 'title' && renderPromptableField('title')}
+      {needs === 'gameName' && renderPromptableField('gameName')}
 
       <span style={{ fontSize: 11, color: '#6b7280' }}>
         Requires Twitch connected with the new scopes. If a button says "insufficient permission", click <em>Disconnect</em> then <em>Connect to Twitch</em> on the Twitch panel.

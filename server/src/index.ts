@@ -3,7 +3,7 @@ import { createServer as createHttpsServer } from 'node:https';
 import { WebSocketServer, WebSocket } from 'ws';
 import { loadOrGenerateCert } from './https-cert.js';
 import { loadOrInitLayout, reloadLayout, toPublic, watchLayout, findTile, collectStreamerLogins, collectKickStreamerSlugs, LAYOUT_FILE } from './layout.js';
-import { executeAction, setShellActionsGate } from './actions/types.js';
+import { executeAction, setShellActionsGate, withPromptValues } from './actions/types.js';
 import { handleRequest } from './http.js';
 import { loadOrInitConfig, saveConfig, CONFIG_FILE } from './config.js';
 import { authorize, isLocalhost, isAllowedHost, isAllowedOrigin } from './auth.js';
@@ -30,7 +30,7 @@ import { checkForUpdate, canApplyInPlace, applyScriptPath, type UpdateCheck } fr
 const PORT = 8765;
 
 type ClientMsg =
-  | { type: 'press'; id: number; longPress?: boolean }
+  | { type: 'press'; id: number; longPress?: boolean; promptValues?: Record<string, string> }
   | { type: 'slider'; id: number; value: number }
   | { type: 'slider-mute'; id: number };
 type ServerMsg =
@@ -264,12 +264,16 @@ wss.on('connection', (ws: WebSocket) => {
         ws.send(JSON.stringify({ type: 'ack', id: msg.id } satisfies ServerMsg));
         return;
       }
-      const action = msg.longPress && tile.longPressAction ? tile.longPressAction : tile.action;
+      const rawAction = msg.longPress && tile.longPressAction ? tile.longPressAction : tile.action;
+      const action = withPromptValues(rawAction, msg.promptValues);
       const actionLabel = Array.isArray(action)
         ? `[${action.length} steps: ${action.map((s) => s.type).join(' → ')}]`
         : action.type;
       const which = msg.longPress && tile.longPressAction ? 'long-press' : 'press';
-      console.log(`    ${which} [${tile.id}] "${tile.label}" → ${actionLabel}`);
+      const promptTag = msg.promptValues && Object.keys(msg.promptValues).length
+        ? ` (prompted: ${Object.entries(msg.promptValues).map(([k, v]) => `${k}=${v}`).join(', ')})`
+        : '';
+      console.log(`    ${which} [${tile.id}] "${tile.label}" → ${actionLabel}${promptTag}`);
       try {
         await executeAction(action);
         ws.send(JSON.stringify({ type: 'ack', id: msg.id } satisfies ServerMsg));

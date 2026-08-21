@@ -82,7 +82,15 @@ export type PublicButton = {
   kickStreamerSlug?: string;
   /** Set when the button (or any step) is a goto-page action. Phone handles navigation locally. */
   gotoPageId?: number;
+  /** Aggregated prompt-at-press descriptors from every step that declared one.
+   *  When present and non-empty, the phone shows a modal to collect these values
+   *  before firing the action; values are echoed back with the `press` message. */
+  prompts?: PublicPrompt[];
 };
+
+/** Phone-facing prompt descriptor. Kept protocol-shaped (not typed to a specific
+ *  integration) so any future action type can piggyback on the same mechanism. */
+export type PublicPrompt = { field: string; label: string; placeholder?: string };
 
 export type PublicSlider = {
   kind: 'slider';
@@ -217,6 +225,17 @@ export function toPublic(layout: Layout): PublicLayout {
         if (goto && goto.type === 'goto-page') {
           out.gotoPageId = goto.pageId;
         }
+        const prompts: PublicPrompt[] = [];
+        const seenFields = new Set<string>();
+        for (const s of steps) {
+          if (s.type !== 'twitch' || !s.prompts?.length) continue;
+          for (const p of s.prompts) {
+            if (seenFields.has(p.field)) continue;
+            seenFields.add(p.field);
+            prompts.push({ field: p.field, label: p.label, placeholder: p.placeholder });
+          }
+        }
+        if (prompts.length) out.prompts = prompts;
         return out;
       }),
     })),

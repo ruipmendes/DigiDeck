@@ -19,7 +19,12 @@ export type TwitchOp =
   | 'toggle-emote-only'
   | 'toggle-sub-only'
   | 'toggle-follower-only'
-  | 'toggle-slow-mode';
+  | 'toggle-slow-mode'
+  | 'start-raid'
+  | 'cancel-raid'
+  | 'shoutout'
+  | 'update-title'
+  | 'update-category';
 
 export type TwitchAnnouncementColor = 'primary' | 'blue' | 'green' | 'orange' | 'purple';
 
@@ -28,7 +33,13 @@ export type TwitchActionParams = {
   color?: TwitchAnnouncementColor;
   adLength?: number;
   duration?: number;
+  target?: string;
+  title?: string;
+  gameName?: string;
 };
+
+export type TwitchPromptField = 'target' | 'title' | 'gameName';
+export type TwitchPrompt = { field: TwitchPromptField; label: string; placeholder?: string };
 
 export type KickOp = 'chat';
 
@@ -55,7 +66,7 @@ export type Action =
   | { type: 'mic'; op: MicOp }
   | { type: 'obs'; op: ObsOp; params?: ObsActionParams }
   | { type: 'streamlabs'; op: StreamlabsOp; params?: StreamlabsActionParams }
-  | { type: 'twitch'; op: TwitchOp; text?: string; params?: TwitchActionParams }
+  | { type: 'twitch'; op: TwitchOp; text?: string; params?: TwitchActionParams; prompts?: TwitchPrompt[] }
   | { type: 'twitch-streamer'; login: string }
   | { type: 'kick'; op: KickOp; text: string }
   | { type: 'kick-streamer'; slug: string; avatarUrl?: string }

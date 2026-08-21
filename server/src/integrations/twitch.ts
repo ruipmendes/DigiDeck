@@ -82,7 +82,12 @@ export type TwitchOp =
   | 'toggle-emote-only'
   | 'toggle-sub-only'
   | 'toggle-follower-only'
-  | 'toggle-slow-mode';
+  | 'toggle-slow-mode'
+  | 'start-raid'
+  | 'cancel-raid'
+  | 'shoutout'
+  | 'update-title'
+  | 'update-category';
 
 /** Announcement highlight color. `primary` uses the broadcaster's channel color. */
 export type TwitchAnnouncementColor = 'primary' | 'blue' | 'green' | 'orange' | 'purple';
@@ -96,7 +101,18 @@ export type TwitchActionParams = {
   adLength?: number;
   /** Minutes for `toggle-follower-only`, seconds for `toggle-slow-mode`. */
   duration?: number;
+  /** Target streamer login for `start-raid` / `shoutout`. */
+  target?: string;
+  /** New stream title for `update-title`. */
+  title?: string;
+  /** New game/category name for `update-category` — resolved to id server-side. */
+  gameName?: string;
 };
+
+/** Runtime prompt shown on the phone before executing the action. Field names
+ *  map to `TwitchActionParams` keys — the merged value lands in `params[field]`. */
+export type TwitchPromptField = 'target' | 'title' | 'gameName';
+export type TwitchPrompt = { field: TwitchPromptField; label: string; placeholder?: string };
 
 const REDIRECT_URI = 'http://localhost:8765/api/integrations/twitch/callback';
 const SCOPES = [
@@ -110,6 +126,8 @@ const SCOPES = [
   'moderator:manage:shield_mode',
   'moderator:manage:chat_settings',
   'moderator:manage:chat_messages',
+  'channel:manage:raids',
+  'moderator:manage:shoutouts',
 ];
 const IRC_URL = 'wss://irc-ws.chat.twitch.tv:443';
 
@@ -388,8 +406,74 @@ class TwitchClient implements IntegrationLifecycle {
       case 'toggle-sub-only':      return this.execToggleBoolSetting(bid, 'subscriber_mode');
       case 'toggle-follower-only': return this.execToggleFollowerOnly(bid, params);
       case 'toggle-slow-mode':     return this.execToggleSlowMode(bid, params);
+      case 'start-raid':           return this.execStartRaid(bid, params);
+      case 'cancel-raid':          return this.execCancelRaid(bid);
+      case 'shoutout':             return this.execShoutout(bid, params);
+      case 'update-title':         return this.execUpdateTitle(bid, params);
+      case 'update-category':      return this.execUpdateCategory(bid, params);
     }
     throw new Error(`unknown Twitch op: ${op as string}`);
+  }
+
+  /** Resolve a Twitch login (e.g. `ninja`) to its numeric user id. Throws when the user doesn't exist. */
+  private async resolveLogin(login: string): Promise<string> {
+    const clean = login.trim().toLowerCase().replace(/^@/, '');
+    if (!clean) throw new Error('Twitch: target streamer login required');
+    const data = await this.helixGet<{ data: Array<{ id: string; login: string }> }>(
+      '/users', { login: clean });
+    const hit = data.data?.[0];
+    if (!hit) throw new Error(`Twitch: streamer "${clean}" not found`);
+    return hit.id;
+  }
+
+  /** Resolve a game/category name (e.g. `Elden Ring`) to its numeric game id. */
+  private async resolveGameName(name: string): Promise<string> {
+    const clean = name.trim();
+    if (!clean) throw new Error('Twitch: game/category name required');
+    const data = await this.helixGet<{ data: Array<{ id: string; name: string }> }>(
+      '/games', { name: clean });
+    const hit = data.data?.[0];
+    if (!hit) throw new Error(`Twitch: category "${clean}" not found`);
+    return hit.id;
+  }
+
+  private async execStartRaid(bid: string, params: TwitchActionParams): Promise<void> {
+    const targetId = await this.resolveLogin(params.target ?? '');
+    await this.helixWrite(
+      'POST', '/raids',
+      { from_broadcaster_id: bid, to_broadcaster_id: targetId },
+    );
+  }
+
+  private async execCancelRaid(bid: string): Promise<void> {
+    await this.helixWrite('DELETE', '/raids', { broadcaster_id: bid });
+  }
+
+  private async execShoutout(bid: string, params: TwitchActionParams): Promise<void> {
+    const targetId = await this.resolveLogin(params.target ?? '');
+    await this.helixWrite(
+      'POST', '/chat/shoutouts',
+      { from_broadcaster_id: bid, to_broadcaster_id: targetId, moderator_id: bid },
+    );
+  }
+
+  private async execUpdateTitle(bid: string, params: TwitchActionParams): Promise<void> {
+    const title = params.title?.trim();
+    if (!title) throw new Error('Twitch: title required');
+    await this.helixWrite(
+      'PATCH', '/channels',
+      { broadcaster_id: bid },
+      { title: title.slice(0, 140) },
+    );
+  }
+
+  private async execUpdateCategory(bid: string, params: TwitchActionParams): Promise<void> {
+    const gameId = await this.resolveGameName(params.gameName ?? '');
+    await this.helixWrite(
+      'PATCH', '/channels',
+      { broadcaster_id: bid },
+      { game_id: gameId },
+    );
   }
 
   private async execChat(params: TwitchActionParams): Promise<void> {

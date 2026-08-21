@@ -18,7 +18,11 @@ export type Button = {
   kickStreamerSlug?: string;
   /** Set when the button's action contains a goto-page step. Phone navigates locally on press. */
   gotoPageId?: number;
+  /** Prompt-at-press descriptors. When present, phone shows a dialog before firing the action. */
+  prompts?: PressPrompt[];
 };
+
+export type PressPrompt = { field: string; label: string; placeholder?: string };
 export type SliderProvider = 'obs' | 'streamlabs';
 
 export type SliderTile = {
@@ -129,8 +133,11 @@ export function useMacroWS(url: string, token: string | null) {
     }
   }
 
-  function press(id: number, longPress?: boolean) {
-    send(longPress ? { type: 'press', id, longPress: true } : { type: 'press', id });
+  function press(id: number, longPress?: boolean, promptValues?: Record<string, string>) {
+    const msg: Record<string, unknown> = { type: 'press', id };
+    if (longPress) msg.longPress = true;
+    if (promptValues && Object.keys(promptValues).length) msg.promptValues = promptValues;
+    send(msg);
   }
   function sliderValue(id: number, value: number) { send({ type: 'slider', id, value }); }
   function sliderMute(id: number) { send({ type: 'slider-mute', id }); }

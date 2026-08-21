@@ -9,7 +9,7 @@ import type { ObsOp, ObsActionParams } from '../integrations/obs.js';
 import { getStreamlabs } from '../integrations/streamlabs.js';
 import type { StreamlabsOp, StreamlabsActionParams } from '../integrations/streamlabs.js';
 import { getTwitch } from '../integrations/twitch.js';
-import type { TwitchOp, TwitchActionParams } from '../integrations/twitch.js';
+import type { TwitchOp, TwitchActionParams, TwitchPrompt } from '../integrations/twitch.js';
 import { getKick } from '../integrations/kick.js';
 import type { KickOp } from '../integrations/kick.js';
 import { getMic } from './mic.js';
@@ -25,7 +25,7 @@ export type Action =
   | { type: 'mic'; op: MicOp }
   | { type: 'obs'; op: ObsOp; params?: ObsActionParams }
   | { type: 'streamlabs'; op: StreamlabsOp; params?: StreamlabsActionParams }
-  | { type: 'twitch'; op: TwitchOp; text?: string; params?: TwitchActionParams }
+  | { type: 'twitch'; op: TwitchOp; text?: string; params?: TwitchActionParams; prompts?: TwitchPrompt[] }
   | { type: 'twitch-streamer'; login: string }
   | { type: 'kick'; op: KickOp; text: string }
   | { type: 'kick-streamer'; slug: string; avatarUrl?: string }
@@ -74,6 +74,27 @@ async function executeStep(step: Action): Promise<void> {
     case 'wait':
       return new Promise((resolve) => setTimeout(resolve, Math.max(0, step.ms)));
   }
+}
+
+/**
+ * Merge prompt-at-press values into any step that declared a matching prompt.
+ * The phone collects one flat `Record<field, value>` per press; each step that
+ * declared a prompt with that field name receives the value in its `params`.
+ * Steps without prompts are returned unchanged.
+ */
+export function withPromptValues(action: ButtonAction, promptValues: Record<string, string> | undefined): ButtonAction {
+  if (!promptValues) return action;
+  const merge = (step: Action): Action => {
+    if (step.type !== 'twitch' || !step.prompts?.length) return step;
+    const merged: Record<string, string> = {};
+    for (const p of step.prompts) {
+      const v = promptValues[p.field];
+      if (v !== undefined) merged[p.field] = v;
+    }
+    if (Object.keys(merged).length === 0) return step;
+    return { ...step, params: { ...step.params, ...merged } };
+  };
+  return Array.isArray(action) ? action.map(merge) : merge(action);
 }
 
 /** Run a button's action — single step or sequence. Aborts on first failing step. */

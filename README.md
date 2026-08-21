@@ -341,7 +341,9 @@ Audio mixer slider tiles work for Streamlabs too — the slider editor exposes a
 
 ## Twitch integration
 
-Chat + a bundle of native Twitch controls: run an ad, snooze the next one, create a clip, drop a stream marker, toggle Shield Mode, toggle emote-only / sub-only / follower-only / slow chat modes, send a highlighted announcement, and clear chat — all from a button, no tabbing out of your game.
+Chat + a bundle of native Twitch controls: run an ad, snooze the next one, create a clip, drop a stream marker, toggle Shield Mode, toggle emote-only / sub-only / follower-only / slow chat modes, send a highlighted announcement, clear chat, start / cancel a raid, send a shoutout, update the stream title, and change the category — all from a button, no tabbing out of your game.
+
+**Prompt on tap.** For raids / shoutouts / title / category updates, the target is often something you decide in the moment. Each of those fields has an *Ask on tap* checkbox in the button editor — with it checked, the field is left blank in the config and the phone pops a small dialog when you press the tile, asking for the value before firing.
 
 One-time setup:
 
@@ -354,7 +356,7 @@ One-time setup:
 
 Create a button with action *Twitch*, pick an op from the dropdown (Send chat message, Run ad, Toggle Shield Mode, etc.), fill in the op-specific field if any, and save. Chat runs through a persistent IRC connection for instant delivery; the rest go through the Helix API.
 
-**Upgrading?** If you connected Twitch before Tier 1 mod actions shipped, the new ops need extra OAuth scopes your existing token doesn't have. On first "insufficient permission" error, open the Twitch card → *Disconnect* → *Connect to Twitch* — one round-trip re-approves with the full scope set.
+**Upgrading?** Every time this integration adds new ops, extra OAuth scopes come with them. On first *insufficient permission* error, open the Twitch card → *Disconnect* → *Connect to Twitch* — one round-trip re-approves with the full scope set.
 
 **Twitch streamer tiles.** A separate action type — *Twitch streamer* — takes a login (e.g. `skullbizarre`). On the phone the tile renders the streamer's profile picture with a purple ring when live and grayscale when offline; tapping opens `twitch.tv/<login>` in the PC's default browser. Live/offline state polls every minute; the ring updates in place.
 
