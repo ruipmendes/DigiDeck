@@ -106,7 +106,11 @@ try {
   Write-Host ''
   Write-Host '  Update applied.' -ForegroundColor Green
   Write-Host ''
-  Start-Sleep -Seconds 2
+  Write-Host '  Note: your phone browser caches the UI. If you do not see the' -ForegroundColor Yellow
+  Write-Host '  new features, pull-to-refresh (or Ctrl+Shift+R on desktop) to' -ForegroundColor Yellow
+  Write-Host '  reload the client.' -ForegroundColor Yellow
+  Write-Host ''
+  Read-Host '  Press Enter to close'
 }
 catch {
   Write-Host ''

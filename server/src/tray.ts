@@ -63,7 +63,15 @@ $reloadItem.Add_Click({ Send-Cmd 'RELOAD' })
 ${restartBlock}
 
 $updateItem = $menu.Items.Add('Check for updates')
-$updateItem.Add_Click({ Send-Cmd 'CHECK_UPDATES' })
+$updateItem.Add_Click({
+  # Instant visual acknowledgement so the ~1-3 s GitHub round-trip isn't silent.
+  # (The follow-up dialog with the actual result appears when the check completes.)
+  $notify.BalloonTipTitle = 'Digi Deck'
+  $notify.BalloonTipText = 'Checking for updates...'
+  $notify.BalloonTipIcon = [System.Windows.Forms.ToolTipIcon]::Info
+  $notify.ShowBalloonTip(3000)
+  Send-Cmd 'CHECK_UPDATES'
+})
 
 [void]$menu.Items.Add('-')
 

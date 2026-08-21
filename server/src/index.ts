@@ -397,9 +397,23 @@ function showUpdateDialog(result: UpdateCheck, applyAvailable: boolean, applyScr
 
   const psLines: string[] = [
     "Add-Type -AssemblyName System.Windows.Forms",
+    "Add-Type -AssemblyName System.Drawing",
+    // Invisible topmost owner form so the MessageBox appears on top of whatever
+    // is focused (game full-screen, browser, etc.) — a background powershell's
+    // MessageBox otherwise easily ends up behind the active window.
+    "$owner = New-Object System.Windows.Forms.Form",
+    "$owner.TopMost = $true",
+    "$owner.StartPosition = 'Manual'",
+    "$owner.Location = New-Object System.Drawing.Point(-32000, -32000)",
+    "$owner.Size = New-Object System.Drawing.Size(1, 1)",
+    "$owner.ShowInTaskbar = $false",
+    "$owner.FormBorderStyle = 'None'",
+    "$owner.Show()",
+    "$owner.Activate()",
     `$buttons = [System.Windows.Forms.MessageBoxButtons]::${buttonsKind}`,
     `$icon = [System.Windows.Forms.MessageBoxIcon]::${icon}`,
-    `$result = [System.Windows.Forms.MessageBox]::Show(${psString(body)}, ${psString(title)}, $buttons, $icon)`,
+    `$result = [System.Windows.Forms.MessageBox]::Show($owner, ${psString(body)}, ${psString(title)}, $buttons, $icon)`,
+    "$owner.Close()",
   ];
   if (mode === 'apply-or-open') {
     psLines.push(
