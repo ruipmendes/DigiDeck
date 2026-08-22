@@ -5,6 +5,7 @@ import { DEFAULT_OBS_CONFIG, type ObsConfig } from './integrations/obs.js';
 import { DEFAULT_TWITCH_CONFIG, type TwitchConfig } from './integrations/twitch.js';
 import { DEFAULT_STREAMLABS_CONFIG, type StreamlabsConfig } from './integrations/streamlabs.js';
 import { DEFAULT_KICK_CONFIG, type KickConfig } from './integrations/kick.js';
+import { DEFAULT_DISCORD_CONFIG, type DiscordConfig } from './integrations/discord.js';
 // scaffold-integration: additional imports inserted above this line
 
 const APP_DIR = join(
@@ -18,6 +19,7 @@ export type IntegrationsConfig = {
   twitch: TwitchConfig;
   streamlabs: StreamlabsConfig;
   kick: KickConfig;
+  discord: DiscordConfig;
   // scaffold-integration: additional fields inserted above this line
 };
 
@@ -58,6 +60,7 @@ function withDefaults(parsed: Partial<ServerConfig> | null | undefined): ServerC
       twitch:     { ...DEFAULT_TWITCH_CONFIG,     ...parsed?.integrations?.twitch },
       streamlabs: { ...DEFAULT_STREAMLABS_CONFIG, ...parsed?.integrations?.streamlabs },
       kick:       { ...DEFAULT_KICK_CONFIG,       ...parsed?.integrations?.kick },
+      discord:    { ...DEFAULT_DISCORD_CONFIG,    ...parsed?.integrations?.discord },
       // scaffold-integration: additional defaults inserted above this line
     },
     security: {

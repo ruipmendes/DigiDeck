@@ -15,6 +15,7 @@ import { getTwitch } from './integrations/twitch.js';
 import { getStreamers } from './integrations/twitch-streamers.js';
 import { getKick } from './integrations/kick.js';
 import { getKickStreamers } from './integrations/kick-streamers.js';
+import { getDiscord } from './integrations/discord.js';
 // scaffold-integration: additional integration imports inserted above this line
 import { getIntegrations } from './integrations/base.js';
 import { getMic } from './actions/mic.js';
@@ -78,6 +79,7 @@ const obs = getObs();
 const streamlabs = getStreamlabs();
 const twitch = getTwitch();
 const kick = getKick();
+const discord = getDiscord();
 // scaffold-integration: additional singleton calls inserted above this line
 
 // Uniform lifecycle wiring — applyConfig / attachSave / start — so adding a
@@ -190,7 +192,7 @@ function broadcastLayout() {
 }
 
 function broadcastStates() {
-  const states = computeButtonStates(activeLayout(), obs.status(), twitch.status(), streamlabs.status(), kick.status());
+  const states = computeButtonStates(activeLayout(), obs.status(), twitch.status(), streamlabs.status(), kick.status(), discord.status());
   const data = JSON.stringify({ type: 'states', states } satisfies ServerMsg);
   for (const ws of wss.clients) {
     if (ws.readyState === ws.OPEN) ws.send(data);
@@ -242,7 +244,7 @@ wss.on('connection', (ws: WebSocket) => {
   ));
   ws.send(JSON.stringify({
     type: 'states',
-    states: computeButtonStates(activeLayout(), obs.status(), twitch.status(), streamlabs.status(), kick.status()),
+    states: computeButtonStates(activeLayout(), obs.status(), twitch.status(), streamlabs.status(), kick.status(), discord.status()),
   } satisfies ServerMsg));
 
   ws.on('message', async (data) => {
@@ -292,6 +294,8 @@ wss.on('connection', (ws: WebSocket) => {
         const provider = tile.provider ?? 'obs';
         if (provider === 'streamlabs') {
           await streamlabs.setInputVolume(tile.inputName, msg.value);
+        } else if (provider === 'discord') {
+          await discord.setSliderVolume(tile.inputName === 'output' ? 'output' : 'input', msg.value);
         } else {
           await obs.setInputVolume(tile.inputName, msg.value);
         }
@@ -310,6 +314,9 @@ wss.on('connection', (ws: WebSocket) => {
         const provider = tile.provider ?? 'obs';
         if (provider === 'streamlabs') {
           await streamlabs.execute('toggle-mute', { inputName: tile.inputName });
+        } else if (provider === 'discord') {
+          // Input slider mutes the mic (self-mute); output slider deafens.
+          await discord.execute(tile.inputName === 'output' ? 'toggle-deafen' : 'toggle-mute');
         } else {
           await obs.execute('toggle-mute', { inputName: tile.inputName });
         }

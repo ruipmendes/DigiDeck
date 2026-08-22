@@ -47,6 +47,33 @@ export type TwitchPrompt = { field: TwitchPromptField; label: string; placeholde
 
 export type KickOp = 'chat';
 
+export type DiscordOp =
+  | 'toggle-mute' | 'mute' | 'unmute'
+  | 'toggle-deafen' | 'deafen' | 'undeafen'
+  | 'toggle-ptt'
+  | 'toggle-noise-suppression'
+  | 'toggle-auto-gain'
+  | 'toggle-echo-cancellation'
+  | 'join-channel'
+  | 'leave-channel'
+  | 'set-user-volume'
+  | 'mute-user'
+  | 'unmute-user';
+
+export type DiscordActionParams = {
+  channelId?: string;
+  userId?: string;
+  volume?: number;
+};
+
+export type DiscordPromptField = 'channelId' | 'userId';
+export type DiscordPrompt = {
+  field: DiscordPromptField;
+  label: string;
+  placeholder?: string;
+  choicesSource?: 'discord-voice-channels' | 'discord-channel-members';
+};
+
 export type MicOp = 'toggle-mute' | 'mute' | 'unmute';
 
 export type StreamlabsOp =
@@ -74,6 +101,7 @@ export type Action =
   | { type: 'twitch-streamer'; login: string }
   | { type: 'kick'; op: KickOp; text: string }
   | { type: 'kick-streamer'; slug: string; avatarUrl?: string }
+  | { type: 'discord'; op: DiscordOp; params?: DiscordActionParams; prompts?: DiscordPrompt[] }
   | { type: 'goto-page'; pageId: number }
   | { type: 'wait'; ms: number };
 
@@ -100,7 +128,7 @@ export type Button = {
   longPressAction?: ButtonAction;
 };
 
-export type SliderProvider = 'obs' | 'streamlabs';
+export type SliderProvider = 'obs' | 'streamlabs' | 'discord';
 
 export type SliderTile = {
   kind: 'slider';
@@ -181,6 +209,7 @@ export function defaultAction(type: ActionType): Action {
     case 'twitch-streamer': return { type: 'twitch-streamer', login: '' };
     case 'kick': return { type: 'kick', op: 'chat', text: '' };
     case 'kick-streamer': return { type: 'kick-streamer', slug: '' };
+    case 'discord': return { type: 'discord', op: 'toggle-mute' };
     case 'goto-page': return { type: 'goto-page', pageId: 0 };
     case 'wait': return { type: 'wait', ms: 200 };
   }

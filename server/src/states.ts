@@ -4,6 +4,7 @@ import type { ObsStatus } from './integrations/obs.js';
 import type { StreamlabsStatus } from './integrations/streamlabs.js';
 import type { TwitchStatus } from './integrations/twitch.js';
 import type { KickStatus } from './integrations/kick.js';
+import type { DiscordStatus } from './integrations/discord.js';
 import { getStreamers } from './integrations/twitch-streamers.js';
 import { getKickStreamers } from './integrations/kick-streamers.js';
 import { getMic } from './actions/mic.js';
@@ -18,6 +19,10 @@ export type ButtonState = {
   thumbnail?: string;
   /** Whether the streamer is currently live. Undefined when not yet known. */
   live?: boolean;
+  /** Dynamic icon URL rendered as the tile background — e.g. the target
+   *  guild's icon on a Discord join-channel tile. Overridden by an author-
+   *  uploaded `tile.image` when both are present. */
+  iconUrl?: string;
   /** Current value for slider tiles (0..1). */
   sliderValue?: number;
   /** Current mute state for slider tiles. */
@@ -30,21 +35,42 @@ export function computeButtonStates(
   twitch: TwitchStatus,
   streamlabs: StreamlabsStatus,
   kick: KickStatus,
+  discord: DiscordStatus,
 ): ButtonState[] {
   const out: ButtonState[] = [];
   for (const page of layout.pages) {
     for (const tile of page.buttons) {
-      const s = computeOne(tile, obs, twitch, streamlabs, kick);
+      const s = computeOne(tile, obs, twitch, streamlabs, kick, discord);
       if (s) out.push(s);
     }
   }
   return out;
 }
 
-function computeOne(t: Tile, obs: ObsStatus, twitch: TwitchStatus, streamlabs: StreamlabsStatus, kick: KickStatus): ButtonState | null {
+function computeOne(t: Tile, obs: ObsStatus, twitch: TwitchStatus, streamlabs: StreamlabsStatus, kick: KickStatus, discord: DiscordStatus): ButtonState | null {
   if (t.kind === 'blank') return null;
   if (t.kind === 'slider') {
     const provider = t.provider ?? 'obs';
+    if (provider === 'discord') {
+      if (discord.state !== 'connected') return { id: t.id, unavailable: true };
+      if (t.inputName === 'sensitivity') {
+        if (discord.voiceThreshold === undefined) return { id: t.id, unavailable: true };
+        // threshold -100..0 dB → slider 1..0 (higher slider = more sensitive).
+        const value = Math.max(0, Math.min(1, -discord.voiceThreshold / 100));
+        // While Discord is auto-adjusting, the "muted" pip signals "manual override off".
+        return { id: t.id, sliderValue: value, sliderMuted: !!discord.voiceAutoThreshold };
+      }
+      const isOutput = t.inputName === 'output';
+      const raw = isOutput ? discord.outputVolume : discord.inputVolume;
+      if (raw === undefined) return { id: t.id, unavailable: true };
+      // Discord reports 0-100 (input) or 0-200 (output); phone protocol is 0-1.
+      // Output maps against the full 0-200 range so the slider covers Discord's
+      // boost band; slider 0.5 = 100 % "normal", 1.0 = 200 % max.
+      const scale = isOutput ? 200 : 100;
+      const value = Math.max(0, Math.min(1, raw / scale));
+      const muted = isOutput ? !!discord.deaf : !!discord.mute;
+      return { id: t.id, sliderValue: value, sliderMuted: muted };
+    }
     const src = provider === 'streamlabs' ? streamlabs : obs;
     if (src.state !== 'connected') return { id: t.id, unavailable: true };
     const value = src.inputVolumes[t.inputName];
@@ -60,9 +86,10 @@ function computeOne(t: Tile, obs: ObsStatus, twitch: TwitchStatus, streamlabs: S
   let unavailable = false;
   let thumbnail: string | undefined;
   let live: boolean | undefined;
+  let iconUrl: string | undefined;
 
   for (const step of steps) {
-    const s = computeStepState(step, obs, twitch, streamlabs, kick);
+    const s = computeStepState(step, obs, twitch, streamlabs, kick, discord);
     if (!s) continue;
     if (s.unavailable) unavailable = true;
     if (active === undefined && s.active !== undefined) {
@@ -71,10 +98,11 @@ function computeOne(t: Tile, obs: ObsStatus, twitch: TwitchStatus, streamlabs: S
     }
     if (thumbnail === undefined && s.thumbnail) thumbnail = s.thumbnail;
     if (live === undefined && s.live !== undefined) live = s.live;
+    if (iconUrl === undefined && s.iconUrl) iconUrl = s.iconUrl;
   }
 
   const hasAnything =
-    active !== undefined || unavailable || thumbnail !== undefined || live !== undefined;
+    active !== undefined || unavailable || thumbnail !== undefined || live !== undefined || iconUrl !== undefined;
   if (!hasAnything) return null;
 
   const state: ButtonState = { id: t.id };
@@ -83,6 +111,7 @@ function computeOne(t: Tile, obs: ObsStatus, twitch: TwitchStatus, streamlabs: S
   if (unavailable) state.unavailable = true;
   if (thumbnail !== undefined) state.thumbnail = thumbnail;
   if (live !== undefined) state.live = live;
+  if (iconUrl !== undefined) state.iconUrl = iconUrl;
   return state;
 }
 
@@ -92,9 +121,10 @@ type StepState = {
   unavailable?: boolean;
   thumbnail?: string;
   live?: boolean;
+  iconUrl?: string;
 };
 
-function computeStepState(a: Action, obs: ObsStatus, twitch: TwitchStatus, streamlabs: StreamlabsStatus, kick: KickStatus): StepState | null {
+function computeStepState(a: Action, obs: ObsStatus, twitch: TwitchStatus, streamlabs: StreamlabsStatus, kick: KickStatus, discord: DiscordStatus): StepState | null {
   if (a.type === 'obs') {
     const unavailable = obs.state !== 'connected';
     let active: boolean | undefined;
@@ -211,6 +241,33 @@ function computeStepState(a: Action, obs: ObsStatus, twitch: TwitchStatus, strea
     if (muted === undefined) return null;
     // "active" when the mic IS muted — matches OBS toggle-mute convention.
     return { active: muted };
+  }
+
+  if (a.type === 'discord') {
+    const unavailable = discord.state !== 'connected';
+    let active: boolean | undefined;
+    let iconUrl: string | undefined;
+    switch (a.op) {
+      case 'toggle-mute':   case 'mute':   case 'unmute':   active = discord.mute; break;
+      case 'toggle-deafen': case 'deafen': case 'undeafen': active = discord.deaf; break;
+      case 'toggle-ptt':               active = discord.voiceMode === 'PUSH_TO_TALK'; break;
+      case 'toggle-noise-suppression': active = discord.noiseSuppression; break;
+      case 'toggle-auto-gain':         active = discord.automaticGainControl; break;
+      case 'toggle-echo-cancellation': active = discord.echoCancellation; break;
+      case 'join-channel': {
+        const cid = a.params?.channelId;
+        // Light the tile when we're currently in the channel this button joins.
+        active = !!cid && discord.currentVoiceChannelId === cid;
+        // Render the target guild's icon as the tile background. Present only
+        // once the icon cache has been primed; falls back to a plain tile otherwise.
+        if (cid) iconUrl = discord.channelIcons?.[cid];
+        break;
+      }
+      case 'leave-channel':
+        active = discord.currentVoiceChannelId != null;
+        break;
+    }
+    return { active, unavailable, iconUrl };
   }
 
   return null;

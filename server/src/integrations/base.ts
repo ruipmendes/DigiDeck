@@ -31,6 +31,10 @@ export interface IntegrationManifest {
   actionTypes: readonly string[];
   /** OAuth integrations need /authorize + /callback + /disconnect routes wired. */
   hasOAuth: boolean;
+  /** IPC-based integrations (e.g. Discord's local pipe) — the auth flow doesn't
+   *  go through a browser redirect, so we expose POST /connect instead of the
+   *  GET /authorize + GET /callback pair. Disconnect still applies. */
+  hasIpcAuth?: boolean;
 }
 
 /**
@@ -73,6 +77,12 @@ export interface IntegrationLifecycle {
   buildAuthorizeUrl?(): string;
   handleCallback?(code: string, state: string): Promise<CallbackOutcome>;
   disconnectIntegration?(): Promise<void>;
+
+  // ─── IPC-auth only, guarded by manifest.hasIpcAuth === true ────
+
+  /** Kick off the interactive local-authorize flow. Resolves when the user has
+   *  approved the request in the target app (or rejects on cancel / timeout). */
+  connectInteractive?(): Promise<CallbackOutcome>;
 }
 
 const registry: IntegrationLifecycle[] = [];

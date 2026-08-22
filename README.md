@@ -371,6 +371,42 @@ Create a button with action *Twitch*, pick an op from the dropdown (Send chat me
 
 ---
 
+## Discord integration
+
+Mute / unmute / deafen / undeafen your own Discord voice from a tile, with a live indicator that lights up when you're actually muted or deafened (unlike a keybind, we *read* the state — no drift between what the tile shows and what Discord is doing).
+
+One-time setup:
+
+1. Visit [discord.com/developers/applications](https://discord.com/developers/applications) → *New Application*, name it anything ("Digi Deck").
+2. Under **OAuth2** → add a redirect URI. Any registered URI works — `http://127.0.0.1` is fine.
+3. Copy the **Application ID** (Client ID) from *General Information*.
+4. Under **OAuth2**, hit *Reset Secret* and copy the **Client Secret**.
+5. In the config UI → **Discord** card → expand → paste Client ID + Secret → *Save credentials*.
+6. Click **Connect to Discord**. A dialog appears **inside the Discord client** asking you to authorize the app — approve it. Digi Deck's panel flips to "Connected."
+
+Action types: **Discord** → Mute (toggle/mute/unmute), Deafen (toggle/deafen/undeafen), Toggle push-to-talk mode, Toggle noise suppression (Krisp), Toggle automatic gain control, Toggle echo cancellation, Join voice channel, Leave voice channel, Set member volume, Mute member, Unmute member. Toggle variants read the current state and flip; force variants are for scripted sequences where you always want a specific final state.
+
+For **Join voice channel** and the per-member ops, the config UI has an *Ask on tap* checkbox on the target field: check it, and instead of pasting an ID at config time, the phone pops a picker at press time.
+- For **Join channel**, the picker lists every voice channel the authorized user can see across their guilds.
+- For **Mute member / Unmute member / Set member volume**, the picker lists the users currently in the voice channel you're in. If you're not in a channel when you press it, the modal says "no options available" and won't fire.
+
+Alternatively paste the raw ID at config time (Discord: *User Settings → Advanced → Developer Mode* → right-click channel or user → *Copy ID*) — useful when you always target the same person or channel.
+
+The tile lights up when the corresponding thing is active (mic muted / deafened / PTT mode on / noise suppression on / currently in the target channel) — same convention as the OBS mic-mute UX. Live state comes from Discord's `VOICE_SETTINGS_UPDATE` and `VOICE_CHANNEL_SELECT` events, so if you change something via keybind or the app itself, the tile still updates.
+
+**Sliders.** Discord is also a slider provider — add a slider tile and pick *Discord* as the source. Three channels:
+- *Microphone input volume* (tap = mic mute)
+- *Voice output volume* (tap = deafen)
+- *Voice activation sensitivity* — sets the voice-activity threshold; higher slider = more sensitive. Flipping the slider overrides Discord's auto-threshold; the mute-pip lights when Discord is auto-adjusting.
+
+Slider position and mute state live-update from Discord, so changing volume inside Discord moves the tile fader in real time.
+
+**Requires Discord running on the same PC.** Discord's local IPC pipe (`\\.\pipe\discord-ipc-N`) is the transport; if Discord isn't open, the Discord card shows *disconnected* and retries every few seconds until it appears.
+
+**Upgrading?** If you connected Discord before the picker-on-tap shipped, the channel/member listing needs the `guilds` OAuth scope your existing token doesn't have. On first "cannot list guilds" error, open the Discord card → *Disconnect* → *Connect to Discord* — one round-trip re-approves with the full scope set.
+
+---
+
 ## Kick chat integration
 
 Same idea as Twitch, for Kick. Send chat to your own Kick channel, plus optional Kick-streamer thumbnail tiles.
@@ -409,7 +445,7 @@ digi-deck/
 │   │   ├── states.ts                  computes per-button live state for the phone
 │   │   ├── updates.ts                 GitHub-based "check for updates" comparator
 │   │   ├── actions/                   one file per action type
-│   │   └── integrations/              base.ts (registry) + obs.ts, streamlabs.ts, twitch.ts, kick.ts
+│   │   └── integrations/              base.ts (registry) + obs.ts, streamlabs.ts, twitch.ts, kick.ts, discord.ts
 │   └── package.json
 ├── client/                            ← Vite + React PWA (built to client/dist, served by the server at :8765)
 │   ├── src/
@@ -417,7 +453,7 @@ digi-deck/
 │   │   ├── ConfigApp.tsx              PC config view
 │   │   ├── ws.ts                      WebSocket hook
 │   │   ├── components/                ButtonGrid, ConfigRow, ActionEditor, ObsPanel,
-│   │   │                              StreamlabsPanel, TwitchPanel, KickPanel, SecurityPanel,
+│   │   │                              StreamlabsPanel, TwitchPanel, KickPanel, DiscordPanel, SecurityPanel,
 │   │   │                              ImagePicker, TemplatesPanel, PreviewBanner, etc.
 │   │   └── lib/                       icons, api, types, token, errors
 │   ├── public/                        favicon + PWA manifest + icon.svg / icon-maskable.svg

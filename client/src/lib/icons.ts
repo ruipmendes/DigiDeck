@@ -1,3 +1,4 @@
+import type { ComponentType, SVGProps } from 'react';
 import {
   Play, Pause, Square, FastForward, Rewind, SkipBack, SkipForward,
   Volume1, Volume2, VolumeX,
@@ -14,10 +15,15 @@ import {
   Settings, Sliders, Search, RefreshCw,
   Home, Menu, MoreHorizontal, Grid3x3,
   Maximize, Minimize, Calendar, Clock,
-  type LucideIcon,
 } from 'lucide-react';
+import {
+  DiscordBrandIcon, TwitchBrandIcon, KickBrandIcon, ObsBrandIcon, StreamlabsBrandIcon,
+} from './brand-icons';
 
-export const ICONS: Record<string, LucideIcon> = {
+/** Component shape both lucide icons and our custom brand icons conform to. */
+export type IconComponent = ComponentType<SVGProps<SVGSVGElement> & { size?: number | string }>;
+
+export const ICONS: Record<string, IconComponent> = {
   'play': Play, 'pause': Pause, 'square': Square,
   'fast-forward': FastForward, 'rewind': Rewind,
   'skip-back': SkipBack, 'skip-forward': SkipForward,
@@ -40,11 +46,17 @@ export const ICONS: Record<string, LucideIcon> = {
   'home': Home, 'menu': Menu, 'more-horizontal': MoreHorizontal, 'grid': Grid3x3,
   'maximize': Maximize, 'minimize': Minimize,
   'calendar': Calendar, 'clock': Clock,
+  // Brand marks for the integrations Digi Deck ships (Simple Icons paths, CC0).
+  'discord':    DiscordBrandIcon,
+  'twitch':     TwitchBrandIcon,
+  'kick':       KickBrandIcon,
+  'obs':        ObsBrandIcon,
+  'streamlabs': StreamlabsBrandIcon,
 };
 
 export const ICON_NAMES = Object.keys(ICONS).sort();
 
-export function getIcon(name?: string): LucideIcon | null {
+export function getIcon(name?: string): IconComponent | null {
   if (!name) return null;
   return ICONS[name] ?? null;
 }

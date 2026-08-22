@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Volume2, VolumeX, ArrowLeft, Home } from 'lucide-react';
 import type { ButtonState, Layout, PressPrompt, Tile } from '../ws';
 import { getIcon } from '../lib/icons';
-import { imageUrl } from '../lib/api';
+import { imageUrl, fetchPromptChoices } from '../lib/api';
 
 /** Convert "#abc" or "#aabbcc" to rgba(...). Falls back to the alpha-only black if parsing fails. */
 function hexToRgba(hex: string, alpha: number): string {
@@ -164,11 +164,15 @@ export function ButtonGrid({ layout, lastAck, lastNack, buttonStates, onPress, o
     if (!longPress && t.kind === 'button' && t.gotoPageId !== undefined) {
       gotoPage(t.gotoPageId);
     }
-    // Prompt-at-press: if the tile declared any prompt fields, collect them
-    // in a modal first, then fire with the values echoed back to the server.
-    if (t.kind === 'button' && t.prompts?.length) {
-      setPrompt({ tileId: t.id, longPress, prompts: t.prompts });
-      return;
+    // Prompt-at-press: if the fired action (tap OR long-press) declared any
+    // prompt fields, collect them in a modal first. Tap and long-press each
+    // have their own list — a tap-side prompt shouldn't pop for a long-press.
+    if (t.kind === 'button') {
+      const activePrompts = longPress ? t.longPressPrompts : t.prompts;
+      if (activePrompts?.length) {
+        setPrompt({ tileId: t.id, longPress, prompts: activePrompts });
+        return;
+      }
     }
     // Send to server too: any other steps in a sequence still execute server-side.
     onPress(t.id, longPress);
@@ -265,10 +269,39 @@ function PressPromptModal({ prompts, onCancel, onConfirm }: {
   // ~10–300 ms after the touch that opened this modal, and that click would
   // otherwise land on the freshly rendered backdrop and dismiss us instantly.
   const [armed, setArmed] = useState(false);
+  // For prompts that declare a choicesSource, fetch options at open time so the
+  // dropdown reflects live state (which voice channels exist, who's currently
+  // in the room, etc.). Keyed by field so a multi-field prompt works too.
+  const [choices, setChoices] = useState<Record<string, Array<{ value: string; label: string }>>>({});
+  const [choicesError, setChoicesError] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState<Set<string>>(new Set(prompts.filter((p) => p.choicesSource).map((p) => p.field)));
+  // Per-field "show all servers" toggles. Only meaningful for voice-channel
+  // prompts, defaults to false (== "just my server"). Refetches when flipped.
+  const [showAllByField, setShowAllByField] = useState<Record<string, boolean>>({});
+
+  const loadChoices = (field: string, source: string, showAll: boolean) => {
+    setLoading((s) => { const n = new Set(s); n.add(field); return n; });
+    setChoicesError((e) => { const n = { ...e }; delete n[field]; return n; });
+    fetchPromptChoices(source, { showAll })
+      .then((opts) => {
+        setChoices((c) => ({ ...c, [field]: opts }));
+        setLoading((s) => { const n = new Set(s); n.delete(field); return n; });
+      })
+      .catch((err: Error) => {
+        setChoicesError((e) => ({ ...e, [field]: err.message }));
+        setLoading((s) => { const n = new Set(s); n.delete(field); return n; });
+      });
+  };
+
   useEffect(() => {
     firstRef.current?.focus();
     const t = setTimeout(() => setArmed(true), 400);
+    prompts.forEach((p) => {
+      if (!p.choicesSource) return;
+      loadChoices(p.field, p.choicesSource, false);
+    });
     return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const canSubmit = prompts.every((p) => values[p.field]?.trim().length > 0);
@@ -299,23 +332,69 @@ function PressPromptModal({ prompts, onCancel, onConfirm }: {
           display: 'flex', flexDirection: 'column', gap: 12,
         }}
       >
-        {prompts.map((p, i) => (
-          <label key={p.field} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <span style={{ fontSize: 13, color: '#d1d5db' }}>{p.label}</span>
-            <input
-              ref={i === 0 ? firstRef : undefined}
-              value={values[p.field] ?? ''}
-              onChange={(e) => setValues((v) => ({ ...v, [p.field]: e.target.value }))}
-              placeholder={p.placeholder}
-              autoCapitalize="none"
-              spellCheck={false}
-              style={{
-                padding: '10px 12px', background: '#111827', color: '#fff',
-                border: '1px solid #374151', borderRadius: 6, fontSize: 15,
-              }}
-            />
-          </label>
-        ))}
+        {prompts.map((p, i) => {
+          const isDropdown = !!p.choicesSource;
+          const opts = choices[p.field] ?? [];
+          const isLoading = loading.has(p.field);
+          const err = choicesError[p.field];
+          return (
+            <label key={p.field} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span style={{ fontSize: 13, color: '#d1d5db' }}>{p.label}</span>
+              {isDropdown ? (
+                <>
+                  {isLoading && <span style={{ fontSize: 12, color: '#9ca3af' }}>loading…</span>}
+                  {err && <span style={{ fontSize: 12, color: '#f87171' }}>{err}</span>}
+                  {!isLoading && !err && opts.length === 0 && (
+                    <span style={{ fontSize: 12, color: '#9ca3af' }}>no options available</span>
+                  )}
+                  {!isLoading && opts.length > 0 && (
+                    <select
+                      value={values[p.field] ?? ''}
+                      onChange={(e) => setValues((v) => ({ ...v, [p.field]: e.target.value }))}
+                      style={{
+                        padding: '10px 12px', background: '#111827', color: '#fff',
+                        border: '1px solid #374151', borderRadius: 6, fontSize: 15,
+                      }}
+                    >
+                      <option value="">— pick one —</option>
+                      {opts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  )}
+                  {p.choicesSource === 'discord-voice-channels' && (
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#9ca3af' }}>
+                      <input
+                        type="checkbox"
+                        checked={!!showAllByField[p.field]}
+                        onChange={(e) => {
+                          const next = e.target.checked;
+                          setShowAllByField((s) => ({ ...s, [p.field]: next }));
+                          // Wipe the current selection so it isn't a stale-scope value
+                          // that no longer appears in the newly filtered list.
+                          setValues((v) => ({ ...v, [p.field]: '' }));
+                          if (p.choicesSource) loadChoices(p.field, p.choicesSource, next);
+                        }}
+                      />
+                      Show channels from all servers
+                    </label>
+                  )}
+                </>
+              ) : (
+                <input
+                  ref={i === 0 ? firstRef : undefined}
+                  value={values[p.field] ?? ''}
+                  onChange={(e) => setValues((v) => ({ ...v, [p.field]: e.target.value }))}
+                  placeholder={p.placeholder}
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  style={{
+                    padding: '10px 12px', background: '#111827', color: '#fff',
+                    border: '1px solid #374151', borderRadius: 6, fontSize: 15,
+                  }}
+                />
+              )}
+            </label>
+          );
+        })}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
           <button type="button" onClick={onCancel} style={dialogBtn(false)}>Cancel</button>
           <button type="submit" disabled={!canSubmit} style={dialogBtn(true, !canSubmit)}>Send</button>
@@ -450,7 +529,12 @@ function ButtonTileView({
   const isKickStreamer = !!tile.kickStreamerSlug;
   const thumbnail = state?.thumbnail;
   const live = state?.live;
-  const hasImage = !!tile.image && !isStreamer;
+  // `iconUrl` is a dynamic background image the server pushes with the state
+  // (e.g. Discord guild icon on a join-channel tile). Falls back behind a
+  // user-uploaded `tile.image`, so authors can always override the visual.
+  const dynamicBgUrl = state?.iconUrl;
+  const bgImageSrc = tile.image ? imageUrl(tile.image) : (dynamicBgUrl ?? null);
+  const hasImage = !!bgImageSrc && !isStreamer;
   const longPressEnabled = !!tile.hasLongPress;
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressFired = useRef(false);
@@ -525,10 +609,10 @@ function ButtonTileView({
         overflow: 'hidden',
       }}
     >
-      {hasImage && tile.image && (
+      {hasImage && bgImageSrc && (
         <>
           <img
-            src={imageUrl(tile.image)}
+            src={bgImageSrc}
             alt=""
             draggable={false}
             style={{
@@ -673,7 +757,14 @@ function SliderTileView({
   const [pendingValue, setPendingValue] = useState<number | null>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const displayValue = dragValue ?? pendingValue ?? serverValue;
-  const percent = Math.round(displayValue * 100);
+  // Discord output volume runs 0-200 % natively (100 % = "normal", 200 % boost).
+  // The slider protocol is still 0-1, but the label reads out at the source's
+  // real scale so the number the user sees matches what Discord shows.
+  const isDiscordOutput = tile.provider === 'discord' && tile.inputName === 'output';
+  const displayScale = isDiscordOutput ? 200 : 100;
+  const percent = Math.round(displayValue * displayScale);
+  // Fill / thumb positions stay relative to the slider track (0..100 % of it).
+  const fillPercent = Math.round(displayValue * 100);
 
   // Server caught up to our last sent value → release the pending.
   useEffect(() => {
@@ -809,7 +900,7 @@ function SliderTileView({
             top: 0,
             left: 0,
             bottom: 0,
-            width: `${percent}%`,
+            width: `${fillPercent}%`,
             background: fillColor,
             transition: dragValue === null ? 'width 0.15s ease-out, background 0.2s' : 'none',
           }}
@@ -820,7 +911,7 @@ function SliderTileView({
             position: 'absolute',
             top: 4,
             bottom: 4,
-            left: `calc(${percent}% - 2px)`,
+            left: `calc(${fillPercent}% - 2px)`,
             width: 4,
             background: '#fff',
             borderRadius: 2,

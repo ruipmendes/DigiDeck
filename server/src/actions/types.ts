@@ -12,6 +12,8 @@ import { getTwitch } from '../integrations/twitch.js';
 import type { TwitchOp, TwitchActionParams, TwitchPrompt } from '../integrations/twitch.js';
 import { getKick } from '../integrations/kick.js';
 import type { KickOp } from '../integrations/kick.js';
+import { getDiscord } from '../integrations/discord.js';
+import type { DiscordOp, DiscordActionParams, DiscordPrompt } from '../integrations/discord.js';
 import { getMic } from './mic.js';
 import type { MicOp } from './mic.js';
 
@@ -29,6 +31,7 @@ export type Action =
   | { type: 'twitch-streamer'; login: string }
   | { type: 'kick'; op: KickOp; text: string }
   | { type: 'kick-streamer'; slug: string; avatarUrl?: string }
+  | { type: 'discord'; op: DiscordOp; params?: DiscordActionParams; prompts?: DiscordPrompt[] }
   | { type: 'goto-page'; pageId: number }
   | { type: 'wait'; ms: number };
 
@@ -68,6 +71,7 @@ async function executeStep(step: Action): Promise<void> {
     case 'kick': return getKick().execute(step.op, { text: step.text });
     case 'kick-streamer':
       return execUrl(`https://kick.com/${step.slug}`);
+    case 'discord': return getDiscord().execute(step.op, step.params);
     case 'goto-page':
       // Navigation is handled entirely on the phone — server has nothing to do.
       return;
@@ -85,14 +89,25 @@ async function executeStep(step: Action): Promise<void> {
 export function withPromptValues(action: ButtonAction, promptValues: Record<string, string> | undefined): ButtonAction {
   if (!promptValues) return action;
   const merge = (step: Action): Action => {
-    if (step.type !== 'twitch' || !step.prompts?.length) return step;
-    const merged: Record<string, string> = {};
-    for (const p of step.prompts) {
-      const v = promptValues[p.field];
-      if (v !== undefined) merged[p.field] = v;
+    if (step.type === 'twitch' && step.prompts?.length) {
+      const merged: Record<string, string> = {};
+      for (const p of step.prompts) {
+        const v = promptValues[p.field];
+        if (v !== undefined) merged[p.field] = v;
+      }
+      if (Object.keys(merged).length === 0) return step;
+      return { ...step, params: { ...step.params, ...merged } };
     }
-    if (Object.keys(merged).length === 0) return step;
-    return { ...step, params: { ...step.params, ...merged } };
+    if (step.type === 'discord' && step.prompts?.length) {
+      const merged: Record<string, string> = {};
+      for (const p of step.prompts) {
+        const v = promptValues[p.field];
+        if (v !== undefined) merged[p.field] = v;
+      }
+      if (Object.keys(merged).length === 0) return step;
+      return { ...step, params: { ...step.params, ...merged } };
+    }
+    return step;
   };
   return Array.isArray(action) ? action.map(merge) : merge(action);
 }

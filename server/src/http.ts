@@ -5,6 +5,7 @@ import { saveLayout, validateLayout } from './layout.js';
 import { authorize, authorizeLocalhost, isLocalhost, isAllowedHost, isAllowedOrigin } from './auth.js';
 import { saveConfig, type ServerConfig } from './config.js';
 import { findIntegration } from './integrations/base.js';
+import { getDiscord } from './integrations/discord.js';
 import {
   saveImage, imagePath, imageExists, deleteImage, imageMime, MAX_IMAGE_BYTES,
 } from './images.js';
@@ -278,6 +279,40 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse, c
     }
   }
 
+  // ─── Discord-specific: choice lists for prompt-at-tap dropdowns ─
+  // These sit *before* the generic auto-router so they win over the
+  // fallthrough for /api/integrations/discord/... paths.
+  if (pathname === '/api/integrations/discord/voice-channels' && req.method === 'GET') {
+    if (!authorize(req, token())) return unauthorized(res);
+    try {
+      const channels = await getDiscord().getVoiceChannels();
+      json(res, 200, { channels });
+    } catch (err) {
+      json(res, 400, { error: (err as Error).message });
+    }
+    return;
+  }
+  if (pathname === '/api/integrations/discord/channel-members' && req.method === 'GET') {
+    if (!authorize(req, token())) return unauthorized(res);
+    try {
+      const members = await getDiscord().getChannelMembers();
+      json(res, 200, { members });
+    } catch (err) {
+      json(res, 400, { error: (err as Error).message });
+    }
+    return;
+  }
+  if (pathname === '/api/integrations/discord/guilds' && req.method === 'GET') {
+    if (!authorize(req, token())) return unauthorized(res);
+    try {
+      const guilds = await getDiscord().getGuilds();
+      json(res, 200, { guilds });
+    } catch (err) {
+      json(res, 400, { error: (err as Error).message });
+    }
+    return;
+  }
+
   // ─── Integrations (auto-generated from the registry) ─────────
   // Any /api/integrations/<name>/... path is dispatched to the integration
   // matching <name> in the registry. Adding a new integration = a manifest
@@ -484,6 +519,34 @@ async function routeIntegration(
     if (action === 'disconnect' && method === 'POST') {
       if (!authorizeLocalhost(req, token())) { unauthorized(res); return true; }
       await integration.disconnectIntegration!();
+      respondConfigStatus();
+      return true;
+    }
+  }
+
+  // IPC-auth (Discord etc.). Auth happens in the target app, not in a browser,
+  // so we expose one endpoint that triggers the interactive flow and blocks
+  // until the user approves or the request times out.
+  if (integration.manifest.hasIpcAuth) {
+    if (action === 'connect' && method === 'POST') {
+      if (!authorizeLocalhost(req, token())) { unauthorized(res); return true; }
+      try {
+        const outcome = await integration.connectInteractive!();
+        ctx.onIntegrationsChanged();
+        json(res, 200, {
+          config: integration.publicConfig(),
+          status: integration.status(),
+          success: outcome.successMessage,
+        });
+      } catch (err) {
+        json(res, 400, { error: (err as Error).message });
+      }
+      return true;
+    }
+    if (action === 'disconnect' && method === 'POST') {
+      if (!authorizeLocalhost(req, token())) { unauthorized(res); return true; }
+      await integration.disconnectIntegration!();
+      ctx.onIntegrationsChanged();
       respondConfigStatus();
       return true;
     }

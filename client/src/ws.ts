@@ -18,12 +18,15 @@ export type Button = {
   kickStreamerSlug?: string;
   /** Set when the button's action contains a goto-page step. Phone navigates locally on press. */
   gotoPageId?: number;
-  /** Prompt-at-press descriptors. When present, phone shows a dialog before firing the action. */
+  /** Prompt-at-press descriptors for the tap action. */
   prompts?: PressPrompt[];
+  /** Same for the long-press action — kept separate so a tap-side prompt
+   *  doesn't fire on long-press and vice versa. */
+  longPressPrompts?: PressPrompt[];
 };
 
-export type PressPrompt = { field: string; label: string; placeholder?: string };
-export type SliderProvider = 'obs' | 'streamlabs';
+export type PressPrompt = { field: string; label: string; placeholder?: string; choicesSource?: string };
+export type SliderProvider = 'obs' | 'streamlabs' | 'discord';
 
 export type SliderTile = {
   kind: 'slider';
@@ -55,6 +58,10 @@ export type ButtonState = {
   live?: boolean;
   sliderValue?: number;
   sliderMuted?: boolean;
+  /** Dynamic tile background image URL — e.g. a Discord guild icon on a
+   *  join-channel tile. Rendered like `tile.image` when the user hasn't
+   *  uploaded one of their own. */
+  iconUrl?: string;
 };
 
 export type PreviewInfo = { name: string; title: string };

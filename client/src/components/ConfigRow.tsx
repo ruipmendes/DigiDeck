@@ -11,7 +11,7 @@ import { ColorPicker } from './ColorPicker';
 import { AppearancePopover, AppearanceSection } from './AppearancePopover';
 import * as api from '../lib/api';
 
-export type IntegrationStatus = { obs: boolean; twitch: boolean; streamlabs: boolean; kick: boolean };
+export type IntegrationStatus = { obs: boolean; twitch: boolean; streamlabs: boolean; kick: boolean; discord: boolean };
 
 type Props = {
   button: Tile;
@@ -366,7 +366,10 @@ function SummaryChip({ text, onClick }: { text: string; onClick: () => void }) {
 function summarizeTile(tile: Tile): string {
   if (tile.kind === 'blank') return 'Spacer · empty grid slot';
   if (tile.kind === 'slider') {
-    const provider = tile.provider === 'streamlabs' ? 'Streamlabs' : 'OBS';
+    const provider =
+      tile.provider === 'streamlabs' ? 'Streamlabs' :
+      tile.provider === 'discord'    ? 'Discord' :
+                                       'OBS';
     return tile.inputName ? `${provider} slider · ${tile.inputName}` : `${provider} slider`;
   }
   const action = tile.action;
@@ -393,6 +396,7 @@ function summarizeAction(a: Action): string {
     case 'twitch-streamer':  return a.login ? `Streamer · ${a.login}` : 'Twitch streamer';
     case 'kick':             return a.text ? `Kick · "${ellipsis(a.text, 20)}"` : 'Kick chat';
     case 'kick-streamer':    return a.slug ? `Kick · ${a.slug}` : 'Kick streamer';
+    case 'discord':          return `Discord · ${a.op}`;
     case 'goto-page':        return `Go to page ${a.pageId}`;
     case 'wait':             return `Wait ${a.ms}ms`;
   }
@@ -460,6 +464,19 @@ function SliderEditor({
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
+    if (provider === 'discord') {
+      // Discord sliders drive singleton channels (input / output), no device list to fetch.
+      let alive = true;
+      api.getDiscordState()
+        .then((d) => { if (alive) { setInputs([]); setConnected(d.status.state === 'connected'); } })
+        .catch(() => { if (alive) { setInputs([]); setConnected(false); } });
+      const t = setInterval(() => {
+        api.getDiscordState()
+          .then((d) => { if (alive) setConnected(d.status.state === 'connected'); })
+          .catch(() => { if (alive) setConnected(false); });
+      }, 4000);
+      return () => { alive = false; clearInterval(t); };
+    }
     let alive = true;
     function load() {
       const fetcher = provider === 'streamlabs'
@@ -480,25 +497,34 @@ function SliderEditor({
 
   const hasOptions = inputs.length > 0;
   const usingOptionList = hasOptions && (inputName === '' || inputs.includes(inputName));
-  const providerLabel = provider === 'streamlabs' ? 'Streamlabs Desktop' : 'OBS Studio';
+  const providerLabel =
+    provider === 'streamlabs' ? 'Streamlabs Desktop' :
+    provider === 'discord'    ? 'Discord' :
+                                'OBS Studio';
 
   // Build the provider option list: include configured integrations, plus the
   // currently-selected provider even if its integration is disabled, so users
   // don't lose context when toggling the integration off.
   type ProviderOpt = { value: SliderProvider; label: string };
   const providerOpts: ProviderOpt[] = [];
-  if (integrationStatus.obs || provider === 'obs') providerOpts.push({ value: 'obs', label: 'OBS Studio' });
+  if (integrationStatus.obs        || provider === 'obs')        providerOpts.push({ value: 'obs',        label: 'OBS Studio' });
   if (integrationStatus.streamlabs || provider === 'streamlabs') providerOpts.push({ value: 'streamlabs', label: 'Streamlabs Desktop' });
+  if (integrationStatus.discord    || provider === 'discord')    providerOpts.push({ value: 'discord',    label: 'Discord' });
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#9ca3af' }}>
-        <Sliders size={12} /> {providerLabel} audio mixer slider — drag-to-set-volume + tap-to-mute
+        <Sliders size={12} /> {providerLabel} {provider === 'discord' ? 'voice volume slider — drag-to-set + tap to mute/deafen' : 'audio mixer slider — drag-to-set-volume + tap-to-mute'}
       </div>
       {providerOpts.length > 0 && (
         <select
           value={provider}
-          onChange={(e) => onChange({ provider: e.target.value as SliderProvider, inputName: '' })}
+          onChange={(e) => {
+            const next = e.target.value as SliderProvider;
+            // Discord sliders default to the mic ('input'); other providers reset to empty
+            // so the user picks a named audio input.
+            onChange({ provider: next, inputName: next === 'discord' ? 'input' : '' });
+          }}
           title="audio source provider"
           style={selectStyle}
         >
@@ -507,10 +533,24 @@ function SliderEditor({
       )}
       {providerOpts.length === 0 && (
         <span style={{ fontSize: 11, color: '#f59e0b' }}>
-          Enable OBS or Streamlabs in Integrations to use slider tiles.
+          Enable OBS, Streamlabs or Discord in Integrations to use slider tiles.
         </span>
       )}
-      {usingOptionList ? (
+      {provider === 'discord' ? (
+        <select
+          value={
+            inputName === 'output' ? 'output' :
+            inputName === 'sensitivity' ? 'sensitivity' :
+            'input'
+          }
+          onChange={(e) => onChange({ inputName: e.target.value })}
+          style={selectStyle}
+        >
+          <option value="input">Microphone input volume — tap to mute</option>
+          <option value="output">Voice output volume — tap to deafen</option>
+          <option value="sensitivity">Voice activation sensitivity — tap = pip when Discord's auto-threshold is on</option>
+        </select>
+      ) : usingOptionList ? (
         <select
           value={inputName}
           onChange={(e) => onChange({ inputName: e.target.value })}
@@ -529,7 +569,7 @@ function SliderEditor({
       )}
       {!connected && (
         <span style={{ fontSize: 11, color: '#9ca3af' }}>
-          {providerLabel} not connected — type the input name manually, or connect it to pick from a list.
+          {providerLabel} not connected — {provider === 'discord' ? 'connect Discord to drive this slider.' : 'type the input name manually, or connect it to pick from a list.'}
         </span>
       )}
     </div>

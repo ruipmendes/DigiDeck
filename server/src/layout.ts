@@ -1,6 +1,6 @@
 import { promises as fs, watch } from 'node:fs';
 import { join } from 'node:path';
-import type { ButtonAction } from './actions/types.js';
+import type { Action, ButtonAction } from './actions/types.js';
 
 export type ImageFit = 'cover' | 'fill' | 'contain';
 
@@ -20,7 +20,12 @@ export type Button = {
   longPressAction?: ButtonAction;
 };
 
-export type SliderProvider = 'obs' | 'streamlabs';
+/** OBS / Streamlabs sliders drive a named audio input; Discord sliders drive
+ *  the singleton input (mic) or output (voice audio out), so `inputName` for
+ *  discord tiles is a fixed literal — 'input' or 'output' — instead of a
+ *  user-facing device name. Kept in one field so the slider protocol shape
+ *  doesn't fork per provider. */
+export type SliderProvider = 'obs' | 'streamlabs' | 'discord';
 
 export type SliderTile = {
   kind: 'slider';
@@ -82,15 +87,19 @@ export type PublicButton = {
   kickStreamerSlug?: string;
   /** Set when the button (or any step) is a goto-page action. Phone handles navigation locally. */
   gotoPageId?: number;
-  /** Aggregated prompt-at-press descriptors from every step that declared one.
-   *  When present and non-empty, the phone shows a modal to collect these values
-   *  before firing the action; values are echoed back with the `press` message. */
+  /** Prompt-at-press descriptors from the tap action. When present, the phone
+   *  shows a modal to collect these values before firing on a short press. */
   prompts?: PublicPrompt[];
+  /** Same as `prompts` but for the long-press action — kept separate so a
+   *  prompt on tap doesn't pop up for a long-press (or vice versa). */
+  longPressPrompts?: PublicPrompt[];
 };
 
 /** Phone-facing prompt descriptor. Kept protocol-shaped (not typed to a specific
- *  integration) so any future action type can piggyback on the same mechanism. */
-export type PublicPrompt = { field: string; label: string; placeholder?: string };
+ *  integration) so any future action type can piggyback on the same mechanism.
+ *  `choicesSource`, when set, tells the phone to fetch a dropdown of options
+ *  from that source instead of rendering a free-text input. */
+export type PublicPrompt = { field: string; label: string; placeholder?: string; choicesSource?: string };
 
 export type PublicSlider = {
   kind: 'slider';
@@ -225,20 +234,33 @@ export function toPublic(layout: Layout): PublicLayout {
         if (goto && goto.type === 'goto-page') {
           out.gotoPageId = goto.pageId;
         }
-        const prompts: PublicPrompt[] = [];
-        const seenFields = new Set<string>();
-        const longSteps = t.longPressAction
+        // Prompts are aggregated PER ACTION SLOT (tap vs long-press) so a
+        // long-press action doesn't inherit tap-side prompts, and vice versa.
+        const collectPrompts = (actionSteps: readonly Action[]): PublicPrompt[] => {
+          const list: PublicPrompt[] = [];
+          const seen = new Set<string>();
+          for (const s of actionSteps) {
+            if ((s.type !== 'twitch' && s.type !== 'discord') || !s.prompts?.length) continue;
+            for (const p of s.prompts) {
+              if (seen.has(p.field)) continue;
+              seen.add(p.field);
+              list.push({
+                field: p.field,
+                label: p.label,
+                placeholder: p.placeholder,
+                choicesSource: 'choicesSource' in p ? p.choicesSource : undefined,
+              });
+            }
+          }
+          return list;
+        };
+        const longSteps: Action[] = t.longPressAction
           ? (Array.isArray(t.longPressAction) ? t.longPressAction : [t.longPressAction])
           : [];
-        for (const s of [...steps, ...longSteps]) {
-          if (s.type !== 'twitch' || !s.prompts?.length) continue;
-          for (const p of s.prompts) {
-            if (seenFields.has(p.field)) continue;
-            seenFields.add(p.field);
-            prompts.push({ field: p.field, label: p.label, placeholder: p.placeholder });
-          }
-        }
-        if (prompts.length) out.prompts = prompts;
+        const tapPrompts = collectPrompts(steps);
+        const longPressPrompts = collectPrompts(longSteps);
+        if (tapPrompts.length) out.prompts = tapPrompts;
+        if (longPressPrompts.length) out.longPressPrompts = longPressPrompts;
         return out;
       }),
     })),
@@ -298,7 +320,7 @@ export function watchLayout(onChange: () => void): () => void {
   return () => w.close();
 }
 
-const VALID_ACTION_TYPES = new Set(['hotkey', 'text', 'launch', 'url', 'script', 'volume', 'mic', 'obs', 'streamlabs', 'twitch', 'twitch-streamer', 'kick', 'kick-streamer', 'goto-page', 'wait']);
+const VALID_ACTION_TYPES = new Set(['hotkey', 'text', 'launch', 'url', 'script', 'volume', 'mic', 'obs', 'streamlabs', 'twitch', 'twitch-streamer', 'kick', 'kick-streamer', 'discord', 'goto-page', 'wait']);
 
 export function validateLayout(input: unknown): Layout {
   if (!input || typeof input !== 'object') throw new Error('layout must be an object');
@@ -415,8 +437,11 @@ function validateButtons(input: unknown[], seenIds: Set<number>): Tile[] {
       if (typeof tile.inputName !== 'string' || !tile.inputName) {
         throw new Error(`tile ${tile.id}: slider requires inputName`);
       }
-      if (tile.provider !== undefined && tile.provider !== 'obs' && tile.provider !== 'streamlabs') {
-        throw new Error(`tile ${tile.id}: slider provider must be 'obs' or 'streamlabs'`);
+      if (tile.provider !== undefined && tile.provider !== 'obs' && tile.provider !== 'streamlabs' && tile.provider !== 'discord') {
+        throw new Error(`tile ${tile.id}: slider provider must be 'obs', 'streamlabs' or 'discord'`);
+      }
+      if (tile.provider === 'discord' && tile.inputName !== 'input' && tile.inputName !== 'output' && tile.inputName !== 'sensitivity') {
+        throw new Error(`tile ${tile.id}: discord slider inputName must be 'input', 'output', or 'sensitivity'`);
       }
     } else if (kind === 'button') {
       validateButtonAction(tile.action, tile.id);

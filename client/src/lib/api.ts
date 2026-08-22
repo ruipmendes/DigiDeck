@@ -413,6 +413,149 @@ export async function reconnectTwitch(): Promise<TwitchState_API> {
   return res.json();
 }
 
+// ─── Discord ────────────────────────────────────────────────────
+
+export type DiscordState =
+  | 'disabled' | 'not-configured' | 'needs-auth'
+  | 'connecting' | 'connected' | 'disconnected' | 'error';
+
+export type DiscordStatus = {
+  state: DiscordState;
+  error?: string;
+  username?: string;
+  mute?: boolean;
+  deaf?: boolean;
+  inputVolume?: number;
+  outputVolume?: number;
+  voiceMode?: 'PUSH_TO_TALK' | 'VOICE_ACTIVITY';
+  voiceThreshold?: number;
+  voiceAutoThreshold?: boolean;
+  noiseSuppression?: boolean;
+  automaticGainControl?: boolean;
+  echoCancellation?: boolean;
+  currentVoiceChannelId?: string | null;
+  currentVoiceChannelName?: string | null;
+  currentVoiceGuildId?: string | null;
+};
+
+export type DiscordPublicConfig = {
+  enabled: boolean;
+  clientId: string;
+  hasSecret: boolean;
+  hasAccessToken: boolean;
+  username: string;
+  primaryGuildId: string;
+};
+
+export type DiscordState_API = { config: DiscordPublicConfig; status: DiscordStatus };
+
+export async function getDiscordState(): Promise<DiscordState_API> {
+  const res = await apiFetch('/api/integrations/discord');
+  if (!res.ok) throw new Error(`GET discord failed: ${res.status}`);
+  return res.json();
+}
+
+export async function putDiscordConfig(c: { enabled: boolean; clientId: string; clientSecret?: string; primaryGuildId?: string }): Promise<DiscordState_API> {
+  const res = await apiFetch('/api/integrations/discord/config', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(c),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(body || `PUT discord config failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function connectDiscord(): Promise<DiscordState_API & { success: string }> {
+  const res = await apiFetch('/api/integrations/discord/connect', { method: 'POST' });
+  if (!res.ok) {
+    let msg = `connect failed: ${res.status}`;
+    try { msg = (await res.json()).error ?? msg; } catch { /* keep default */ }
+    throw new Error(msg);
+  }
+  return res.json();
+}
+
+export async function disconnectDiscord(): Promise<DiscordState_API> {
+  const res = await apiFetch('/api/integrations/discord/disconnect', { method: 'POST' });
+  if (!res.ok) throw new Error(`disconnect failed: ${res.status}`);
+  return res.json();
+}
+
+export async function reconnectDiscord(): Promise<DiscordState_API> {
+  const res = await apiFetch('/api/integrations/discord/reconnect', { method: 'POST' });
+  if (!res.ok) throw new Error(`reconnect failed: ${res.status}`);
+  return res.json();
+}
+
+export async function getDiscordVoiceChannels(): Promise<Array<{ id: string; channelName: string; guildId: string; guildName: string }>> {
+  const res = await apiFetch('/api/integrations/discord/voice-channels');
+  if (!res.ok) {
+    let msg = `voice channels failed: ${res.status}`;
+    try { msg = (await res.json()).error ?? msg; } catch { /* keep default */ }
+    throw new Error(msg);
+  }
+  return (await res.json()).channels;
+}
+
+export async function getDiscordGuilds(): Promise<Array<{ id: string; name: string }>> {
+  const res = await apiFetch('/api/integrations/discord/guilds');
+  if (!res.ok) {
+    let msg = `guilds failed: ${res.status}`;
+    try { msg = (await res.json()).error ?? msg; } catch { /* keep default */ }
+    throw new Error(msg);
+  }
+  return (await res.json()).guilds;
+}
+
+export async function getDiscordChannelMembers(): Promise<Array<{ id: string; name: string }>> {
+  const res = await apiFetch('/api/integrations/discord/channel-members');
+  if (!res.ok) {
+    let msg = `channel members failed: ${res.status}`;
+    try { msg = (await res.json()).error ?? msg; } catch { /* keep default */ }
+    throw new Error(msg);
+  }
+  return (await res.json()).members;
+}
+
+/** Prompt-at-tap choice sources: map from a source identifier to the fetcher.
+ *  `showAll` disables the "just my server" filter — used by the modal's
+ *  "Show all servers" toggle for voice-channel pickers. */
+export async function fetchPromptChoices(
+  source: string,
+  opts: { showAll?: boolean } = {},
+): Promise<Array<{ value: string; label: string }>> {
+  if (source === 'discord-voice-channels') {
+    // Default to the user's "primary server" (Discord panel setting), falling
+    // back to whichever guild their current voice channel is in. If neither is
+    // known, we don't filter — better to show everything than nothing.
+    const [chs, dc] = await Promise.all([
+      getDiscordVoiceChannels(),
+      getDiscordState().catch(() => null),
+    ]);
+    const scopeGuildId = dc?.config.primaryGuildId || dc?.status.currentVoiceGuildId || '';
+    const scoped = (!opts.showAll && scopeGuildId)
+      ? chs.filter((c) => c.guildId === scopeGuildId)
+      : chs;
+    // If the scoped list is empty but the full list has channels, silently
+    // widen so the user doesn't hit a "no options available" wall (e.g. because
+    // their primary guild has no voice channels or they weren't looking at it).
+    const list = scoped.length > 0 ? scoped : chs;
+    const showGuildLabel = list === chs;
+    return list.map((c) => ({
+      value: c.id,
+      label: showGuildLabel ? `${c.guildName} · ${c.channelName}` : c.channelName,
+    }));
+  }
+  if (source === 'discord-channel-members') {
+    const ms = await getDiscordChannelMembers();
+    return ms.map((m) => ({ value: m.id, label: m.name }));
+  }
+  throw new Error(`unknown choices source: ${source}`);
+}
+
 // ─── Security ───────────────────────────────────────────────────
 
 export type SecurityConfig = { allowShellActions: boolean | null; httpsEnabled: boolean };
