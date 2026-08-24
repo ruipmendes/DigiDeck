@@ -41,6 +41,11 @@ export type ObsStatus = {
   error?: string;
   scenes: string[];
   inputs: string[];
+  /** Subset of inputs that are media (ffmpeg) sources — video/audio files.
+   *  Populated so the config UI can filter the picker for media-* ops. */
+  mediaInputs: string[];
+  /** Subset of inputs that are browser sources — for refresh-browser-source. */
+  browserSources: string[];
   sceneItems: Record<string, string[]>;
   currentScene?: string;
   recording: boolean;
@@ -63,7 +68,10 @@ export type ObsOp =
   | 'toggle-stream' | 'start-stream' | 'stop-stream'
   | 'toggle-virtual-cam' | 'toggle-replay-buffer' | 'save-replay-buffer'
   | 'set-scene' | 'toggle-mute'
-  | 'toggle-source' | 'show-source' | 'hide-source';
+  | 'toggle-source' | 'show-source' | 'hide-source'
+  | 'media-play' | 'media-pause' | 'media-restart' | 'media-stop'
+  | 'media-next' | 'media-previous'
+  | 'refresh-browser-source';
 
 export type ObsActionParams = { sceneName?: string; inputName?: string; sourceName?: string };
 
@@ -93,6 +101,8 @@ class ObsClient implements IntegrationLifecycle {
   private cfg: ObsConfig = { ...DEFAULT_OBS_CONFIG };
   private scenes: string[] = [];
   private inputs: string[] = [];
+  private mediaInputs: string[] = [];
+  private browserSources: string[] = [];
   private sceneItems: Record<string, string[]> = {};
   private currentScene: string | undefined;
   private recording = false;
@@ -116,6 +126,8 @@ class ObsClient implements IntegrationLifecycle {
       this.state = 'disconnected';
       this.scenes = [];
       this.inputs = [];
+      this.mediaInputs = [];
+      this.browserSources = [];
       this.sceneItems = {};
       this.currentScene = undefined;
       this.recording = false;
@@ -189,6 +201,8 @@ class ObsClient implements IntegrationLifecycle {
       error: this.err,
       scenes: [...this.scenes],
       inputs: [...this.inputs],
+      mediaInputs: [...this.mediaInputs],
+      browserSources: [...this.browserSources],
       sceneItems: { ...this.sceneItems },
       currentScene: this.currentScene,
       recording: this.recording,
@@ -238,6 +252,8 @@ class ObsClient implements IntegrationLifecycle {
     this.state = 'disabled';
     this.scenes = [];
     this.inputs = [];
+    this.mediaInputs = [];
+    this.browserSources = [];
     this.sceneItems = {};
     this.currentScene = undefined;
     this.recording = false;
@@ -317,6 +333,39 @@ class ObsClient implements IntegrationLifecycle {
         await this.setSourceVisibility(params.sceneName, params.sourceName, op === 'show-source');
         break;
       }
+      case 'media-play':
+      case 'media-pause':
+      case 'media-restart':
+      case 'media-stop':
+      case 'media-next':
+      case 'media-previous': {
+        if (!params.inputName) throw new Error(`${op} requires inputName`);
+        // obs-websocket 5 wants the fully-qualified enum-name string for the
+        // media action. Map our short op names to those.
+        const mediaAction = {
+          'media-play':     'OBS_WEBSOCKET_MEDIA_INPUT_ACTION_PLAY',
+          'media-pause':    'OBS_WEBSOCKET_MEDIA_INPUT_ACTION_PAUSE',
+          'media-restart':  'OBS_WEBSOCKET_MEDIA_INPUT_ACTION_RESTART',
+          'media-stop':     'OBS_WEBSOCKET_MEDIA_INPUT_ACTION_STOP',
+          'media-next':     'OBS_WEBSOCKET_MEDIA_INPUT_ACTION_NEXT',
+          'media-previous': 'OBS_WEBSOCKET_MEDIA_INPUT_ACTION_PREVIOUS',
+        }[op];
+        await this.obs.call('TriggerMediaInputAction', {
+          inputName: params.inputName,
+          mediaAction,
+        });
+        break;
+      }
+      case 'refresh-browser-source': {
+        if (!params.inputName) throw new Error('refresh-browser-source requires inputName');
+        // `refreshnocache` is the property button OBS's own UI hits to reload
+        // a browser source bypassing cache. Works on browser_source kind.
+        await this.obs.call('PressInputPropertiesButton', {
+          inputName: params.inputName,
+          propertyName: 'refreshnocache',
+        });
+        break;
+      }
     }
   }
 
@@ -332,7 +381,16 @@ class ObsClient implements IntegrationLifecycle {
       this.currentScene = sceneList.currentProgramSceneName as string;
       this.scenes = (sceneList.scenes as Array<{ sceneName: string }>).map((s) => s.sceneName);
       const inputList = await this.obs.call('GetInputList');
-      this.inputs = (inputList.inputs as Array<{ inputName: string }>).map((i) => i.inputName);
+      const raw = inputList.inputs as Array<{ inputName: string; inputKind?: string }>;
+      this.inputs = raw.map((i) => i.inputName);
+      // ffmpeg_source covers video AND audio media inputs — vlc_source too on
+      // installs that have the VLC integration. Track both under mediaInputs.
+      this.mediaInputs = raw
+        .filter((i) => i.inputKind === 'ffmpeg_source' || i.inputKind === 'vlc_source')
+        .map((i) => i.inputName);
+      this.browserSources = raw
+        .filter((i) => i.inputKind === 'browser_source')
+        .map((i) => i.inputName);
 
       const sceneItems: Record<string, string[]> = {};
       this.sceneItemIdToSource.clear();

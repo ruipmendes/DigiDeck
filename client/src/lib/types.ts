@@ -3,7 +3,10 @@ export type ObsOp =
   | 'toggle-stream' | 'start-stream' | 'stop-stream'
   | 'toggle-virtual-cam' | 'toggle-replay-buffer' | 'save-replay-buffer'
   | 'set-scene' | 'toggle-mute'
-  | 'toggle-source' | 'show-source' | 'hide-source';
+  | 'toggle-source' | 'show-source' | 'hide-source'
+  | 'media-play' | 'media-pause' | 'media-restart' | 'media-stop'
+  | 'media-next' | 'media-previous'
+  | 'refresh-browser-source';
 
 export type ObsActionParams = { sceneName?: string; inputName?: string; sourceName?: string };
 

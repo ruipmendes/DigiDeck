@@ -318,7 +318,7 @@ In OBS: *Tools → WebSocket Server Settings → Enable WebSocket server → Sho
 
 In Digi Deck's config UI: expand the **OBS Studio** card, tick *Enable*, paste the port + password, click **Save & reconnect**.
 
-Action types you can bind: toggle/start/stop recording, toggle/start/stop streaming, toggle virtual camera, toggle/save replay buffer, switch scene (dropdown of your scenes), toggle input mute (dropdown of your inputs), toggle source visibility in a scene (dropdown of scene → sources in that scene).
+Action types you can bind: toggle/start/stop recording, toggle/start/stop streaming, toggle virtual camera, toggle/save replay buffer, switch scene (dropdown of your scenes), toggle input mute (dropdown of your inputs), toggle source visibility in a scene (dropdown of scene → sources in that scene), **media controls** (play/pause/restart/stop/next/previous — dropdown of your media sources), **refresh browser source** (dropdown of your browser sources — great for reloading chat overlays without cache).
 
 Live state on the phone: recording / streaming / virtual cam / scene-active / muted buttons show a blue dot, source-visible buttons show a green dot, and any OBS button is dimmed with an "offline" pip if OBS isn't connected.
 

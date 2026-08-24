@@ -75,6 +75,13 @@ const obsEntries = ((): ActionPickerEntry[] => {
     { op: 'show-source',          label: 'Show source…',           hint: 'Pick scene + source in editor',      kw: 'source show visibility' },
     { op: 'hide-source',          label: 'Hide source…',           hint: 'Pick scene + source in editor',      kw: 'source hide visibility' },
     { op: 'toggle-source',        label: 'Toggle source visibility…', hint: 'Pick scene + source in editor',   kw: 'source toggle visibility' },
+    { op: 'media-play',           label: 'Play media source…',      hint: 'Pick media input in editor',        kw: 'media play video audio soundboard clip' },
+    { op: 'media-pause',          label: 'Pause media source…',     hint: 'Pick media input in editor',        kw: 'media pause video audio soundboard' },
+    { op: 'media-restart',        label: 'Restart media source…',   hint: 'Play from the beginning',           kw: 'media restart video audio soundboard replay' },
+    { op: 'media-stop',           label: 'Stop media source…',      hint: 'Pick media input in editor',        kw: 'media stop video audio soundboard' },
+    { op: 'media-next',           label: 'Next media source…',      hint: 'Skip to next in playlist',          kw: 'media next skip video audio playlist' },
+    { op: 'media-previous',       label: 'Previous media source…',  hint: 'Back one in playlist',              kw: 'media previous back video audio playlist' },
+    { op: 'refresh-browser-source', label: 'Refresh browser source…', hint: 'Reload OBS browser source (bypass cache)', kw: 'browser source refresh reload chat overlay widget' },
   ];
   return rows.map((r) => ({
     key: `obs:${r.op}`, category: 'OBS Studio', label: r.label, hint: r.hint, iconName: 'obs',

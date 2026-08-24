@@ -3,7 +3,7 @@ import type { Action, ObsOp } from '../../lib/types';
 import * as api from '../../lib/api';
 import { PickOrType, selectStyle } from './shared';
 
-type ObsNeeds = 'scene' | 'input' | 'scene+source' | null;
+type ObsNeeds = 'scene' | 'input' | 'scene+source' | 'media-input' | 'scene+browser-source' | null;
 type ObsOpDef = { value: ObsOp; label: string; needs: ObsNeeds };
 type ObsOpGroup = { label: string; options: ObsOpDef[] };
 
@@ -52,6 +52,23 @@ const OBS_OP_GROUPS: ObsOpGroup[] = [
       { value: 'toggle-source', label: 'Toggle visibility…', needs: 'scene+source' },
     ],
   },
+  {
+    label: 'Media',
+    options: [
+      { value: 'media-play',     label: 'Play media…',      needs: 'media-input' },
+      { value: 'media-pause',    label: 'Pause media…',     needs: 'media-input' },
+      { value: 'media-restart',  label: 'Restart media…',   needs: 'media-input' },
+      { value: 'media-stop',     label: 'Stop media…',      needs: 'media-input' },
+      { value: 'media-next',     label: 'Next media…',      needs: 'media-input' },
+      { value: 'media-previous', label: 'Previous media…',  needs: 'media-input' },
+    ],
+  },
+  {
+    label: 'Browser sources',
+    options: [
+      { value: 'refresh-browser-source', label: 'Refresh browser source…', needs: 'scene+browser-source' },
+    ],
+  },
 ];
 
 const OBS_OPS: ObsOpDef[] = OBS_OP_GROUPS.flatMap((g) => g.options);
@@ -60,6 +77,8 @@ export function ObsBody({ action, onChange }: { action: Extract<Action, { type: 
   const [snap, setSnap] = useState<{
     scenes: string[];
     inputs: string[];
+    mediaInputs: string[];
+    browserSources: string[];
     sceneItems: Record<string, string[]>;
     sourceStates: Record<string, boolean>;
     connected: boolean;
@@ -72,11 +91,13 @@ export function ObsBody({ action, onChange }: { action: Extract<Action, { type: 
         .then((d) => { if (alive) setSnap({
           scenes: d.status.scenes,
           inputs: d.status.inputs,
+          mediaInputs: d.status.mediaInputs ?? [],
+          browserSources: d.status.browserSources ?? [],
           sceneItems: d.status.sceneItems ?? {},
           sourceStates: d.status.sourceStates ?? {},
           connected: d.status.state === 'connected',
         }); })
-        .catch(() => { if (alive) setSnap({ scenes: [], inputs: [], sceneItems: {}, sourceStates: {}, connected: false }); });
+        .catch(() => { if (alive) setSnap({ scenes: [], inputs: [], mediaInputs: [], browserSources: [], sceneItems: {}, sourceStates: {}, connected: false }); });
     }
     load();
     // Refresh while the editor is open so visibility hints stay current.
@@ -125,6 +146,43 @@ export function ObsBody({ action, onChange }: { action: Extract<Action, { type: 
           placeholder="input name (e.g. Mic/Aux)"
           onChange={(v) => onChange({ ...action, params: { ...action.params, inputName: v } })}
         />
+      )}
+      {needs === 'media-input' && (
+        <PickOrType
+          value={action.params?.inputName ?? ''}
+          options={snap?.mediaInputs ?? []}
+          placeholder={snap?.connected && snap.mediaInputs.length === 0 ? 'no media sources found — add one in OBS first' : 'media source name'}
+          onChange={(v) => onChange({ ...action, params: { ...action.params, inputName: v } })}
+        />
+      )}
+      {needs === 'scene+browser-source' && (
+        <>
+          <PickOrType
+            value={action.params?.sceneName ?? ''}
+            options={snap?.scenes ?? []}
+            placeholder="scene"
+            onChange={(v) => onChange({ ...action, params: { ...action.params, sceneName: v, inputName: '' } })}
+          />
+          <PickOrType
+            value={action.params?.inputName ?? ''}
+            options={(() => {
+              const s = action.params?.sceneName;
+              if (!s) return [];
+              const inScene = snap?.sceneItems[s] ?? [];
+              // Intersect scene contents with the known browser-source list so
+              // the second dropdown only offers browser sources actually placed
+              // in this scene.
+              const browsers = new Set(snap?.browserSources ?? []);
+              return inScene.filter((name) => browsers.has(name));
+            })()}
+            placeholder={
+              !action.params?.sceneName ? 'pick a scene first'
+                : (snap?.browserSources.length ?? 0) === 0 ? 'no browser sources in OBS'
+                : 'browser source in that scene'
+            }
+            onChange={(v) => onChange({ ...action, params: { ...action.params, inputName: v } })}
+          />
+        </>
       )}
       {needs === 'scene+source' && (
         <>

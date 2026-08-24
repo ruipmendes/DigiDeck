@@ -58,6 +58,15 @@ export const TILE_PRESETS: TilePreset[] = [
   { key: 'obs-audio-slider', category: 'OBS Studio', label: 'Audio input slider', hint: 'Pick input in the editor', iconName: 'sliders',
     keywords: 'obs audio input mixer slider volume mic',
     create: (id) => ({ kind: 'slider', id, label: 'Mic', provider: 'obs', inputName: '' }) },
+  { key: 'obs-media-play', category: 'OBS Studio', label: 'Soundboard: play media', hint: 'Pick media source in editor', iconName: 'play',
+    keywords: 'obs media play soundboard clip video audio replay',
+    create: (id) => ({ kind: 'button', id, label: 'Play', icon: 'play', action: { type: 'obs', op: 'media-play' } }) },
+  { key: 'obs-media-restart', category: 'OBS Studio', label: 'Soundboard: restart media', hint: 'Play from the beginning', iconName: 'refresh-cw',
+    keywords: 'obs media restart soundboard clip video audio replay',
+    create: (id) => ({ kind: 'button', id, label: 'Restart', icon: 'refresh-cw', action: { type: 'obs', op: 'media-restart' } }) },
+  { key: 'obs-refresh-browser', category: 'OBS Studio', label: 'Refresh browser source', hint: 'Bypass cache reload — great for chat overlays', iconName: 'refresh-cw',
+    keywords: 'obs browser source refresh reload chat overlay widget',
+    create: (id) => ({ kind: 'button', id, label: 'Reload', icon: 'refresh-cw', action: { type: 'obs', op: 'refresh-browser-source' } }) },
 
   // ─── Twitch ─────────────────────────────────────────
   { key: 'twitch-clip', category: 'Twitch', label: 'Create clip', iconName: 'twitch',

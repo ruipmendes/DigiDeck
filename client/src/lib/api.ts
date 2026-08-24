@@ -263,6 +263,10 @@ export type ObsStatus = {
   error?: string;
   scenes: string[];
   inputs: string[];
+  /** Subset of inputs that are media (ffmpeg/vlc) sources. Filters the picker for media-* ops. */
+  mediaInputs?: string[];
+  /** Subset of inputs that are browser sources. Filters the picker for refresh-browser-source. */
+  browserSources?: string[];
   sceneItems: Record<string, string[]>;
   /** "<sceneName>::<sourceName>" → visible. Use for at-a-glance state in pickers. */
   sourceStates: Record<string, boolean>;
