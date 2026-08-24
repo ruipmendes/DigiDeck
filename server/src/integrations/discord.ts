@@ -13,6 +13,10 @@ export type PublicDiscordConfig = {
    *  "just my server". Empty string when not set: falls back to the guild of
    *  whatever voice channel the user is currently in. */
   primaryGuildId: string;
+  /** True when a bot token is on file. The token itself is never echoed back
+   *  to the client — only its presence. Bot auth is what powers pull-user /
+   *  move-user; user OAuth alone can't PATCH other guild members. */
+  hasBotToken: boolean;
 };
 
 export function publicDiscordConfig(cfg: DiscordConfig): PublicDiscordConfig {
@@ -23,6 +27,7 @@ export function publicDiscordConfig(cfg: DiscordConfig): PublicDiscordConfig {
     hasAccessToken: !!cfg.accessToken,
     username: cfg.username,
     primaryGuildId: cfg.primaryGuildId,
+    hasBotToken: !!cfg.botToken,
   };
 }
 
@@ -42,6 +47,15 @@ export function validateDiscordConfig(input: unknown, existing: DiscordConfig): 
     username: existing.username,
     // User-facing config: an empty string clears the setting, otherwise trim.
     primaryGuildId: typeof o.primaryGuildId === 'string' ? o.primaryGuildId.trim() : existing.primaryGuildId,
+    // Bot token — same "empty keeps existing" convention as clientSecret so
+    // the UI can safely echo the config back without exposing the token. An
+    // explicit `null` (not undefined, not "") clears the token — needed for
+    // the panel's "Clear bot token" button to actually take effect.
+    botToken: o.botToken === null
+      ? ''
+      : typeof o.botToken === 'string' && o.botToken.trim().length > 0
+        ? o.botToken.trim()
+        : existing.botToken,
   };
 }
 
@@ -61,6 +75,10 @@ export type DiscordConfig = {
   refreshToken: string;
   username: string;
   primaryGuildId: string;
+  /** Bot token from Developer Portal → Bot → Reset Token. Optional. Only used
+   *  to POST /guilds/{id}/members/{id} (pull-user / move-user) which user OAuth
+   *  can't do. Blank string when not set. */
+  botToken: string;
 };
 
 export const DEFAULT_DISCORD_CONFIG: DiscordConfig = {
@@ -71,6 +89,7 @@ export const DEFAULT_DISCORD_CONFIG: DiscordConfig = {
   refreshToken: '',
   username: '',
   primaryGuildId: '',
+  botToken: '',
 };
 
 export type DiscordState =
@@ -135,6 +154,10 @@ export type DiscordChannelMember = {
   ourVolume: number;
   /** Our client-side per-user mute for this user. Tracked the same way. */
   ourMute: boolean;
+  /** True while Discord is emitting SPEAKING_START for this user without a
+   *  matching SPEAKING_STOP yet. Drives the "who's talking" pulse in the
+   *  voice-panel tile. */
+  speaking: boolean;
 };
 
 export type DiscordOp =
@@ -191,7 +214,14 @@ const OP_PONG = 4;
 const REDIRECT_URI = 'http://127.0.0.1';
 const TOKEN_ENDPOINT = 'https://discord.com/api/oauth2/token';
 const PIPE_INDEXES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-const RPC_SCOPES = ['rpc', 'guilds', 'guilds.members.write'];
+// `guilds.members.write` was requested for pull-user / move-user, but per
+// Discord's docs that scope authorises PUT /guilds/{id}/members/{id} (add
+// self to a guild), not PATCH (move another member). PATCH requires Bot auth
+// with Move Members. Requesting the scope also seems to trigger an OAuth2
+// Error 5000 on the authorize dialog for some app configurations. Removed
+// until we have a working plan; pull-user / move-user now throw with a
+// clear "bot-only" message at execute time.
+const RPC_SCOPES = ['rpc', 'guilds'];
 const DISCORD_API_BASE = 'https://discord.com/api/v10';
 
 type RpcRequest = { cmd: string; args?: unknown; evt?: string };
@@ -449,10 +479,7 @@ class DiscordClient implements IntegrationLifecycle {
         if (!this.currentVoiceGuildId || !this.currentVoiceChannelId) {
           throw new Error('Discord: pull-user needs you to be in a voice channel — that\'s where the target gets pulled to');
         }
-        await this.discordRestPatch(
-          `/guilds/${this.currentVoiceGuildId}/members/${userId}`,
-          { channel_id: this.currentVoiceChannelId },
-        );
+        await this.botMoveMember(this.currentVoiceGuildId, userId, this.currentVoiceChannelId);
         return;
       }
       case 'move-user': {
@@ -467,10 +494,7 @@ class DiscordClient implements IntegrationLifecycle {
         if (!guildId) {
           throw new Error('Discord: could not determine target guild — set a Primary server on the Discord panel or pick the channel from the picker to populate the cache');
         }
-        await this.discordRestPatch(
-          `/guilds/${guildId}/members/${userId}`,
-          { channel_id: channelId },
-        );
+        await this.botMoveMember(guildId, userId, channelId);
         return;
       }
       default: throw new Error(`unknown Discord op: ${op as string}`);
@@ -499,30 +523,41 @@ class DiscordClient implements IntegrationLifecycle {
     }
   }
 
-  /** REST-side PATCH helper — first non-IPC call in the Discord integration.
-   *  Uses the OAuth bearer token; 401/403 surface with a scope/permission hint
-   *  because those are the most common causes. */
-  private async discordRestPatch(path: string, body: unknown): Promise<void> {
-    if (!this.cfg.accessToken) throw new Error('Discord not authorized');
-    const res = await fetch(`${DISCORD_API_BASE}${path}`, {
+  /** Move a guild member to a specific voice channel. Uses Bot auth — user
+   *  OAuth genuinely can't PATCH other members regardless of scope. Errors are
+   *  translated to actionable messages (missing token / bot not in guild /
+   *  missing permission) so the phone toast tells the user how to fix it. */
+  private async botMoveMember(guildId: string, userId: string, channelId: string | null): Promise<void> {
+    if (!this.cfg.botToken) {
+      throw new Error('Discord: pull-user / move-user need a Bot token. Discord Developer Portal → your app → Bot → Reset Token, then paste it in the Discord panel. The bot must also be added to your server with Move Members permission.');
+    }
+    const res = await fetch(`${DISCORD_API_BASE}/guilds/${guildId}/members/${userId}`, {
       method: 'PATCH',
       headers: {
-        Authorization: `Bearer ${this.cfg.accessToken}`,
+        Authorization: `Bot ${this.cfg.botToken}`,
         'Content-Type': 'application/json',
+        // Some corporate proxies reject fetch requests without a UA.
+        'User-Agent': 'DigiDeck (https://github.com/ruipmendes/DigiDeck, 0.2.0)',
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ channel_id: channelId }),
     });
-    if (!res.ok) {
-      let detail = '';
-      try {
-        const j = await res.json() as { message?: string };
-        if (j.message) detail = ` ${j.message}`;
-      } catch { detail = ` ${await res.text()}`; }
-      if (res.status === 401 || res.status === 403) {
-        throw new Error(`Discord: insufficient permission (${res.status}${detail}) — reconnect to grant the "guilds.members.write" scope, and confirm you have the Move Members permission in that server`);
-      }
-      throw new Error(`Discord PATCH ${path}: ${res.status}${detail}`);
+    if (res.ok) return;
+    let detail = '';
+    try {
+      const j = await res.json() as { message?: string; code?: number };
+      if (j.message) detail = ` ${j.message}`;
+      if (j.code) detail += ` (code ${j.code})`;
+    } catch { detail = ` ${await res.text()}`; }
+    if (res.status === 401) {
+      throw new Error(`Discord: bot token rejected (${res.status}${detail}) — regenerate the token in Developer Portal → Bot → Reset Token and paste the fresh one.`);
     }
+    if (res.status === 403) {
+      throw new Error(`Discord: bot lacks permission (${res.status}${detail}) — confirm the bot is added to that server with Move Members permission. Discord role hierarchy also applies: bot can only move members whose highest role is below the bot's highest role.`);
+    }
+    if (res.status === 404) {
+      throw new Error(`Discord: not found (${res.status}${detail}) — either the bot isn't in that guild, or the target user isn't a member of it.`);
+    }
+    throw new Error(`Discord PATCH member: ${res.status}${detail}`);
   }
 
   /** Flat list of every guild the authorized user is in. Used to populate the
@@ -841,6 +876,14 @@ class DiscordClient implements IntegrationLifecycle {
       this.applyVoiceStateEvent('delete', msg.data);
       return;
     }
+    if (msg.cmd === 'DISPATCH' && msg.evt === 'SPEAKING_START') {
+      this.applySpeakingEvent(true, msg.data);
+      return;
+    }
+    if (msg.cmd === 'DISPATCH' && msg.evt === 'SPEAKING_STOP') {
+      this.applySpeakingEvent(false, msg.data);
+      return;
+    }
     if (msg.cmd === 'DISPATCH' && msg.evt === 'VOICE_CHANNEL_SELECT') {
       // Event payload: { channel_id, guild_id }. Look up the name via GET_CHANNEL
       // for a friendly label — best effort, don't fail the event handling.
@@ -942,7 +985,7 @@ class DiscordClient implements IntegrationLifecycle {
       const prev = this.subscribedChannelId;
       this.subscribedChannelId = null;
       // Silent failure — Discord may have already cleaned up the sub if the pipe blinked.
-      for (const evt of ['VOICE_STATE_CREATE', 'VOICE_STATE_UPDATE', 'VOICE_STATE_DELETE']) {
+      for (const evt of ['VOICE_STATE_CREATE', 'VOICE_STATE_UPDATE', 'VOICE_STATE_DELETE', 'SPEAKING_START', 'SPEAKING_STOP']) {
         void this.rpcRequest({ cmd: 'UNSUBSCRIBE', evt, args: { channel_id: prev } }).catch(() => {});
       }
     }
@@ -951,7 +994,7 @@ class DiscordClient implements IntegrationLifecycle {
     this.channelMembers.clear();
     if (!cid) return;
     this.subscribedChannelId = cid;
-    for (const evt of ['VOICE_STATE_CREATE', 'VOICE_STATE_UPDATE', 'VOICE_STATE_DELETE']) {
+    for (const evt of ['VOICE_STATE_CREATE', 'VOICE_STATE_UPDATE', 'VOICE_STATE_DELETE', 'SPEAKING_START', 'SPEAKING_STOP']) {
       void this.rpcRequest({ cmd: 'SUBSCRIBE', evt, args: { channel_id: cid } }).catch(() => {});
     }
     // Get fresh voice_states — VOICE_STATE_CREATE only fires for future joins.
@@ -989,6 +1032,7 @@ class DiscordClient implements IntegrationLifecycle {
         selfDeaf: !!state.self_deaf,
         ourVolume: 100,
         ourMute: false,
+        speaking: false,
       });
     }
   }
@@ -1021,8 +1065,24 @@ class DiscordClient implements IntegrationLifecycle {
         // a client-side setting Discord doesn't echo back.
         ourVolume: prev?.ourVolume ?? 100,
         ourMute: prev?.ourMute ?? false,
+        // Same for speaking — voice-state events don't include it; it lives in
+        // its own SPEAKING_START/STOP stream, so preserve whatever we last saw.
+        speaking: prev?.speaking ?? false,
       });
     }
+    this.emitChange();
+  }
+
+  /** Apply a Discord SPEAKING_START / SPEAKING_STOP event to the roster.
+   *  Fired per user_id + channel_id — we only care about the current channel. */
+  private applySpeakingEvent(active: boolean, data: unknown): void {
+    if (!data || typeof data !== 'object') return;
+    const d = data as { user_id?: string };
+    const uid = d.user_id;
+    if (!uid || uid === this.cachedSelfUserId) return;
+    const m = this.channelMembers.get(uid);
+    if (!m || m.speaking === active) return;
+    this.channelMembers.set(uid, { ...m, speaking: active });
     this.emitChange();
   }
 

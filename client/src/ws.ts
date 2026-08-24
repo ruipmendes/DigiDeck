@@ -66,6 +66,8 @@ export type VoicePanelMember = {
   selfDeaf: boolean;
   ourVolume: number;
   ourMute: boolean;
+  /** Live-updates while the member is actually speaking (Discord SPEAKING_START/STOP events). */
+  speaking: boolean;
 };
 export type Page = { id: number; name: string; icon?: string; image?: string; cols?: number; background?: string; backgroundImage?: string; buttons: Tile[] };
 export type NavigationMode = 'tabs' | 'folders';

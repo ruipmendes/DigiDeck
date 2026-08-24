@@ -382,7 +382,17 @@ One-time setup:
 3. Copy the **Application ID** (Client ID) from *General Information*.
 4. Under **OAuth2**, hit *Reset Secret* and copy the **Client Secret**.
 5. In the config UI → **Discord** card → expand → paste Client ID + Secret → *Save credentials*.
-6. Click **Connect to Discord**. A dialog appears **inside the Discord client** asking you to authorize the app — approve it. Digi Deck's panel flips to "Connected."
+6. Click **Connect to Discord**. A dialog appears **inside the Discord client** asking you to authorize the app — approve it. The authorize dialog lists two scopes: `rpc` (voice control + live state) and `guilds` (list your servers for the channel picker). Approve to proceed. Digi Deck's panel flips to "Connected."
+
+### Optional: bot token for moving members between channels
+
+**Pull member** (drag someone into your VC) and **Move member** (drop someone into any channel) can't run on user OAuth — Discord makes that a bot-only capability. Setup is one-time and lives on the same Developer Portal app:
+
+1. Same app in the Developer Portal → **Bot** tab → *Reset Token* (or *Add Bot* first if the tab is empty). Copy the token.
+2. Back to **OAuth2** → **URL Generator** → tick the `bot` scope, then tick the **Move Members** permission. Copy the generated URL, open it, and invite the bot to whichever server you'll be moving members in.
+3. In Digi Deck's Discord card → expand the **Bot token** collapsible section → paste → *Save*.
+
+Pull / Move buttons now work in that server. Discord's role hierarchy still applies — the bot can only move members whose highest role is below the bot's highest role, so put the bot's role near the top. The bot doesn't need to be online / streaming a presence; it just needs to be a guild member.
 
 Action types: **Discord** → Mute (toggle/mute/unmute), Deafen (toggle/deafen/undeafen), Toggle push-to-talk mode, Toggle noise suppression (Krisp), Toggle automatic gain control, Toggle echo cancellation, Join voice channel, Leave voice channel, Set member volume, Mute member, Unmute member, **Pull member into my channel**, **Move member to channel**. Toggle variants read the current state and flip; force variants are for scripted sequences where you always want a specific final state. Pull and Move require the Move Members permission in the target Discord server.
 
@@ -394,7 +404,7 @@ Alternatively paste the raw ID at config time (Discord: *User Settings → Advan
 
 The tile lights up when the corresponding thing is active (mic muted / deafened / PTT mode on / noise suppression on / currently in the target channel) — same convention as the OBS mic-mute UX. Live state comes from Discord's `VOICE_SETTINGS_UPDATE` and `VOICE_CHANNEL_SELECT` events, so if you change something via keybind or the app itself, the tile still updates.
 
-**Voice channel panel tile.** A dedicated wide tile that renders the live roster of whichever voice channel you're currently in. Each row is a member with a volume slider (0–200 %) and a *mute-for-me* toggle. Add one from the config editor → tile kind → *Discord voice panel*. Joining or leaving a channel updates the roster instantly via `VOICE_STATE_*` events.
+**Voice channel panel tile.** A dedicated wide tile that renders the live roster of whichever voice channel you're currently in. Each row is a member with a volume slider (0–200 %), a *mute-for-me* toggle, and a **live speaking indicator** — the avatar glows green with an outer ring while that person is actually talking, driven by Discord's `SPEAKING_START` / `SPEAKING_STOP` events. Add one from the config editor → tile kind → *Discord voice panel*. Joining or leaving a channel updates the roster instantly via `VOICE_STATE_*` events.
 
 **Sliders.** Discord is also a slider provider — add a slider tile and pick *Discord* as the source. Three channels:
 - *Microphone input volume* (tap = mic mute)
@@ -405,7 +415,7 @@ Slider position and mute state live-update from Discord, so changing volume insi
 
 **Requires Discord running on the same PC.** Discord's local IPC pipe (`\\.\pipe\discord-ipc-N`) is the transport; if Discord isn't open, the Discord card shows *disconnected* and retries every few seconds until it appears.
 
-**Upgrading?** If you connected Discord before the picker-on-tap shipped, the channel/member listing needs the `guilds` OAuth scope your existing token doesn't have. On first "cannot list guilds" error, open the Discord card → *Disconnect* → *Connect to Discord* — one round-trip re-approves with the full scope set.
+**Upgrading?** Every time this integration adds new capabilities, extra OAuth scopes come with them. On first "cannot list …" error or a stuck authorize dialog, open the Discord card → *Disconnect* → *Connect to Discord* — one round-trip re-approves with the current scope set (`rpc` + `guilds`).
 
 ---
 

@@ -11,6 +11,7 @@ export function DiscordPanel() {
   const [expanded, setExpanded] = useState(false);
   const [clientIdDraft, setClientIdDraft] = useState('');
   const [clientSecretDraft, setClientSecretDraft] = useState('');
+  const [botTokenDraft, setBotTokenDraft] = useState('');
   const [guilds, setGuilds] = useState<Array<{ id: string; name: string }> | null>(null);
 
   async function refresh() {
@@ -48,6 +49,46 @@ export function DiscordPanel() {
         enabled: config.enabled,
         clientId: config.clientId,
         primaryGuildId: id,
+      });
+      setConfig(data.config);
+      setStatus(data.status);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveBotToken(token: string) {
+    if (!config) return;
+    setBusy(true);
+    try {
+      const data = await api.putDiscordConfig({
+        enabled: config.enabled,
+        clientId: config.clientId,
+        botToken: token,
+      });
+      setConfig(data.config);
+      setStatus(data.status);
+      setBotTokenDraft('');
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function clearBotToken() {
+    if (!config) return;
+    if (!confirm('Remove the bot token? Pull-user / move-user will stop working until you paste a new one.')) return;
+    setBusy(true);
+    try {
+      // Explicit null tells the server "clear this field" — plain "" means
+      // "keep whatever was saved before" for secret-style values.
+      const data = await api.putDiscordConfig({
+        enabled: config.enabled,
+        clientId: config.clientId,
+        botToken: null,
       });
       setConfig(data.config);
       setStatus(data.status);
@@ -206,6 +247,54 @@ export function DiscordPanel() {
                   />
                 )}
               </div>
+              <details style={{ marginTop: 12, fontSize: 12, color: '#9ca3af' }}>
+                <summary style={{ cursor: 'pointer', color: '#d1d5db' }}>
+                  <strong style={{ fontWeight: 500 }}>Bot token</strong> — optional, powers <em>Pull member</em> / <em>Move member</em>
+                  {config.hasBotToken && <span style={{ marginLeft: 6, color: '#22c55e' }}>✓ set</span>}
+                </summary>
+                <div style={{ marginTop: 8, lineHeight: 1.5 }}>
+                  User OAuth can't move other guild members — Discord requires a bot for that. Setup is one-time:
+                  <ol style={{ paddingLeft: 20, marginTop: 6, color: '#9ca3af' }}>
+                    <li>Visit <a href="https://discord.com/developers/applications" target="_blank" rel="noreferrer" style={{ color: '#a78bfa' }}>discord.com/developers/applications</a> → your Digi Deck app.</li>
+                    <li><em>Bot</em> tab → <em>Reset Token</em> (or <em>Add Bot</em> first if the tab is empty). Copy the token.</li>
+                    <li><em>OAuth2</em> → <em>URL Generator</em> → check the <code style={{ ...codeStyle, fontSize: 10 }}>bot</code> scope and the <code style={{ ...codeStyle, fontSize: 10 }}>Move Members</code> permission. Open the generated URL, invite the bot to your server.</li>
+                    <li>Paste the token below.</li>
+                  </ol>
+                  <div style={{ marginTop: 8, display: 'flex', gap: 6 }}>
+                    <input
+                      type="password"
+                      value={botTokenDraft}
+                      onChange={(e) => setBotTokenDraft(e.target.value)}
+                      placeholder={config.hasBotToken ? '(saved — leave blank to keep)' : 'MT.xxxxxxxxxxxxxxxxxxxx.xxxxxxxxxxxxx'}
+                      autoComplete="off"
+                      spellCheck={false}
+                      style={{ ...inp, flex: 1 }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void saveBotToken(botTokenDraft.trim())}
+                      disabled={busy || !botTokenDraft.trim()}
+                      style={secondaryBtn}
+                    >
+                      Save
+                    </button>
+                    {config.hasBotToken && (
+                      <button
+                        type="button"
+                        onClick={() => void clearBotToken()}
+                        disabled={busy}
+                        style={dangerBtn}
+                        title="Remove the stored bot token"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                  <div style={{ marginTop: 6, fontSize: 11, color: '#6b7280' }}>
+                    The bot doesn't need to be online. It just needs to be a member of the guild with the Move Members permission. Discord's role hierarchy applies — the bot can only move members whose highest role is below the bot's highest role.
+                  </div>
+                </div>
+              </details>
               <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
                 <button onClick={reconnect} disabled={busy} style={secondaryBtn}><RefreshCw size={14} /> reconnect</button>
                 <button onClick={disconnect} disabled={busy} style={dangerBtn}>Disconnect</button>

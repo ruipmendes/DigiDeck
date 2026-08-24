@@ -445,6 +445,7 @@ export type DiscordPublicConfig = {
   hasAccessToken: boolean;
   username: string;
   primaryGuildId: string;
+  hasBotToken: boolean;
 };
 
 export type DiscordState_API = { config: DiscordPublicConfig; status: DiscordStatus };
@@ -455,7 +456,7 @@ export async function getDiscordState(): Promise<DiscordState_API> {
   return res.json();
 }
 
-export async function putDiscordConfig(c: { enabled: boolean; clientId: string; clientSecret?: string; primaryGuildId?: string }): Promise<DiscordState_API> {
+export async function putDiscordConfig(c: { enabled: boolean; clientId: string; clientSecret?: string; primaryGuildId?: string; botToken?: string | null }): Promise<DiscordState_API> {
   const res = await apiFetch('/api/integrations/discord/config', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },

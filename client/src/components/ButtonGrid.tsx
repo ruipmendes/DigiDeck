@@ -584,7 +584,9 @@ function VoicePanelMemberRow({ m, accent, onVolume, onMute }: {
   }
 
   const fill = muted ? '#6b7280' : accent;
-  const speaking = !m.selfMute && !m.serverMute && !muted;
+  // Live speaking indicator — only glow if the member is actually talking AND
+  // isn't muted from any side, so the visual matches what you'd hear.
+  const speakingLive = m.speaking && !m.selfMute && !m.serverMute && !muted;
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -593,8 +595,10 @@ function VoicePanelMemberRow({ m, accent, onVolume, onMute }: {
         title={muted ? 'unmute for me' : 'mute for me'}
         style={{
           width: 32, height: 32, borderRadius: '50%',
-          background: muted ? '#7f1d1d' : (speaking ? '#374151' : '#1f2937'),
-          border: `2px solid ${muted ? '#dc2626' : (m.selfMute || m.serverMute ? '#6b7280' : accent)}`,
+          background: muted ? '#7f1d1d' : (speakingLive ? '#065f46' : '#1f2937'),
+          border: `2px solid ${muted ? '#dc2626' : (speakingLive ? '#34d399' : (m.selfMute || m.serverMute ? '#6b7280' : accent))}`,
+          boxShadow: speakingLive ? '0 0 0 3px rgba(52, 211, 153, 0.35)' : 'none',
+          transition: 'box-shadow 0.12s ease-out, border-color 0.12s, background 0.12s',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: 13, fontWeight: 700, color: '#fff', cursor: 'pointer',
           flexShrink: 0,
