@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { ArrowUp, ArrowDown, X, Plus, FolderOpen } from 'lucide-react';
-import type { Action, ActionType, ButtonAction, DiscordActionParams, DiscordOp, DiscordPrompt, DiscordPromptField, MicOp, ObsOp, StreamlabsOp, TwitchOp, TwitchActionParams, TwitchAnnouncementColor, TwitchPrompt, TwitchPromptField } from '../lib/types';
+import type { Action, ButtonAction, DiscordActionParams, DiscordOp, DiscordPrompt, DiscordPromptField, IntegrationStatus, MicOp, ObsOp, StreamlabsOp, TwitchOp, TwitchActionParams, TwitchAnnouncementColor, TwitchPrompt, TwitchPromptField } from '../lib/types';
+export type { IntegrationStatus };
 import { defaultAction } from '../lib/types';
 import * as api from '../lib/api';
 import { HotkeyInput } from './HotkeyInput';
+import { ActionPicker } from './ActionPicker';
 
 type PageRef = { id: number; name: string };
-export type IntegrationStatus = { obs: boolean; twitch: boolean; streamlabs: boolean; kick: boolean; discord: boolean };
 
 type Props = {
   action: ButtonAction;
@@ -162,53 +163,6 @@ function StepCard({ index, total, step, onChange, onRemove, onMoveUp, onMoveDown
   );
 }
 
-type ActionOption = { value: ActionType; label: string };
-type ActionGroup = { label: string; options: ActionOption[] };
-
-const ACTION_GROUPS: ActionGroup[] = [
-  {
-    label: 'Desktop input',
-    options: [
-      { value: 'hotkey', label: 'Hotkey' },
-      { value: 'text',   label: 'Type text' },
-      { value: 'url',    label: 'Open URL / file' },
-      { value: 'launch', label: 'Launch app' },
-      { value: 'script', label: 'Run PowerShell' },
-    ],
-  },
-  {
-    label: 'Audio',
-    options: [
-      { value: 'volume', label: 'Volume (speaker)' },
-      { value: 'mic',    label: 'Microphone mute' },
-    ],
-  },
-  {
-    label: 'Streaming',
-    options: [
-      { value: 'obs',             label: 'OBS Studio' },
-      { value: 'streamlabs',      label: 'Streamlabs Desktop' },
-      { value: 'twitch',          label: 'Twitch (chat, mod, ads, clips)' },
-      { value: 'twitch-streamer', label: 'Twitch streamer tile' },
-      { value: 'kick',            label: 'Kick chat' },
-      { value: 'kick-streamer',   label: 'Kick streamer tile' },
-    ],
-  },
-  {
-    label: 'Voice / comms',
-    options: [
-      { value: 'discord',         label: 'Discord (voice, filters, channels, members)' },
-    ],
-  },
-  {
-    label: 'Flow',
-    options: [
-      { value: 'goto-page', label: 'Go to page (folder)' },
-      { value: 'wait',      label: 'Wait (delay)' },
-    ],
-  },
-];
-
 const MIC_OPS: { value: MicOp; label: string }[] = [
   { value: 'toggle-mute', label: 'Toggle mic mute' },
   { value: 'mute',        label: 'Mute mic' },
@@ -222,39 +176,14 @@ type StepEditorProps = {
   integrationStatus?: IntegrationStatus;
 };
 
-function isActionTypeAvailable(type: ActionType, status: IntegrationStatus | undefined, current: ActionType): boolean {
-  // Always keep the currently-selected type visible so users don't lose their setting.
-  if (type === current) return true;
-  if (!status) return true; // no status known yet → show everything
-  if (type === 'obs') return status.obs;
-  if (type === 'streamlabs') return status.streamlabs;
-  if (type === 'twitch' || type === 'twitch-streamer') return status.twitch;
-  if (type === 'kick' || type === 'kick-streamer') return status.kick;
-  if (type === 'discord') return status.discord;
-  return true;
-}
-
 function ActionStepEditor({ action, onChange, pages, integrationStatus }: StepEditorProps) {
-  const filteredGroups = ACTION_GROUPS
-    .map((g) => ({
-      ...g,
-      options: g.options.filter((o) => isActionTypeAvailable(o.value, integrationStatus, action.type)),
-    }))
-    .filter((g) => g.options.length > 0);
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <select
-        value={action.type}
-        onChange={(e) => onChange(defaultAction(e.target.value as ActionType))}
-        style={selectStyle}
-      >
-        {filteredGroups.map((g) => (
-          <optgroup key={g.label} label={g.label}>
-            {g.options.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-          </optgroup>
-        ))}
-      </select>
+      <ActionPicker
+        current={action}
+        onPick={(next) => onChange(next)}
+        integrationStatus={integrationStatus}
+      />
       <Body action={action} onChange={onChange} pages={pages} />
     </div>
   );

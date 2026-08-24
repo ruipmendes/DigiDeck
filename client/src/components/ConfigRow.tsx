@@ -11,7 +11,8 @@ import { ColorPicker } from './ColorPicker';
 import { AppearancePopover, AppearanceSection } from './AppearancePopover';
 import * as api from '../lib/api';
 
-export type IntegrationStatus = { obs: boolean; twitch: boolean; streamlabs: boolean; kick: boolean; discord: boolean };
+import type { IntegrationStatus } from '../lib/types';
+export type { IntegrationStatus };
 
 type Props = {
   button: Tile;

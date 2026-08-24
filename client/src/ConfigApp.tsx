@@ -13,6 +13,8 @@ import { PairingModal } from './components/PairingModal';
 import { IntegrationsPanel } from './components/IntegrationsPanel';
 import { SecurityPanel } from './components/SecurityPanel';
 import { IconPicker } from './components/IconPicker';
+import { TilePresetPicker } from './components/TilePresetPicker';
+import type { TilePreset } from './components/tilePresets';
 import { ImagePicker } from './components/ImagePicker';
 import { ColorPicker } from './components/ColorPicker';
 import { AppearancePopover, AppearanceSection } from './components/AppearancePopover';
@@ -43,6 +45,7 @@ export function ConfigApp() {
   // ConfigRow expansion state is parent-managed so we can: (a) auto-expand
   // freshly added tiles, (b) collapse every row on Save.
   const [expandedTileIds, setExpandedTileIds] = useState<Set<number>>(new Set());
+  const [presetPickerPageId, setPresetPickerPageId] = useState<number | null>(null);
 
   function toggleExpanded(id: number) {
     setExpandedTileIds((prev) => {
@@ -260,6 +263,18 @@ export function ConfigApp() {
     if (!layout) return;
     const id = nextButtonId(layout);
     const newTile: Tile = defaultTile(kind, id);
+    insertTile(pageId, newTile);
+  }
+
+  function addFromPreset(pageId: number, preset: TilePreset) {
+    if (!layout) return;
+    const id = nextButtonId(layout);
+    insertTile(pageId, preset.create(id));
+  }
+
+  function insertTile(pageId: number, newTile: Tile) {
+    if (!layout) return;
+    const id = newTile.id;
     updateLayout({
       pages: layout.pages.map((p) => (p.id === pageId ? {
         ...p,
@@ -458,26 +473,33 @@ export function ConfigApp() {
                 </div>
               )}
 
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button
+                  onClick={() => setPresetPickerPageId(activePage.id)}
+                  style={{ ...addTileBtnStyle, borderColor: '#3b82f6', color: '#93c5fd' }}
+                  title="Pick from a curated library — mute, record, clip, voice panel, and more"
+                >
+                  + from library…
+                </button>
                 <button
                   onClick={() => addButton(activePage.id, 'button')}
                   style={addTileBtnStyle}
                 >
-                  + add button
+                  + blank button
                 </button>
                 <button
                   onClick={() => addButton(activePage.id, 'slider')}
                   style={addTileBtnStyle}
-                  title="Add a slider tile for OBS audio mixer control"
+                  title="Add a slider tile for audio mixer control"
                 >
-                  + add slider
+                  + blank slider
                 </button>
                 <button
                   onClick={() => addButton(activePage.id, 'blank')}
                   style={addTileBtnStyle}
                   title="Add an empty grid slot to push other tiles to a column or row"
                 >
-                  + add blank
+                  + spacer
                 </button>
               </div>
             </>
@@ -490,6 +512,16 @@ export function ConfigApp() {
       </footer>
 
       <PairingModal open={pairingOpen} onClose={() => setPairingOpen(false)} />
+      {presetPickerPageId !== null && (
+        <TilePresetPicker
+          onPick={(preset) => {
+            const pageId = presetPickerPageId;
+            setPresetPickerPageId(null);
+            addFromPreset(pageId, preset);
+          }}
+          onCancel={() => setPresetPickerPageId(null)}
+        />
+      )}
       <TemplatesPanel
         open={templatesOpen}
         onClose={() => setTemplatesOpen(false)}

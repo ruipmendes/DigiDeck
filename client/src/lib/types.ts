@@ -7,6 +7,10 @@ export type ObsOp =
 
 export type ObsActionParams = { sceneName?: string; inputName?: string; sourceName?: string };
 
+/** Which integrations are enabled at the current moment — used to gate action
+ *  picker entries and slider providers on integration availability. */
+export type IntegrationStatus = { obs: boolean; twitch: boolean; streamlabs: boolean; kick: boolean; discord: boolean };
+
 export type TwitchOp =
   | 'chat'
   | 'chat-announcement'

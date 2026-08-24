@@ -1,0 +1,244 @@
+/**
+ * Flat catalogue of everything an action step can be. The Stream-Deck-style
+ * ActionPicker filters over these; picking one replaces the action wholesale
+ * with what `create()` returns (a fresh default — params/prompts stay for the
+ * per-op body to configure).
+ *
+ * Keep entries stable enough that per-op bodies can rely on the shape they
+ * produce — e.g. picking "OBS · Switch to scene" always yields
+ * `{ type: 'obs', op: 'set-scene' }` with no params, then the body renders a
+ * scene picker.
+ *
+ * `keywords` is lowercased and space-joined; the filter matches substrings
+ * against it.
+ */
+import type { Action, IntegrationStatus } from '../lib/types';
+
+export type ActionPickerEntry = {
+  key: string;
+  /** Category label — used as a section header when the query is empty. */
+  category: string;
+  /** Short user-facing title, e.g. "Toggle recording". */
+  label: string;
+  /** Optional one-line hint below the label. */
+  hint?: string;
+  /** Icon name from the icons library — rendered small at the row start. */
+  iconName?: string;
+  /** Whitespace-separated lowercase search terms. */
+  keywords: string;
+  /** Which integration status flag gates this entry — undefined means always available. */
+  requires?: keyof IntegrationStatus;
+  create(): Action;
+};
+
+const desktop: ActionPickerEntry[] = [
+  { key: 'hotkey',  category: 'Desktop input', label: 'Hotkey',            hint: 'Send a key combo',                  iconName: 'command',       keywords: 'hotkey key press shortcut combo keyboard',
+    create: () => ({ type: 'hotkey', keys: [] }) },
+  { key: 'text',    category: 'Desktop input', label: 'Type text',         hint: 'Type a string at the cursor',       iconName: 'file-text',     keywords: 'text type string write input',
+    create: () => ({ type: 'text', text: '' }) },
+  { key: 'url',     category: 'Desktop input', label: 'Open URL / file',   hint: 'Launch a link or open a file',      iconName: 'external-link', keywords: 'url open link web browser file path',
+    create: () => ({ type: 'url', url: '' }) },
+  { key: 'launch',  category: 'Desktop input', label: 'Launch app',        hint: 'Run an executable or shortcut',     iconName: 'terminal',      keywords: 'launch app run start exe executable program',
+    create: () => ({ type: 'launch', path: '' }) },
+  { key: 'script',  category: 'Desktop input', label: 'Run PowerShell',    hint: 'Execute PowerShell commands',       iconName: 'code',          keywords: 'script powershell shell command bash exec',
+    create: () => ({ type: 'script', script: '' }) },
+];
+
+const audio: ActionPickerEntry[] = [
+  { key: 'volume:up',    category: 'Audio', label: 'Volume up',   iconName: 'volume-2', keywords: 'volume up louder raise increase speaker system',
+    create: () => ({ type: 'volume', delta: 2 }) },
+  { key: 'volume:down',  category: 'Audio', label: 'Volume down', iconName: 'volume-1', keywords: 'volume down quieter lower decrease speaker system',
+    create: () => ({ type: 'volume', delta: -2 }) },
+  { key: 'volume:mute',  category: 'Audio', label: 'Toggle system mute', iconName: 'volume-x', keywords: 'volume mute silence toggle system speaker',
+    create: () => ({ type: 'volume', mute: true }) },
+  { key: 'mic:toggle',   category: 'Audio', label: 'Toggle microphone mute', iconName: 'mic-off',  keywords: 'mic microphone mute toggle',
+    create: () => ({ type: 'mic', op: 'toggle-mute' }) },
+  { key: 'mic:mute',     category: 'Audio', label: 'Mute microphone',       iconName: 'mic-off',  keywords: 'mic microphone mute off',
+    create: () => ({ type: 'mic', op: 'mute' }) },
+  { key: 'mic:unmute',   category: 'Audio', label: 'Unmute microphone',     iconName: 'mic',      keywords: 'mic microphone unmute on',
+    create: () => ({ type: 'mic', op: 'unmute' }) },
+];
+
+const obsEntries = ((): ActionPickerEntry[] => {
+  const rows: Array<{ op: string; label: string; hint?: string; kw: string }> = [
+    { op: 'toggle-record',        label: 'Toggle recording',       kw: 'record recording toggle' },
+    { op: 'start-record',         label: 'Start recording',        kw: 'record recording start' },
+    { op: 'stop-record',          label: 'Stop recording',         kw: 'record recording stop' },
+    { op: 'toggle-stream',        label: 'Toggle stream',          kw: 'stream toggle live broadcast' },
+    { op: 'start-stream',         label: 'Start stream',           kw: 'stream start live broadcast go live' },
+    { op: 'stop-stream',          label: 'Stop stream',            kw: 'stream stop end broadcast' },
+    { op: 'toggle-virtual-cam',   label: 'Toggle virtual camera',  kw: 'virtual camera cam toggle' },
+    { op: 'toggle-replay-buffer', label: 'Toggle replay buffer',   kw: 'replay buffer toggle instant' },
+    { op: 'save-replay-buffer',   label: 'Save replay buffer',     kw: 'replay buffer save instant clip' },
+    { op: 'set-scene',            label: 'Switch to scene…',       hint: 'Pick the scene in the editor',       kw: 'scene switch change set' },
+    { op: 'toggle-mute',          label: 'Toggle audio input mute…', hint: 'Pick the input in the editor',    kw: 'mute audio input source toggle' },
+    { op: 'show-source',          label: 'Show source…',           hint: 'Pick scene + source in editor',      kw: 'source show visibility' },
+    { op: 'hide-source',          label: 'Hide source…',           hint: 'Pick scene + source in editor',      kw: 'source hide visibility' },
+    { op: 'toggle-source',        label: 'Toggle source visibility…', hint: 'Pick scene + source in editor',   kw: 'source toggle visibility' },
+  ];
+  return rows.map((r) => ({
+    key: `obs:${r.op}`, category: 'OBS Studio', label: r.label, hint: r.hint, iconName: 'obs',
+    keywords: `obs ${r.kw}`, requires: 'obs' as const,
+    create: () => ({ type: 'obs', op: r.op as never }) as Action,
+  }));
+})();
+
+const streamlabsEntries = ((): ActionPickerEntry[] => {
+  const rows: Array<{ op: string; label: string; hint?: string; kw: string }> = [
+    { op: 'toggle-record',        label: 'Toggle recording',       kw: 'record recording toggle' },
+    { op: 'start-record',         label: 'Start recording',        kw: 'record recording start' },
+    { op: 'stop-record',          label: 'Stop recording',         kw: 'record recording stop' },
+    { op: 'toggle-stream',        label: 'Toggle stream',          kw: 'stream toggle live broadcast' },
+    { op: 'start-stream',         label: 'Start stream',           kw: 'stream start live broadcast go live' },
+    { op: 'stop-stream',          label: 'Stop stream',            kw: 'stream stop end broadcast' },
+    { op: 'toggle-virtual-cam',   label: 'Toggle virtual camera',  kw: 'virtual camera cam toggle' },
+    { op: 'toggle-replay-buffer', label: 'Toggle replay buffer',   kw: 'replay buffer toggle instant' },
+    { op: 'save-replay-buffer',   label: 'Save replay buffer',     kw: 'replay buffer save instant clip' },
+    { op: 'set-scene',            label: 'Switch to scene…',       hint: 'Pick the scene in the editor',       kw: 'scene switch change set' },
+    { op: 'toggle-mute',          label: 'Toggle audio input mute…', hint: 'Pick the input in the editor',    kw: 'mute audio input source toggle' },
+    { op: 'show-source',          label: 'Show source…',           hint: 'Pick scene + source in editor',      kw: 'source show visibility' },
+    { op: 'hide-source',          label: 'Hide source…',           hint: 'Pick scene + source in editor',      kw: 'source hide visibility' },
+    { op: 'toggle-source',        label: 'Toggle source visibility…', hint: 'Pick scene + source in editor',   kw: 'source toggle visibility' },
+  ];
+  return rows.map((r) => ({
+    key: `streamlabs:${r.op}`, category: 'Streamlabs Desktop', label: r.label, hint: r.hint, iconName: 'streamlabs',
+    keywords: `streamlabs ${r.kw}`, requires: 'streamlabs' as const,
+    create: () => ({ type: 'streamlabs', op: r.op as never }) as Action,
+  }));
+})();
+
+const twitchEntries = ((): ActionPickerEntry[] => {
+  const rows: Array<{ op: string; label: string; hint?: string; kw: string }> = [
+    { op: 'chat',                    label: 'Send chat message',        hint: 'Baked-in text — great for !commands',  kw: 'chat message send command' },
+    { op: 'chat-announcement',       label: 'Send /announce',           hint: 'Highlighted in-chat announcement',      kw: 'announcement announce highlighted chat message' },
+    { op: 'clear-chat',              label: 'Clear chat',                                                              kw: 'clear chat delete messages' },
+    { op: 'run-ad',                  label: 'Run ad',                   hint: 'Preset length; needs live stream',      kw: 'ad advertisement commercial run play' },
+    { op: 'snooze-ad',               label: 'Snooze next ad',                                                          kw: 'ad snooze skip delay next' },
+    { op: 'create-clip',             label: 'Create clip',              hint: 'Needs live stream',                     kw: 'clip clips create make record' },
+    { op: 'stream-marker',           label: 'Create stream marker',                                                    kw: 'stream marker bookmark timestamp' },
+    { op: 'toggle-shield-mode',      label: 'Toggle Shield Mode',                                                      kw: 'shield mode moderation raid harassment safety' },
+    { op: 'toggle-emote-only',       label: 'Toggle emote-only chat',                                                  kw: 'emote only chat mode restrict' },
+    { op: 'toggle-sub-only',         label: 'Toggle sub-only chat',                                                    kw: 'subscriber sub only chat mode restrict' },
+    { op: 'toggle-follower-only',    label: 'Toggle follower-only chat',                                               kw: 'follower only chat mode restrict' },
+    { op: 'toggle-slow-mode',        label: 'Toggle slow-mode chat',                                                   kw: 'slow mode chat rate limit' },
+    { op: 'start-raid',              label: 'Start raid',               hint: 'Preset target or ask on tap',           kw: 'raid start target streamer send' },
+    { op: 'cancel-raid',             label: 'Cancel raid',                                                             kw: 'raid cancel stop abort' },
+    { op: 'shoutout',                label: 'Send shoutout',                                                           kw: 'shoutout so promote streamer' },
+    { op: 'update-title',            label: 'Update stream title',                                                     kw: 'title update change stream name' },
+    { op: 'update-category',         label: 'Update category / game',                                                  kw: 'category game update change directory' },
+    { op: 'create-poll',             label: 'Create poll',              hint: 'Question + choices in editor',          kw: 'poll create question vote choices' },
+    { op: 'create-prediction',       label: 'Create prediction',        hint: 'Title + outcomes in editor',            kw: 'prediction bet channel points outcomes' },
+  ];
+  const list: ActionPickerEntry[] = rows.map((r) => ({
+    key: `twitch:${r.op}`, category: 'Twitch', label: r.label, hint: r.hint, iconName: 'twitch',
+    keywords: `twitch ${r.kw}`, requires: 'twitch' as const,
+    create: () => ({ type: 'twitch', op: r.op as never, text: r.op === 'chat' ? '' : undefined }) as Action,
+  }));
+  list.push({
+    key: 'twitch-streamer', category: 'Twitch', label: 'Streamer tile',
+    hint: 'Live thumbnail + click-to-open — not an action',
+    iconName: 'twitch', keywords: 'twitch streamer tile thumbnail live indicator profile',
+    requires: 'twitch',
+    create: () => ({ type: 'twitch-streamer', login: '' }),
+  });
+  return list;
+})();
+
+const kickEntries: ActionPickerEntry[] = [
+  { key: 'kick:chat', category: 'Kick', label: 'Send chat message', iconName: 'kick',
+    keywords: 'kick chat message send command', requires: 'kick',
+    create: () => ({ type: 'kick', op: 'chat', text: '' }) },
+  { key: 'kick-streamer', category: 'Kick', label: 'Streamer tile', hint: 'Live thumbnail + click-to-open — not an action',
+    iconName: 'kick', keywords: 'kick streamer tile thumbnail live indicator profile',
+    requires: 'kick',
+    create: () => ({ type: 'kick-streamer', slug: '' }) },
+];
+
+const discordEntries = ((): ActionPickerEntry[] => {
+  const rows: Array<{ op: string; label: string; hint?: string; kw: string }> = [
+    { op: 'toggle-mute',               label: 'Toggle mic mute',                                                             kw: 'mic mute toggle voice' },
+    { op: 'mute',                      label: 'Mute mic',                                                                    kw: 'mic mute voice' },
+    { op: 'unmute',                    label: 'Unmute mic',                                                                  kw: 'mic unmute voice' },
+    { op: 'toggle-deafen',             label: 'Toggle deafen',                                                               kw: 'deafen toggle sound off' },
+    { op: 'deafen',                    label: 'Deafen',                                                                      kw: 'deafen sound off' },
+    { op: 'undeafen',                  label: 'Undeafen',                                                                    kw: 'undeafen sound on' },
+    { op: 'toggle-ptt',                label: 'Toggle push-to-talk mode',                                                    kw: 'push to talk ptt voice activity mode' },
+    { op: 'toggle-noise-suppression',  label: 'Toggle noise suppression',   hint: 'Krisp',                                    kw: 'noise suppression krisp toggle filter' },
+    { op: 'toggle-auto-gain',          label: 'Toggle automatic gain control',                                                kw: 'automatic gain control agc toggle mic' },
+    { op: 'toggle-echo-cancellation',  label: 'Toggle echo cancellation',                                                    kw: 'echo cancellation toggle mic filter' },
+    { op: 'join-channel',              label: 'Join voice channel',         hint: 'Pick channel in editor or ask on tap',    kw: 'join voice channel enter server' },
+    { op: 'leave-channel',             label: 'Leave voice channel',                                                         kw: 'leave voice channel disconnect exit' },
+    { op: 'set-user-volume',           label: 'Set member volume',          hint: 'Preset volume + pick member',              kw: 'member user volume set adjust' },
+    { op: 'mute-user',                 label: 'Mute member (for me)',       hint: 'Client-side only',                          kw: 'member user mute silence' },
+    { op: 'unmute-user',               label: 'Unmute member (for me)',     hint: 'Client-side only',                          kw: 'member user unmute' },
+    { op: 'pull-user',                 label: 'Pull member into my channel', hint: 'Requires Move Members perm',              kw: 'member user pull move drag call' },
+    { op: 'move-user',                 label: 'Move member to a channel',   hint: 'Requires Move Members perm',               kw: 'member user move drag call' },
+  ];
+  return rows.map((r) => ({
+    key: `discord:${r.op}`, category: 'Discord', label: r.label, hint: r.hint, iconName: 'discord',
+    keywords: `discord ${r.kw}`, requires: 'discord' as const,
+    create: () => ({ type: 'discord', op: r.op as never }) as Action,
+  }));
+})();
+
+const flow: ActionPickerEntry[] = [
+  { key: 'goto-page', category: 'Flow', label: 'Go to page (folder)', iconName: 'folder', keywords: 'goto page folder navigate switch',
+    create: () => ({ type: 'goto-page', pageId: 0 }) },
+  { key: 'wait',      category: 'Flow', label: 'Wait (delay)',        iconName: 'clock',  keywords: 'wait delay pause sleep',
+    create: () => ({ type: 'wait', ms: 200 }) },
+];
+
+export const ACTION_PICKER_ENTRIES: ActionPickerEntry[] = [
+  ...desktop,
+  ...audio,
+  ...obsEntries,
+  ...streamlabsEntries,
+  ...twitchEntries,
+  ...kickEntries,
+  ...discordEntries,
+  ...flow,
+];
+
+/** Match a filter query against an entry — case-insensitive substring across
+ *  label, category, keywords, and hint. Multi-token queries require every
+ *  token to appear somewhere (order-independent). */
+export function filterEntries(entries: ActionPickerEntry[], query: string): ActionPickerEntry[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return entries;
+  const tokens = q.split(/\s+/);
+  return entries.filter((e) => {
+    const haystack = `${e.label} ${e.category} ${e.keywords} ${e.hint ?? ''}`.toLowerCase();
+    return tokens.every((t) => haystack.includes(t));
+  });
+}
+
+/** Best-guess match: given an existing Action, find the entry that would have
+ *  produced it. Used to highlight the "current pick" in the picker so users
+ *  can see what they're editing. Falls back to null when nothing fits. */
+export function entryFor(action: Action): ActionPickerEntry | null {
+  const byOp = (type: string, op: string): ActionPickerEntry | null =>
+    ACTION_PICKER_ENTRIES.find((e) => e.key === `${type}:${op}`) ?? null;
+  switch (action.type) {
+    case 'hotkey':          return ACTION_PICKER_ENTRIES.find((e) => e.key === 'hotkey') ?? null;
+    case 'text':            return ACTION_PICKER_ENTRIES.find((e) => e.key === 'text') ?? null;
+    case 'url':             return ACTION_PICKER_ENTRIES.find((e) => e.key === 'url') ?? null;
+    case 'launch':          return ACTION_PICKER_ENTRIES.find((e) => e.key === 'launch') ?? null;
+    case 'script':          return ACTION_PICKER_ENTRIES.find((e) => e.key === 'script') ?? null;
+    case 'volume':
+      if (action.mute) return ACTION_PICKER_ENTRIES.find((e) => e.key === 'volume:mute') ?? null;
+      return (action.delta ?? 0) >= 0
+        ? ACTION_PICKER_ENTRIES.find((e) => e.key === 'volume:up') ?? null
+        : ACTION_PICKER_ENTRIES.find((e) => e.key === 'volume:down') ?? null;
+    case 'mic':             return byOp('mic', action.op);
+    case 'obs':             return byOp('obs', action.op);
+    case 'streamlabs':      return byOp('streamlabs', action.op);
+    case 'twitch':          return byOp('twitch', action.op);
+    case 'twitch-streamer': return ACTION_PICKER_ENTRIES.find((e) => e.key === 'twitch-streamer') ?? null;
+    case 'kick':            return ACTION_PICKER_ENTRIES.find((e) => e.key === 'kick:chat') ?? null;
+    case 'kick-streamer':   return ACTION_PICKER_ENTRIES.find((e) => e.key === 'kick-streamer') ?? null;
+    case 'discord':         return byOp('discord', action.op);
+    case 'goto-page':       return ACTION_PICKER_ENTRIES.find((e) => e.key === 'goto-page') ?? null;
+    case 'wait':            return ACTION_PICKER_ENTRIES.find((e) => e.key === 'wait') ?? null;
+    default:                return null;
+  }
+}
