@@ -520,6 +520,16 @@ export async function getDiscordChannelMembers(): Promise<Array<{ id: string; na
   return (await res.json()).members;
 }
 
+export async function getDiscordGuildVoiceMembers(): Promise<Array<{ id: string; name: string; channelName: string }>> {
+  const res = await apiFetch('/api/integrations/discord/guild-voice-members');
+  if (!res.ok) {
+    let msg = `guild voice members failed: ${res.status}`;
+    try { msg = (await res.json()).error ?? msg; } catch { /* keep default */ }
+    throw new Error(msg);
+  }
+  return (await res.json()).members;
+}
+
 /** Prompt-at-tap choice sources: map from a source identifier to the fetcher.
  *  `showAll` disables the "just my server" filter — used by the modal's
  *  "Show all servers" toggle for voice-channel pickers. */
@@ -552,6 +562,10 @@ export async function fetchPromptChoices(
   if (source === 'discord-channel-members') {
     const ms = await getDiscordChannelMembers();
     return ms.map((m) => ({ value: m.id, label: m.name }));
+  }
+  if (source === 'discord-guild-voice-members') {
+    const ms = await getDiscordGuildVoiceMembers();
+    return ms.map((m) => ({ value: m.id, label: `${m.name} · in ${m.channelName}` }));
   }
   throw new Error(`unknown choices source: ${source}`);
 }

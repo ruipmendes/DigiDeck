@@ -968,7 +968,7 @@ function TwitchBody({ action, onChange }: { action: Extract<Action, { type: 'twi
   );
 }
 
-type DiscordNeeds = 'channel' | 'user' | 'user+volume' | null;
+type DiscordNeeds = 'channel' | 'user' | 'user+volume' | 'user-guild' | 'user-guild+channel' | null;
 type DiscordOpDef = { value: DiscordOp; label: string; needs: DiscordNeeds };
 type DiscordOpGroup = { label: string; options: DiscordOpDef[] };
 
@@ -1013,12 +1013,29 @@ const DISCORD_OP_GROUPS: DiscordOpGroup[] = [
       { value: 'unmute-user',     label: 'Unmute member…',      needs: 'user' },
     ],
   },
+  {
+    label: 'Move members',
+    options: [
+      { value: 'pull-user', label: 'Pull member into my channel…', needs: 'user-guild' },
+      { value: 'move-user', label: 'Move member to channel…',      needs: 'user-guild+channel' },
+    ],
+  },
 ];
 
-const DISCORD_PROMPT_META: Record<DiscordPromptField, { label: string; placeholder: string; choicesSource: 'discord-voice-channels' | 'discord-channel-members' }> = {
-  channelId: { label: 'Voice channel',         placeholder: 'channel id',   choicesSource: 'discord-voice-channels' },
-  userId:    { label: 'Member (current channel)', placeholder: 'user id',   choicesSource: 'discord-channel-members' },
-};
+/** Prompt metadata is a function of `(op, field)` because the same field name
+ *  (`userId`) means different things for different ops — channel-mute ops want
+ *  members of the current channel, while pull/move want everyone in voice
+ *  across the guild. */
+function discordPromptMeta(op: DiscordOp, field: DiscordPromptField): { label: string; placeholder: string; choicesSource: 'discord-voice-channels' | 'discord-channel-members' | 'discord-guild-voice-members' } {
+  if (field === 'channelId') {
+    return { label: 'Voice channel', placeholder: 'channel id', choicesSource: 'discord-voice-channels' };
+  }
+  // field === 'userId'
+  if (op === 'pull-user' || op === 'move-user') {
+    return { label: 'Member (anywhere in server)', placeholder: 'user id', choicesSource: 'discord-guild-voice-members' };
+  }
+  return { label: 'Member (current channel)', placeholder: 'user id', choicesSource: 'discord-channel-members' };
+}
 
 function DiscordBody({ action, onChange }: { action: Extract<Action, { type: 'discord' }>; onChange: (a: Action) => void }) {
   const opMeta = DISCORD_OP_GROUPS.flatMap((g) => g.options).find((o) => o.value === action.op);
@@ -1036,7 +1053,7 @@ function DiscordBody({ action, onChange }: { action: Extract<Action, { type: 'di
   // current voice channel is in. "Show all" removes the filter. UI-only state.
   const [showAllGuilds, setShowAllGuilds] = useState(false);
   useEffect(() => {
-    if (needs !== 'channel') return;
+    if (needs !== 'channel' && needs !== 'user-guild+channel') return;
     let alive = true;
     Promise.all([
       api.getDiscordVoiceChannels().catch((err: Error) => { throw err; }),
@@ -1068,7 +1085,7 @@ function DiscordBody({ action, onChange }: { action: Extract<Action, { type: 'di
   const setPromptEnabled = (field: DiscordPromptField, enabled: boolean) => {
     const rest = (action.prompts ?? []).filter((p) => p.field !== field);
     if (enabled) {
-      const meta = DISCORD_PROMPT_META[field];
+      const meta = discordPromptMeta(action.op, field);
       const nextPrompts = [...rest, { field, label: meta.label, placeholder: meta.placeholder, choicesSource: meta.choicesSource }];
       const nextParams: DiscordActionParams = { ...params };
       delete nextParams[field];
@@ -1167,6 +1184,34 @@ function DiscordBody({ action, onChange }: { action: Extract<Action, { type: 'di
         'userId',
         'Discord user id',
         'Right-click a user (with Developer Mode on) → Copy User ID. Or check "Ask on tap" to pick from the current channel at press-time.',
+      )}
+
+      {(needs === 'user-guild' || needs === 'user-guild+channel') && renderPromptableIdField(
+        'userId',
+        'Discord user id',
+        'Or check "Ask on tap" to pick from everyone currently in voice across your Primary server (or the guild you\'re in).',
+      )}
+
+      {needs === 'user-guild+channel' && (
+        <>
+          {renderPromptableIdField(
+            'channelId',
+            'pick a voice channel',
+            'Destination channel — where to move the picked member.',
+            filteredChannels?.map((c) => ({ value: c.id, label: showAllGuilds ? `${c.guildName} · ${c.channelName}` : c.channelName })),
+            voiceChannelsError,
+          )}
+          {!promptFor('channelId') && voiceChannels && voiceChannels.length > 0 && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#9ca3af' }}>
+              <input
+                type="checkbox"
+                checked={showAllGuilds}
+                onChange={(e) => setShowAllGuilds(e.target.checked)}
+              />
+              Show channels from all servers
+            </label>
+          )}
+        </>
       )}
 
       {needs === 'user+volume' && (

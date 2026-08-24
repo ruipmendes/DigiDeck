@@ -302,6 +302,16 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse, c
     }
     return;
   }
+  if (pathname === '/api/integrations/discord/guild-voice-members' && req.method === 'GET') {
+    if (!authorize(req, token())) return unauthorized(res);
+    try {
+      const members = await getDiscord().getGuildVoiceMembers();
+      json(res, 200, { members });
+    } catch (err) {
+      json(res, 400, { error: (err as Error).message });
+    }
+    return;
+  }
   if (pathname === '/api/integrations/discord/guilds' && req.method === 'GET') {
     if (!authorize(req, token())) return unauthorized(res);
     try {

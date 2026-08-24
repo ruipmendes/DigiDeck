@@ -126,7 +126,9 @@ export type DiscordOp =
   | 'leave-channel'
   | 'set-user-volume'
   | 'mute-user'
-  | 'unmute-user';
+  | 'unmute-user'
+  | 'pull-user'
+  | 'move-user';
 
 export type DiscordActionParams = {
   /** Discord channel id (18–19 digit snowflake) — target for `join-channel`. */
@@ -139,13 +141,20 @@ export type DiscordActionParams = {
 
 /** Prompt-at-press descriptor for Discord actions. Same shape as Twitch's. */
 export type DiscordPromptField = 'channelId' | 'userId';
+export type DiscordChoicesSource =
+  | 'discord-voice-channels'
+  /** Members of the voice channel the user is currently in. */
+  | 'discord-channel-members'
+  /** Members in any voice channel of the user's primary/current guild — used
+   *  by pull-user / move-user to pick someone in another VC of the same server. */
+  | 'discord-guild-voice-members';
 export type DiscordPrompt = {
   field: DiscordPromptField;
   label: string;
   placeholder?: string;
   /** When set, the phone fetches a dropdown of choices at press-time from this
    *  source rather than rendering a free-text input. */
-  choicesSource?: 'discord-voice-channels' | 'discord-channel-members';
+  choicesSource?: DiscordChoicesSource;
 };
 
 // Discord IPC framing — 8-byte header (opcode LE, length LE) + UTF-8 JSON payload.
@@ -160,7 +169,8 @@ const OP_PONG = 4;
 const REDIRECT_URI = 'http://127.0.0.1';
 const TOKEN_ENDPOINT = 'https://discord.com/api/oauth2/token';
 const PIPE_INDEXES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-const RPC_SCOPES = ['rpc', 'guilds'];
+const RPC_SCOPES = ['rpc', 'guilds', 'guilds.members.write'];
+const DISCORD_API_BASE = 'https://discord.com/api/v10';
 
 type RpcRequest = { cmd: string; args?: unknown; evt?: string };
 type RpcResponse = { cmd: string; args?: unknown; data?: unknown; evt?: string; nonce?: string };
@@ -374,7 +384,9 @@ class DiscordClient implements IntegrationLifecycle {
       case 'toggle-echo-cancellation': return this.setVoice({ echo_cancellation: !current?.echoCancellation });
       case 'join-channel': {
         const cid = params.channelId?.trim();
-        if (!cid) throw new Error('Discord: channelId required');
+        if (!cid) {
+          throw new Error(`Discord: channelId required (received params: ${JSON.stringify(params)})`);
+        }
         // `force: true` — switch even if we're currently in another voice channel.
         // Without it Discord returns "user is already in a voice channel".
         await this.rpcRequest({ cmd: 'SELECT_VOICE_CHANNEL', args: { channel_id: cid, force: true } });
@@ -404,7 +416,63 @@ class DiscordClient implements IntegrationLifecycle {
         await this.rpcRequest({ cmd: 'SET_USER_VOICE_SETTINGS', args: { user_id: userId, mute: false } });
         return;
       }
+      case 'pull-user': {
+        const userId = params.userId?.trim();
+        if (!userId) throw new Error(`Discord: userId required (received params: ${JSON.stringify(params)})`);
+        if (!this.currentVoiceGuildId || !this.currentVoiceChannelId) {
+          throw new Error('Discord: pull-user needs you to be in a voice channel — that\'s where the target gets pulled to');
+        }
+        await this.discordRestPatch(
+          `/guilds/${this.currentVoiceGuildId}/members/${userId}`,
+          { channel_id: this.currentVoiceChannelId },
+        );
+        return;
+      }
+      case 'move-user': {
+        const userId = params.userId?.trim();
+        const channelId = params.channelId?.trim();
+        if (!userId) throw new Error(`Discord: userId required (received params: ${JSON.stringify(params)})`);
+        if (!channelId) throw new Error(`Discord: channelId required for move-user (received params: ${JSON.stringify(params)})`);
+        // The REST endpoint needs the destination channel's guild. We cached
+        // channel→guild for every channel the picker has ever surfaced; fall
+        // back to the primary/current guild if the cache is cold (raw-ID paste).
+        const guildId = this.channelToGuild.get(channelId) || this.cfg.primaryGuildId || this.currentVoiceGuildId;
+        if (!guildId) {
+          throw new Error('Discord: could not determine target guild — set a Primary server on the Discord panel or pick the channel from the picker to populate the cache');
+        }
+        await this.discordRestPatch(
+          `/guilds/${guildId}/members/${userId}`,
+          { channel_id: channelId },
+        );
+        return;
+      }
       default: throw new Error(`unknown Discord op: ${op as string}`);
+    }
+  }
+
+  /** REST-side PATCH helper — first non-IPC call in the Discord integration.
+   *  Uses the OAuth bearer token; 401/403 surface with a scope/permission hint
+   *  because those are the most common causes. */
+  private async discordRestPatch(path: string, body: unknown): Promise<void> {
+    if (!this.cfg.accessToken) throw new Error('Discord not authorized');
+    const res = await fetch(`${DISCORD_API_BASE}${path}`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${this.cfg.accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      let detail = '';
+      try {
+        const j = await res.json() as { message?: string };
+        if (j.message) detail = ` ${j.message}`;
+      } catch { detail = ` ${await res.text()}`; }
+      if (res.status === 401 || res.status === 403) {
+        throw new Error(`Discord: insufficient permission (${res.status}${detail}) — reconnect to grant the "guilds.members.write" scope, and confirm you have the Move Members permission in that server`);
+      }
+      throw new Error(`Discord PATCH ${path}: ${res.status}${detail}`);
     }
   }
 
@@ -473,6 +541,40 @@ class DiscordClient implements IntegrationLifecycle {
       }
     }
     this.emitChange();
+  }
+
+  /** Users currently voice-connected anywhere in the primary-or-current guild,
+   *  minus ourselves. Each entry names the channel they're in so pickers can
+   *  disambiguate "Bob (in Lobby)" from "Alice (in Gaming)". Used by pull-user
+   *  and move-user to select someone in another VC of the same server. */
+  async getGuildVoiceMembers(): Promise<Array<{ id: string; name: string; channelName: string }>> {
+    if (this.internal !== 'connected') await this.start();
+    if (this.internal !== 'connected') throw new Error(`Discord not connected (${this.internal})`);
+    const guildId = this.cfg.primaryGuildId || this.currentVoiceGuildId;
+    if (!guildId) {
+      throw new Error('Discord: set a Primary server or join a voice channel first — needed to know which guild to search');
+    }
+    const chRes = await this.rpcRequest({ cmd: 'GET_CHANNELS', args: { guild_id: guildId } });
+    const channels = (chRes.data as { channels?: Array<{ id: string; name: string; type: number }> })?.channels ?? [];
+    const voiceChannels = channels.filter((c) => c.type === 2 || c.type === 13);
+    const out: Array<{ id: string; name: string; channelName: string }> = [];
+    const selfId = this.cachedSelfUserId;
+    for (const c of voiceChannels) {
+      try {
+        const cRes = await this.rpcRequest({ cmd: 'GET_CHANNEL', args: { channel_id: c.id } });
+        const states = (cRes.data as { voice_states?: Array<{ user?: { id?: string; username?: string }; nick?: string | null }> })?.voice_states ?? [];
+        for (const s of states) {
+          const uid = s.user?.id;
+          if (!uid || uid === selfId) continue;
+          out.push({
+            id: uid,
+            name: s.nick || s.user?.username || uid,
+            channelName: c.name,
+          });
+        }
+      } catch { /* skip channels we couldn't read */ }
+    }
+    return out;
   }
 
   /** Users currently in the voice channel this account is in. Empty when we're

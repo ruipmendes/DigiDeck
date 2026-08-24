@@ -384,7 +384,7 @@ One-time setup:
 5. In the config UI → **Discord** card → expand → paste Client ID + Secret → *Save credentials*.
 6. Click **Connect to Discord**. A dialog appears **inside the Discord client** asking you to authorize the app — approve it. Digi Deck's panel flips to "Connected."
 
-Action types: **Discord** → Mute (toggle/mute/unmute), Deafen (toggle/deafen/undeafen), Toggle push-to-talk mode, Toggle noise suppression (Krisp), Toggle automatic gain control, Toggle echo cancellation, Join voice channel, Leave voice channel, Set member volume, Mute member, Unmute member. Toggle variants read the current state and flip; force variants are for scripted sequences where you always want a specific final state.
+Action types: **Discord** → Mute (toggle/mute/unmute), Deafen (toggle/deafen/undeafen), Toggle push-to-talk mode, Toggle noise suppression (Krisp), Toggle automatic gain control, Toggle echo cancellation, Join voice channel, Leave voice channel, Set member volume, Mute member, Unmute member, **Pull member into my channel**, **Move member to channel**. Toggle variants read the current state and flip; force variants are for scripted sequences where you always want a specific final state. Pull and Move require the Move Members permission in the target Discord server.
 
 For **Join voice channel** and the per-member ops, the config UI has an *Ask on tap* checkbox on the target field: check it, and instead of pasting an ID at config time, the phone pops a picker at press time.
 - For **Join channel**, the picker lists every voice channel the authorized user can see across their guilds.

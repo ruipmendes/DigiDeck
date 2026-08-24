@@ -58,7 +58,9 @@ export type DiscordOp =
   | 'leave-channel'
   | 'set-user-volume'
   | 'mute-user'
-  | 'unmute-user';
+  | 'unmute-user'
+  | 'pull-user'
+  | 'move-user';
 
 export type DiscordActionParams = {
   channelId?: string;
@@ -67,11 +69,15 @@ export type DiscordActionParams = {
 };
 
 export type DiscordPromptField = 'channelId' | 'userId';
+export type DiscordChoicesSource =
+  | 'discord-voice-channels'
+  | 'discord-channel-members'
+  | 'discord-guild-voice-members';
 export type DiscordPrompt = {
   field: DiscordPromptField;
   label: string;
   placeholder?: string;
-  choicesSource?: 'discord-voice-channels' | 'discord-channel-members';
+  choicesSource?: DiscordChoicesSource;
 };
 
 export type MicOp = 'toggle-mute' | 'mute' | 'unmute';
