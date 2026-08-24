@@ -10,6 +10,7 @@
  * picker fills that role).
  */
 import type { Tile } from '../lib/types';
+import { ACTION_PICKER_ENTRIES } from './actionPickerEntries';
 
 export type TilePreset = {
   key: string;
@@ -104,11 +105,54 @@ export const TILE_PRESETS: TilePreset[] = [
     create: (id) => ({ kind: 'button', id, label: 'Folder', icon: 'folder', action: { type: 'goto-page', pageId: 0 } }) },
 ];
 
+/** Synthesise a whole-tile preset from every ActionPickerEntry so the tile
+ *  picker's search space matches what's available in per-step editing. The
+ *  curated presets above still lead the empty-state view; these fill the
+ *  "search returns nothing" gap for ops we didn't hand-pick. */
+const SYNTHESISED_PRESETS: TilePreset[] = (() => {
+  // Skip anything already covered by a curated preset — those get preference
+  // for their nicer labels/icons and default configs.
+  const curatedActionKeys = new Set<string>();
+  for (const p of TILE_PRESETS) {
+    // Curated preset keys map to an ActionPickerEntry key when applicable
+    // (e.g. curated "obs-record" ↔ picker key "obs:toggle-record"). Rather
+    // than a lookup table, we synthesise then dedupe by label at the picker.
+    curatedActionKeys.add(p.key);
+  }
+  return ACTION_PICKER_ENTRIES
+    .filter((e) => !curatedActionKeys.has(`action-${e.key}`))
+    .map<TilePreset>((e) => ({
+      key: `action-${e.key}`,
+      category: e.category,
+      label: e.label,
+      hint: e.hint,
+      iconName: e.iconName,
+      keywords: e.keywords,
+      create: (id) => {
+        const built = e.create();
+        // twitch-streamer and kick-streamer aren't action-only — they own a
+        // tile-shape convention (login/slug field). Fall through as buttons.
+        return {
+          kind: 'button',
+          id,
+          label: e.label.replace(/…$/, '').replace(/^(OBS|Discord|Twitch|Kick|Streamlabs) · /, ''),
+          icon: e.iconName,
+          action: built,
+        };
+      },
+    }));
+})();
+
 export function filterPresets(query: string): TilePreset[] {
   const q = query.trim().toLowerCase();
-  if (!q) return TILE_PRESETS;
+  // Empty query = curated only, so the initial view stays focused. Searching
+  // widens to include every action the ActionPicker knows about — otherwise
+  // "scene" hitting the tile picker returns nothing while the same query in
+  // the per-step ActionPicker finds "OBS · Switch to scene".
+  const pool = q ? [...TILE_PRESETS, ...SYNTHESISED_PRESETS] : TILE_PRESETS;
+  if (!q) return pool;
   const tokens = q.split(/\s+/);
-  return TILE_PRESETS.filter((p) => {
+  return pool.filter((p) => {
     const haystack = `${p.label} ${p.category} ${p.keywords} ${p.hint ?? ''}`.toLowerCase();
     return tokens.every((t) => haystack.includes(t));
   });
