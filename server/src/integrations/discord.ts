@@ -173,7 +173,8 @@ export type DiscordOp =
   | 'mute-user'
   | 'unmute-user'
   | 'pull-user'
-  | 'move-user';
+  | 'move-user'
+  | 'kick-user';
 
 export type DiscordActionParams = {
   /** Discord channel id (18–19 digit snowflake) — target for `join-channel`. */
@@ -495,6 +496,19 @@ class DiscordClient implements IntegrationLifecycle {
           throw new Error('Discord: could not determine target guild — set a Primary server on the Discord panel or pick the channel from the picker to populate the cache');
         }
         await this.botMoveMember(guildId, userId, channelId);
+        return;
+      }
+      case 'kick-user': {
+        // "Kick from voice" = PATCH member.channel_id = null. Same bot flow
+        // as move-user; user drops out of whatever voice channel they're in.
+        // Not a guild kick — they stay a member, they just get disconnected.
+        const userId = params.userId?.trim();
+        if (!userId) throw new Error(`Discord: userId required (received params: ${JSON.stringify(params)})`);
+        const guildId = this.cfg.primaryGuildId || this.currentVoiceGuildId;
+        if (!guildId) {
+          throw new Error('Discord: kick-user needs a guild context — set a Primary server on the Discord panel or join a voice channel first.');
+        }
+        await this.botMoveMember(guildId, userId, null);
         return;
       }
       default: throw new Error(`unknown Discord op: ${op as string}`);

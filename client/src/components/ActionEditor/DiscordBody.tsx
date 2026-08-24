@@ -53,6 +53,7 @@ const DISCORD_OP_GROUPS: DiscordOpGroup[] = [
     options: [
       { value: 'pull-user', label: 'Pull member into my channel…', needs: 'user-guild' },
       { value: 'move-user', label: 'Move member to channel…',      needs: 'user-guild+channel' },
+      { value: 'kick-user', label: 'Kick member from voice…',      needs: 'user-guild' },
     ],
   },
 ];

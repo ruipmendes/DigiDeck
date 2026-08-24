@@ -173,6 +173,7 @@ const discordEntries = ((): ActionPickerEntry[] => {
     { op: 'unmute-user',               label: 'Unmute member (for me)',     hint: 'Client-side only',                          kw: 'member user unmute' },
     { op: 'pull-user',                 label: 'Pull member into my channel', hint: 'Requires Move Members perm',              kw: 'member user pull move drag call' },
     { op: 'move-user',                 label: 'Move member to a channel',   hint: 'Requires Move Members perm',               kw: 'member user move drag call' },
+    { op: 'kick-user',                 label: 'Kick member from voice',     hint: 'Disconnect them; requires Move Members',   kw: 'member user kick disconnect boot remove voice' },
   ];
   return rows.map((r) => ({
     key: `discord:${r.op}`, category: 'Discord', label: r.label, hint: r.hint, iconName: 'discord',

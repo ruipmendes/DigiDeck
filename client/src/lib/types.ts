@@ -64,7 +64,8 @@ export type DiscordOp =
   | 'mute-user'
   | 'unmute-user'
   | 'pull-user'
-  | 'move-user';
+  | 'move-user'
+  | 'kick-user';
 
 export type DiscordActionParams = {
   channelId?: string;

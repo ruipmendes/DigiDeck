@@ -384,9 +384,9 @@ One-time setup:
 5. In the config UI → **Discord** card → expand → paste Client ID + Secret → *Save credentials*.
 6. Click **Connect to Discord**. A dialog appears **inside the Discord client** asking you to authorize the app — approve it. The authorize dialog lists two scopes: `rpc` (voice control + live state) and `guilds` (list your servers for the channel picker). Approve to proceed. Digi Deck's panel flips to "Connected."
 
-### Optional: bot token for moving members between channels
+### Optional: bot token for moving / kicking members
 
-**Pull member** (drag someone into your VC) and **Move member** (drop someone into any channel) can't run on user OAuth — Discord makes that a bot-only capability. Setup is one-time and lives on the same Developer Portal app:
+**Pull member** (drag someone into your VC), **Move member** (drop someone into any channel), and **Kick member** (disconnect them from voice) can't run on user OAuth — Discord makes those bot-only capabilities. Setup is one-time and lives on the same Developer Portal app:
 
 1. Same app in the Developer Portal → **Bot** tab → *Reset Token* (or *Add Bot* first if the tab is empty). Copy the token.
 2. Back to **OAuth2** → **URL Generator** → tick the `bot` scope, then tick the **Move Members** permission. Copy the generated URL, open it, and invite the bot to whichever server you'll be moving members in.
@@ -394,7 +394,7 @@ One-time setup:
 
 Pull / Move buttons now work in that server. Discord's role hierarchy still applies — the bot can only move members whose highest role is below the bot's highest role, so put the bot's role near the top. The bot doesn't need to be online / streaming a presence; it just needs to be a guild member.
 
-Action types: **Discord** → Mute (toggle/mute/unmute), Deafen (toggle/deafen/undeafen), Toggle push-to-talk mode, Toggle noise suppression (Krisp), Toggle automatic gain control, Toggle echo cancellation, Join voice channel, Leave voice channel, Set member volume, Mute member, Unmute member, **Pull member into my channel**, **Move member to channel**. Toggle variants read the current state and flip; force variants are for scripted sequences where you always want a specific final state. Pull and Move require the Move Members permission in the target Discord server.
+Action types: **Discord** → Mute (toggle/mute/unmute), Deafen (toggle/deafen/undeafen), Toggle push-to-talk mode, Toggle noise suppression (Krisp), Toggle automatic gain control, Toggle echo cancellation, Join voice channel, Leave voice channel, Set member volume, Mute member, Unmute member, **Pull member into my channel**, **Move member to channel**, **Kick member from voice**. Toggle variants read the current state and flip; force variants are for scripted sequences where you always want a specific final state. Pull / Move / Kick all require the Move Members permission — see the bot-token section below.
 
 For **Join voice channel** and the per-member ops, the config UI has an *Ask on tap* checkbox on the target field: check it, and instead of pasting an ID at config time, the phone pops a picker at press time.
 - For **Join channel**, the picker lists every voice channel the authorized user can see across their guilds.
