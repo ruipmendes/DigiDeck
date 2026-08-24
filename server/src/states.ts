@@ -4,7 +4,7 @@ import type { ObsStatus } from './integrations/obs.js';
 import type { StreamlabsStatus } from './integrations/streamlabs.js';
 import type { TwitchStatus } from './integrations/twitch.js';
 import type { KickStatus } from './integrations/kick.js';
-import type { DiscordStatus } from './integrations/discord.js';
+import type { DiscordStatus, DiscordChannelMember } from './integrations/discord.js';
 import { getStreamers } from './integrations/twitch-streamers.js';
 import { getKickStreamers } from './integrations/kick-streamers.js';
 import { getMic } from './actions/mic.js';
@@ -27,6 +27,11 @@ export type ButtonState = {
   sliderValue?: number;
   /** Current mute state for slider tiles. */
   sliderMuted?: boolean;
+  /** Live roster for a discord-voice-panel tile. */
+  voicePanelMembers?: DiscordChannelMember[];
+  /** True when a voice-panel tile is unavailable because Discord isn't
+   *  connected or the user isn't in a voice channel. */
+  voicePanelDisconnected?: boolean;
 };
 
 export function computeButtonStates(
@@ -49,6 +54,12 @@ export function computeButtonStates(
 
 function computeOne(t: Tile, obs: ObsStatus, twitch: TwitchStatus, streamlabs: StreamlabsStatus, kick: KickStatus, discord: DiscordStatus): ButtonState | null {
   if (t.kind === 'blank') return null;
+  if (t.kind === 'discord-voice-panel') {
+    if (discord.state !== 'connected' || !discord.currentVoiceChannelId) {
+      return { id: t.id, voicePanelDisconnected: true };
+    }
+    return { id: t.id, voicePanelMembers: discord.channelMembers ?? [] };
+  }
   if (t.kind === 'slider') {
     const provider = t.provider ?? 'obs';
     if (provider === 'discord') {

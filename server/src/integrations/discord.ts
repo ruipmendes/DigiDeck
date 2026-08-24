@@ -113,6 +113,28 @@ export type DiscordStatus = {
    *  for the channel→guild mapping). Consumed by button-state computation
    *  so `join-channel` tiles can render the target server's icon. */
   channelIcons?: Record<string, string>;
+  /** Live roster of the voice channel we're currently in. Excludes ourselves.
+   *  Populated on channel-join via GET_CHANNEL, kept fresh by VOICE_STATE_*
+   *  event subscriptions. Consumed by discord-voice-panel tiles. */
+  channelMembers?: Array<DiscordChannelMember>;
+};
+
+export type DiscordChannelMember = {
+  id: string;
+  name: string;
+  /** Server-side mute (applied by a moderator, affects everyone). */
+  serverMute: boolean;
+  /** User's own mute state (self-mute). */
+  selfMute: boolean;
+  /** Server-side deafen. */
+  serverDeaf: boolean;
+  /** User's own deafen state. */
+  selfDeaf: boolean;
+  /** Our client-side per-user volume (0-200). Tracked locally — Discord doesn't
+   *  expose reads for this. Starts at 100 (Discord default) until we adjust. */
+  ourVolume: number;
+  /** Our client-side per-user mute for this user. Tracked the same way. */
+  ourMute: boolean;
 };
 
 export type DiscordOp =
@@ -214,6 +236,7 @@ class DiscordClient implements IntegrationLifecycle {
       currentVoiceChannelName: this.currentVoiceChannelName,
       currentVoiceGuildId: this.currentVoiceGuildId,
       channelIcons: this.buildChannelIconsMap(),
+      channelMembers: this.currentVoiceChannelId ? Array.from(this.channelMembers.values()) : undefined,
     };
   }
 
@@ -304,6 +327,8 @@ class DiscordClient implements IntegrationLifecycle {
     this.cachedSelfUserId = null;
     this.guildIcons.clear();
     this.channelToGuild.clear();
+    this.channelMembers.clear();
+    this.subscribedChannelId = null;
     this.internal = 'idle';
     this.err = undefined;
     await this.persistCfg();
@@ -355,6 +380,8 @@ class DiscordClient implements IntegrationLifecycle {
   async stop(): Promise<void> {
     if (this.retryTimer) { clearTimeout(this.retryTimer); this.retryTimer = null; }
     this.closePipe();
+    this.channelMembers.clear();
+    this.subscribedChannelId = null;
     this.internal = 'idle';
     this.emitChange();
   }
@@ -401,19 +428,19 @@ class DiscordClient implements IntegrationLifecycle {
         const userId = params.userId?.trim();
         if (!userId) throw new Error('Discord: userId required');
         const volume = Math.max(0, Math.min(200, Math.round(params.volume ?? 100)));
-        await this.rpcRequest({ cmd: 'SET_USER_VOICE_SETTINGS', args: { user_id: userId, volume } });
+        await this.setChannelMemberVolume(userId, volume);
         return;
       }
       case 'mute-user': {
         const userId = params.userId?.trim();
         if (!userId) throw new Error('Discord: userId required');
-        await this.rpcRequest({ cmd: 'SET_USER_VOICE_SETTINGS', args: { user_id: userId, mute: true } });
+        await this.setChannelMemberMute(userId, true);
         return;
       }
       case 'unmute-user': {
         const userId = params.userId?.trim();
         if (!userId) throw new Error('Discord: userId required');
-        await this.rpcRequest({ cmd: 'SET_USER_VOICE_SETTINGS', args: { user_id: userId, mute: false } });
+        await this.setChannelMemberMute(userId, false);
         return;
       }
       case 'pull-user': {
@@ -447,6 +474,28 @@ class DiscordClient implements IntegrationLifecycle {
         return;
       }
       default: throw new Error(`unknown Discord op: ${op as string}`);
+    }
+  }
+
+  /** Set the per-user volume for `userId` (0-200) and cache it locally so the
+   *  voice-panel tile reflects the change without needing to poll. */
+  async setChannelMemberVolume(userId: string, volume: number): Promise<void> {
+    const clamped = Math.max(0, Math.min(200, Math.round(volume)));
+    await this.rpcRequest({ cmd: 'SET_USER_VOICE_SETTINGS', args: { user_id: userId, volume: clamped } });
+    const m = this.channelMembers.get(userId);
+    if (m) {
+      this.channelMembers.set(userId, { ...m, ourVolume: clamped });
+      this.emitChange();
+    }
+  }
+
+  /** Set our client-side per-user mute for `userId` and cache locally. */
+  async setChannelMemberMute(userId: string, mute: boolean): Promise<void> {
+    await this.rpcRequest({ cmd: 'SET_USER_VOICE_SETTINGS', args: { user_id: userId, mute } });
+    const m = this.channelMembers.get(userId);
+    if (m) {
+      this.channelMembers.set(userId, { ...m, ourMute: mute });
+      this.emitChange();
     }
   }
 
@@ -635,6 +684,13 @@ class DiscordClient implements IntegrationLifecycle {
   private guildIcons = new Map<string, string>();
   /** channelId → guildId. Populated during getVoiceChannels() (which walks all guilds). */
   private channelToGuild = new Map<string, string>();
+  /** Live roster of the current voice channel, keyed by user id. Excludes self.
+   *  Populated on channel-join, kept fresh by VOICE_STATE_* events + our own
+   *  writes to per-user voice settings. */
+  private channelMembers = new Map<string, DiscordChannelMember>();
+  /** Which channel id our current VOICE_STATE_* subscription is scoped to.
+   *  Null when we haven't subscribed. Used to unsubscribe on channel change. */
+  private subscribedChannelId: string | null = null;
   private retryTimer: NodeJS.Timeout | null = null;
   private readyResolver: (() => void) | null = null;
 
@@ -773,6 +829,18 @@ class DiscordClient implements IntegrationLifecycle {
       this.updateVoiceSettings(msg.data);
       return;
     }
+    if (msg.cmd === 'DISPATCH' && msg.evt === 'VOICE_STATE_CREATE') {
+      this.applyVoiceStateEvent('create', msg.data);
+      return;
+    }
+    if (msg.cmd === 'DISPATCH' && msg.evt === 'VOICE_STATE_UPDATE') {
+      this.applyVoiceStateEvent('update', msg.data);
+      return;
+    }
+    if (msg.cmd === 'DISPATCH' && msg.evt === 'VOICE_STATE_DELETE') {
+      this.applyVoiceStateEvent('delete', msg.data);
+      return;
+    }
     if (msg.cmd === 'DISPATCH' && msg.evt === 'VOICE_CHANNEL_SELECT') {
       // Event payload: { channel_id, guild_id }. Look up the name via GET_CHANNEL
       // for a friendly label — best effort, don't fail the event handling.
@@ -849,10 +917,111 @@ class DiscordClient implements IntegrationLifecycle {
       this.currentVoiceChannelName = null;
       this.currentVoiceGuildId = null;
     } else if (typeof data === 'object') {
-      const d = data as { id?: string | null; name?: string | null; guild_id?: string | null };
+      const d = data as { id?: string | null; name?: string | null; guild_id?: string | null; voice_states?: unknown };
       this.currentVoiceChannelId = typeof d.id === 'string' ? d.id : null;
       this.currentVoiceChannelName = typeof d.name === 'string' ? d.name : null;
       if (typeof d.guild_id === 'string') this.currentVoiceGuildId = d.guild_id;
+      // GET_CHANNEL responses embed the current voice_states — seed the roster
+      // when we get one so voice-panel tiles have data immediately.
+      if (Array.isArray(d.voice_states)) {
+        this.seedChannelMembers(d.voice_states);
+      }
+    }
+    void this.syncVoiceStateSubscription();
+    this.emitChange();
+  }
+
+  /** Bring the VOICE_STATE_* subscription in line with `currentVoiceChannelId`.
+   *  Idempotent — safe to call from any hydration point. */
+  private async syncVoiceStateSubscription(): Promise<void> {
+    if (this.internal !== 'connected' && this.internal !== 'connecting') return;
+    const cid = this.currentVoiceChannelId;
+    if (this.subscribedChannelId === cid) return;
+    // Unsubscribe the previous channel.
+    if (this.subscribedChannelId) {
+      const prev = this.subscribedChannelId;
+      this.subscribedChannelId = null;
+      // Silent failure — Discord may have already cleaned up the sub if the pipe blinked.
+      for (const evt of ['VOICE_STATE_CREATE', 'VOICE_STATE_UPDATE', 'VOICE_STATE_DELETE']) {
+        void this.rpcRequest({ cmd: 'UNSUBSCRIBE', evt, args: { channel_id: prev } }).catch(() => {});
+      }
+    }
+    // Clear the local roster whenever the channel changes; it'll be reseeded
+    // by the fresh GET_CHANNEL below (or stay empty if we left voice entirely).
+    this.channelMembers.clear();
+    if (!cid) return;
+    this.subscribedChannelId = cid;
+    for (const evt of ['VOICE_STATE_CREATE', 'VOICE_STATE_UPDATE', 'VOICE_STATE_DELETE']) {
+      void this.rpcRequest({ cmd: 'SUBSCRIBE', evt, args: { channel_id: cid } }).catch(() => {});
+    }
+    // Get fresh voice_states — VOICE_STATE_CREATE only fires for future joins.
+    void this.rpcRequest({ cmd: 'GET_CHANNEL', args: { channel_id: cid } })
+      .then((r) => {
+        const d = r.data as { voice_states?: unknown };
+        if (Array.isArray(d?.voice_states)) {
+          this.seedChannelMembers(d.voice_states);
+          this.emitChange();
+        }
+      })
+      .catch(() => { /* stale is fine — events will fill it in */ });
+  }
+
+  private seedChannelMembers(voiceStates: unknown[]): void {
+    this.channelMembers.clear();
+    for (const s of voiceStates) {
+      if (!s || typeof s !== 'object') continue;
+      const state = s as {
+        user?: { id?: string; username?: string };
+        nick?: string | null;
+        mute?: boolean;
+        deaf?: boolean;
+        self_mute?: boolean;
+        self_deaf?: boolean;
+      };
+      const uid = state.user?.id;
+      if (!uid || uid === this.cachedSelfUserId) continue;
+      this.channelMembers.set(uid, {
+        id: uid,
+        name: state.nick || state.user?.username || uid,
+        serverMute: !!state.mute,
+        selfMute: !!state.self_mute,
+        serverDeaf: !!state.deaf,
+        selfDeaf: !!state.self_deaf,
+        ourVolume: 100,
+        ourMute: false,
+      });
+    }
+  }
+
+  /** Apply a single VOICE_STATE_CREATE / UPDATE / DELETE event to the roster. */
+  private applyVoiceStateEvent(evt: 'create' | 'update' | 'delete', data: unknown): void {
+    if (!data || typeof data !== 'object') return;
+    const d = data as {
+      user?: { id?: string; username?: string };
+      nick?: string | null;
+      mute?: boolean;
+      deaf?: boolean;
+      self_mute?: boolean;
+      self_deaf?: boolean;
+    };
+    const uid = d.user?.id;
+    if (!uid || uid === this.cachedSelfUserId) return;
+    if (evt === 'delete') {
+      this.channelMembers.delete(uid);
+    } else {
+      const prev = this.channelMembers.get(uid);
+      this.channelMembers.set(uid, {
+        id: uid,
+        name: d.nick || d.user?.username || prev?.name || uid,
+        serverMute: !!d.mute,
+        selfMute: !!d.self_mute,
+        serverDeaf: !!d.deaf,
+        selfDeaf: !!d.self_deaf,
+        // Our per-user volume/mute persist across voice-state events — they're
+        // a client-side setting Discord doesn't echo back.
+        ourVolume: prev?.ourVolume ?? 100,
+        ourMute: prev?.ourMute ?? false,
+      });
     }
     this.emitChange();
   }

@@ -187,6 +187,7 @@ function NonBlankConfigRow({ button, pages, currentPageId, layout, integrationSt
               <option value="button">Button</option>
               <option value="slider">Slider</option>
               <option value="blank">Blank (spacer)</option>
+              <option value="discord-voice-panel">Discord voice panel</option>
             </select>
             <span style={{ ...metaLabel, marginLeft: 'auto' }}>id: {button.id}</span>
           </div>
@@ -197,6 +198,12 @@ function NonBlankConfigRow({ button, pages, currentPageId, layout, integrationSt
               integrationStatus={integrationStatus}
               onChange={(patch) => onChange(patch)}
             />
+          ) : button.kind === 'discord-voice-panel' ? (
+            <span style={{ fontSize: 12, color: '#9ca3af' }}>
+              Renders a live list of the members in whichever Discord voice channel
+              you're currently in. Each row has a volume slider (0–200 %) and a
+              mute-for-me toggle. No config beyond label / cosmetics.
+            </span>
           ) : (
             <>
               <ActionEditor
@@ -365,6 +372,7 @@ function SummaryChip({ text, onClick }: { text: string; onClick: () => void }) {
 
 function summarizeTile(tile: Tile): string {
   if (tile.kind === 'blank') return 'Spacer · empty grid slot';
+  if (tile.kind === 'discord-voice-panel') return 'Discord voice panel · live channel roster';
   if (tile.kind === 'slider') {
     const provider =
       tile.provider === 'streamlabs' ? 'Streamlabs' :

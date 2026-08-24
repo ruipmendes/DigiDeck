@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Volume2, VolumeX, ArrowLeft, Home } from 'lucide-react';
-import type { ButtonState, Layout, PressPrompt, Tile } from '../ws';
+import { Volume2, VolumeX, ArrowLeft, Home, Headphones, MicOff } from 'lucide-react';
+import type { ButtonState, Layout, PressPrompt, Tile, VoicePanelMember } from '../ws';
 import { getIcon } from '../lib/icons';
 import { imageUrl, fetchPromptChoices } from '../lib/api';
 
@@ -24,6 +24,8 @@ type Props = {
   onPress: (id: number, longPress?: boolean, promptValues?: Record<string, string>) => void;
   onSliderChange: (id: number, value: number) => void;
   onSliderMute: (id: number) => void;
+  onVoicePanelVolume: (id: number, userId: string, value: number) => void;
+  onVoicePanelMute: (id: number, userId: string) => void;
 };
 
 const LONG_PRESS_MS = 500;
@@ -31,7 +33,7 @@ const LONG_PRESS_MS = 500;
 const PAGE_KEY = 'digi-deck:active_page';
 const BACK_TILE_ID = -1; // synthetic id; never collides with real tile ids (which are >= 0)
 
-export function ButtonGrid({ layout, lastAck, lastNack, buttonStates, onPress, onSliderChange, onSliderMute }: Props) {
+export function ButtonGrid({ layout, lastAck, lastNack, buttonStates, onPress, onSliderChange, onSliderMute, onVoicePanelVolume, onVoicePanelMute }: Props) {
   // Flash state carries the tile id AND the kind of flash so failed actions
   // can briefly tint red while successful ones tint blue/accent.
   const [flash, setFlash] = useState<{ id: number; kind: 'ack' | 'nack' } | null>(null);
@@ -220,6 +222,18 @@ export function ButtonGrid({ layout, lastAck, lastNack, buttonStates, onPress, o
                 state={state}
                 onChange={(v) => onSliderChange(t.id, v)}
                 onMute={() => onSliderMute(t.id)}
+              />
+            );
+          }
+          if (t.kind === 'discord-voice-panel') {
+            return (
+              <VoicePanelTileView
+                key={t.id}
+                tile={t}
+                state={state}
+                cols={activePage.cols ?? 2}
+                onMemberVolume={(uid, v) => onVoicePanelVolume(t.id, uid, v)}
+                onMemberMute={(uid) => onVoicePanelMute(t.id, uid)}
               />
             );
           }
@@ -448,6 +462,183 @@ function ActionFailureToast({ message, onDismiss }: { message: string; onDismiss
         <span style={{ opacity: 0.6, fontSize: 11, marginLeft: 'auto' }}>tap to dismiss</span>
       </div>
       <span style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{message}</span>
+    </div>
+  );
+}
+
+function VoicePanelTileView({ tile, state, cols, onMemberVolume, onMemberMute }: {
+  tile: Extract<Tile, { kind: 'discord-voice-panel' }>;
+  state: ButtonState | undefined;
+  cols: number;
+  onMemberVolume: (userId: string, value: number) => void;
+  onMemberMute: (userId: string) => void;
+}) {
+  const disconnected = !!state?.voicePanelDisconnected;
+  const members = state?.voicePanelMembers ?? [];
+  const accent = tile.accentColor ?? '#5865f2';
+
+  return (
+    <div
+      style={{
+        // Panel tile always spans the full row — a member list needs the width.
+        gridColumn: `1 / span ${cols}`,
+        background: '#1f1f1f',
+        border: '1px solid #2a2a2a',
+        borderRadius: 16,
+        padding: 12,
+        color: '#fff',
+        minHeight: 96,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <Headphones size={14} style={{ color: accent }} />
+        <span style={{ fontSize: 13, fontWeight: 600 }}>{tile.label}</span>
+        {!disconnected && (
+          <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 'auto' }}>
+            {members.length} {members.length === 1 ? 'member' : 'members'}
+          </span>
+        )}
+      </div>
+      {disconnected && (
+        <span style={{ fontSize: 12, color: '#9ca3af' }}>
+          Discord disconnected or you're not in a voice channel.
+        </span>
+      )}
+      {!disconnected && members.length === 0 && (
+        <span style={{ fontSize: 12, color: '#9ca3af' }}>
+          You're alone in this voice channel.
+        </span>
+      )}
+      {!disconnected && members.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {members.map((m) => (
+            <VoicePanelMemberRow
+              key={m.id}
+              m={m}
+              accent={accent}
+              onVolume={(v) => onMemberVolume(m.id, v)}
+              onMute={() => onMemberMute(m.id)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function VoicePanelMemberRow({ m, accent, onVolume, onMute }: {
+  m: VoicePanelMember;
+  accent: string;
+  onVolume: (value: number) => void;
+  onMute: () => void;
+}) {
+  // Local drag state so the slider stays responsive between server echoes.
+  const [dragValue, setDragValue] = useState<number | null>(null);
+  const [pendingValue, setPendingValue] = useState<number | null>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const serverValue = m.ourVolume / 200; // 0..200 → 0..1
+  const displayValue = dragValue ?? pendingValue ?? serverValue;
+  const percent = Math.round(displayValue * 200);
+  const fillPercent = Math.round(displayValue * 100);
+  const muted = m.ourMute;
+
+  useEffect(() => {
+    if (pendingValue === null) return;
+    if (Math.abs(serverValue - pendingValue) < 0.02) setPendingValue(null);
+  }, [serverValue, pendingValue]);
+  useEffect(() => {
+    if (pendingValue === null) return;
+    const t = setTimeout(() => setPendingValue(null), 1000);
+    return () => clearTimeout(t);
+  }, [pendingValue]);
+
+  function valueFromPointer(clientX: number): number {
+    const track = trackRef.current;
+    if (!track) return 0;
+    const rect = track.getBoundingClientRect();
+    return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+  }
+  function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const v = valueFromPointer(e.clientX);
+    setDragValue(v);
+    onVolume(v);
+    navigator.vibrate?.(6);
+  }
+  function onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
+    const v = valueFromPointer(e.clientX);
+    setDragValue(v);
+    onVolume(v);
+  }
+  function onPointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
+    if (dragValue !== null) setPendingValue(dragValue);
+    setDragValue(null);
+  }
+
+  const fill = muted ? '#6b7280' : accent;
+  const speaking = !m.selfMute && !m.serverMute && !muted;
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div
+        onPointerDown={(e) => { e.stopPropagation(); onMute(); navigator.vibrate?.(10); }}
+        title={muted ? 'unmute for me' : 'mute for me'}
+        style={{
+          width: 32, height: 32, borderRadius: '50%',
+          background: muted ? '#7f1d1d' : (speaking ? '#374151' : '#1f2937'),
+          border: `2px solid ${muted ? '#dc2626' : (m.selfMute || m.serverMute ? '#6b7280' : accent)}`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 13, fontWeight: 700, color: '#fff', cursor: 'pointer',
+          flexShrink: 0,
+        }}
+      >
+        {muted ? <MicOff size={14} /> : m.name.charAt(0).toUpperCase()}
+      </div>
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, fontSize: 12 }}>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {m.name}
+            {(m.selfMute || m.serverMute) && <span style={{ color: '#f87171', marginLeft: 4 }}>· muted</span>}
+            {(m.selfDeaf || m.serverDeaf) && <span style={{ color: '#f87171', marginLeft: 4 }}>· deaf</span>}
+          </span>
+          <span style={{ marginLeft: 'auto', color: '#9ca3af', fontSize: 11 }}>
+            {muted ? 'muted' : `${percent}%`}
+          </span>
+        </div>
+        <div
+          ref={trackRef}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          style={{
+            position: 'relative',
+            height: 10,
+            background: '#111827',
+            borderRadius: 5,
+            touchAction: 'none',
+            cursor: 'pointer',
+          }}
+        >
+          <div
+            style={{
+              position: 'absolute', left: 0, top: 0, bottom: 0,
+              width: `${fillPercent}%`,
+              background: fill,
+              borderRadius: 5,
+              transition: dragValue !== null ? 'none' : 'width 0.15s ease-out',
+              opacity: muted ? 0.5 : 1,
+            }}
+          />
+        </div>
+      </div>
     </div>
   );
 }

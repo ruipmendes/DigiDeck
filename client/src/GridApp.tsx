@@ -32,7 +32,7 @@ export function GridApp() {
     return defaultUrl();
   });
   const [draft, setDraft] = useState<string | null>(null);
-  const { status, layout, preview, lastAck, lastNack, buttonStates, press, sliderValue, sliderMute } = useMacroWS(url, token);
+  const { status, layout, preview, lastAck, lastNack, buttonStates, press, sliderValue, sliderMute, voicePanelVolume, voicePanelMute } = useMacroWS(url, token);
   const [previewError, setPreviewError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -160,6 +160,8 @@ export function GridApp() {
         onPress={press}
         onSliderChange={sliderValue}
         onSliderMute={sliderMute}
+        onVoicePanelVolume={voicePanelVolume}
+        onVoicePanelMute={voicePanelMute}
       />
     </div>
   );

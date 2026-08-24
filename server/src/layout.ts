@@ -51,7 +51,19 @@ export type BlankTile = {
   id: number;
 };
 
-export type Tile = Button | SliderTile | BlankTile;
+/** Live roster of the voice channel the Discord account is currently in.
+ *  Each row exposes per-user volume + client-side mute controls. Content is
+ *  fully dynamic — no per-tile config beyond the label / cosmetics. */
+export type DiscordVoicePanelTile = {
+  kind: 'discord-voice-panel';
+  id: number;
+  label: string;
+  icon?: string;
+  image?: string;
+  accentColor?: string;
+};
+
+export type Tile = Button | SliderTile | BlankTile | DiscordVoicePanelTile;
 export type Page = {
   id: number;
   name: string;
@@ -114,7 +126,16 @@ export type PublicSlider = {
 
 export type PublicBlank = { kind: 'blank'; id: number };
 
-export type PublicTile = PublicButton | PublicSlider | PublicBlank;
+export type PublicDiscordVoicePanel = {
+  kind: 'discord-voice-panel';
+  id: number;
+  label: string;
+  icon?: string;
+  image?: string;
+  accentColor?: string;
+};
+
+export type PublicTile = PublicButton | PublicSlider | PublicBlank | PublicDiscordVoicePanel;
 export type PublicPage = { id: number; name: string; icon?: string; image?: string; cols?: number; background?: string; backgroundImage?: string; buttons: PublicTile[] };
 export type PublicLayout = { navigation?: NavigationMode; pages: PublicPage[] };
 
@@ -218,6 +239,9 @@ export function toPublic(layout: Layout): PublicLayout {
         }
         if (t.kind === 'slider') {
           return { kind: 'slider', id: t.id, label: t.label, icon: t.icon, image: t.image, accentColor: t.accentColor, provider: t.provider, inputName: t.inputName };
+        }
+        if (t.kind === 'discord-voice-panel') {
+          return { kind: 'discord-voice-panel', id: t.id, label: t.label, icon: t.icon, image: t.image, accentColor: t.accentColor };
         }
         const out: PublicButton = { kind: 'button', id: t.id, label: t.label, icon: t.icon, image: t.image, imageFit: t.imageFit, accentColor: t.accentColor };
         if (t.longPressAction !== undefined) out.hasLongPress = true;
@@ -451,6 +475,9 @@ function validateButtons(input: unknown[], seenIds: Set<number>): Tile[] {
         // Drop nulls so the persisted shape is clean.
         delete (tile as Record<string, unknown>).longPressAction;
       }
+    } else if (kind === 'discord-voice-panel') {
+      // Voice-panel tiles are fully content-driven — no action, no inputName,
+      // no per-tile config beyond label + cosmetics (which are validated above).
     } else {
       throw new Error(`tile ${tile.id}: unknown kind "${kind}"`);
     }

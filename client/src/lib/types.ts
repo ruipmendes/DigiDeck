@@ -156,7 +156,18 @@ export type BlankTile = {
   id: number;
 };
 
-export type Tile = Button | SliderTile | BlankTile;
+/** Live roster of the Discord voice channel the account is currently in.
+ *  Renders as a wide card with per-user volume + mute controls. */
+export type DiscordVoicePanelTile = {
+  kind: 'discord-voice-panel';
+  id: number;
+  label: string;
+  icon?: string;
+  image?: string;
+  accentColor?: string;
+};
+
+export type Tile = Button | SliderTile | BlankTile | DiscordVoicePanelTile;
 export type Page = {
   id: number;
   name: string;
@@ -179,6 +190,9 @@ export function defaultTile(kind: TileKind, id: number): Tile {
   }
   if (kind === 'blank') {
     return { kind: 'blank', id };
+  }
+  if (kind === 'discord-voice-panel') {
+    return { kind: 'discord-voice-panel', id, label: 'Voice channel' };
   }
   return { kind: 'button', id, label: 'New', action: defaultAction('hotkey') };
 }

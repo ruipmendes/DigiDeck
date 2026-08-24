@@ -33,7 +33,9 @@ const PORT = 8765;
 type ClientMsg =
   | { type: 'press'; id: number; longPress?: boolean; promptValues?: Record<string, string> }
   | { type: 'slider'; id: number; value: number }
-  | { type: 'slider-mute'; id: number };
+  | { type: 'slider-mute'; id: number }
+  | { type: 'voice-panel-volume'; id: number; userId: string; value: number }
+  | { type: 'voice-panel-mute'; id: number; userId: string };
 type ServerMsg =
   | { type: 'layout'; layout: PublicLayout; preview?: { name: string; title: string } }
   | { type: 'ack'; id: number }
@@ -323,6 +325,35 @@ wss.on('connection', (ws: WebSocket) => {
       } catch (err) {
         const message = (err as Error).message;
         console.error('  slider mute failed:', message);
+        ws.send(JSON.stringify({ type: 'nack', id: msg.id, error: message } satisfies ServerMsg));
+      }
+      return;
+    }
+
+    if (msg.type === 'voice-panel-volume') {
+      if (tile.kind !== 'discord-voice-panel') return;
+      if (previewing) return;
+      try {
+        // Client sends 0..1 to match the slider protocol; map to Discord's 0..200.
+        const volume = Math.max(0, Math.min(200, Math.round(msg.value * 200)));
+        await discord.setChannelMemberVolume(msg.userId, volume);
+      } catch (err) {
+        const message = (err as Error).message;
+        console.error('  voice-panel volume failed:', message);
+        ws.send(JSON.stringify({ type: 'nack', id: msg.id, error: message } satisfies ServerMsg));
+      }
+      return;
+    }
+
+    if (msg.type === 'voice-panel-mute') {
+      if (tile.kind !== 'discord-voice-panel') return;
+      if (previewing) return;
+      try {
+        const cur = discord.status().channelMembers?.find((m) => m.id === msg.userId);
+        await discord.setChannelMemberMute(msg.userId, !cur?.ourMute);
+      } catch (err) {
+        const message = (err as Error).message;
+        console.error('  voice-panel mute failed:', message);
         ws.send(JSON.stringify({ type: 'nack', id: msg.id, error: message } satisfies ServerMsg));
       }
       return;

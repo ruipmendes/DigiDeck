@@ -44,7 +44,29 @@ export type BlankTile = {
   id: number;
 };
 
-export type Tile = Button | SliderTile | BlankTile;
+/** Live roster of the voice channel the Discord account is currently in.
+ *  Renders as a scrollable card with per-user volume slider + mute toggle. */
+export type DiscordVoicePanelTile = {
+  kind: 'discord-voice-panel';
+  id: number;
+  label: string;
+  icon?: string;
+  image?: string;
+  accentColor?: string;
+};
+
+export type Tile = Button | SliderTile | BlankTile | DiscordVoicePanelTile;
+
+export type VoicePanelMember = {
+  id: string;
+  name: string;
+  serverMute: boolean;
+  selfMute: boolean;
+  serverDeaf: boolean;
+  selfDeaf: boolean;
+  ourVolume: number;
+  ourMute: boolean;
+};
 export type Page = { id: number; name: string; icon?: string; image?: string; cols?: number; background?: string; backgroundImage?: string; buttons: Tile[] };
 export type NavigationMode = 'tabs' | 'folders';
 export type Layout = { navigation?: NavigationMode; pages: Page[] };
@@ -62,6 +84,10 @@ export type ButtonState = {
    *  join-channel tile. Rendered like `tile.image` when the user hasn't
    *  uploaded one of their own. */
   iconUrl?: string;
+  /** Voice-panel roster — the current voice channel's members. */
+  voicePanelMembers?: VoicePanelMember[];
+  /** Voice-panel tile can't render: Discord disconnected or not in a channel. */
+  voicePanelDisconnected?: boolean;
 };
 
 export type PreviewInfo = { name: string; title: string };
@@ -148,6 +174,8 @@ export function useMacroWS(url: string, token: string | null) {
   }
   function sliderValue(id: number, value: number) { send({ type: 'slider', id, value }); }
   function sliderMute(id: number) { send({ type: 'slider-mute', id }); }
+  function voicePanelVolume(id: number, userId: string, value: number) { send({ type: 'voice-panel-volume', id, userId, value }); }
+  function voicePanelMute(id: number, userId: string) { send({ type: 'voice-panel-mute', id, userId }); }
 
-  return { status, layout, preview, lastAck, lastNack, buttonStates, press, sliderValue, sliderMute };
+  return { status, layout, preview, lastAck, lastNack, buttonStates, press, sliderValue, sliderMute, voicePanelVolume, voicePanelMute };
 }

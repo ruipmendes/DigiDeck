@@ -394,6 +394,8 @@ Alternatively paste the raw ID at config time (Discord: *User Settings → Advan
 
 The tile lights up when the corresponding thing is active (mic muted / deafened / PTT mode on / noise suppression on / currently in the target channel) — same convention as the OBS mic-mute UX. Live state comes from Discord's `VOICE_SETTINGS_UPDATE` and `VOICE_CHANNEL_SELECT` events, so if you change something via keybind or the app itself, the tile still updates.
 
+**Voice channel panel tile.** A dedicated wide tile that renders the live roster of whichever voice channel you're currently in. Each row is a member with a volume slider (0–200 %) and a *mute-for-me* toggle. Add one from the config editor → tile kind → *Discord voice panel*. Joining or leaving a channel updates the roster instantly via `VOICE_STATE_*` events.
+
 **Sliders.** Discord is also a slider provider — add a slider tile and pick *Discord* as the source. Three channels:
 - *Microphone input volume* (tap = mic mute)
 - *Voice output volume* (tap = deafen)
