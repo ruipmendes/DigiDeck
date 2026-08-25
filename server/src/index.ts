@@ -212,11 +212,10 @@ function broadcastLayout() {
   }
 }
 
-function broadcastStates() {
+function buildLiveMeta(): LiveMeta {
   const obsStatus = obs.status();
   const discordStatus = discord.status();
-  const states = computeButtonStates(activeLayout(), obsStatus, twitch.status(), streamlabs.status(), kick.status(), discordStatus);
-  const meta: LiveMeta = {
+  return {
     obs: {
       recording: obsStatus.recording,
       streaming: obsStatus.streaming,
@@ -231,6 +230,13 @@ function broadcastStates() {
       deaf: discordStatus.deaf,
     },
   };
+}
+
+function broadcastStates() {
+  const obsStatus = obs.status();
+  const discordStatus = discord.status();
+  const states = computeButtonStates(activeLayout(), obsStatus, twitch.status(), streamlabs.status(), kick.status(), discordStatus);
+  const meta = buildLiveMeta();
   const data = JSON.stringify({ type: 'states', states, meta } satisfies ServerMsg);
   for (const ws of wss.clients) {
     if (ws.readyState === ws.OPEN) ws.send(data);
@@ -280,9 +286,15 @@ wss.on('connection', (ws: WebSocket) => {
     ? { type: 'layout', layout: toPublic(activeLayout()), preview: info }
     : { type: 'layout', layout: toPublic(activeLayout()) }
   ));
+  // Same meta the periodic broadcast sends. Without this, a phone that
+  // connects mid-session gets zero liveMeta until an integration state
+  // changes — which never happens if you were already in a voice channel
+  // when you paired the phone, so dynamic labels like {discord.channel}
+  // silently render as empty.
   ws.send(JSON.stringify({
     type: 'states',
     states: computeButtonStates(activeLayout(), obs.status(), twitch.status(), streamlabs.status(), kick.status(), discord.status()),
+    meta: buildLiveMeta(),
   } satisfies ServerMsg));
 
   ws.on('message', async (data) => {
