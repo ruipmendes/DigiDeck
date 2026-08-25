@@ -435,6 +435,7 @@ class ObsClient implements IntegrationLifecycle {
       }
     }
     this.trackedScenes = next;
+    console.log(`[obs] tracked scenes for previews: ${next.size > 0 ? [...next].join(', ') : '(none)'} (state=${this.state})`);
     this.updateThumbnailPollSchedule();
     // Fire once immediately so a freshly-added set-scene tile shows a thumbnail
     // within a second rather than waiting for the next poll tick.
@@ -471,20 +472,24 @@ class ObsClient implements IntegrationLifecycle {
     const scene = scenes[this.thumbnailPollCursor % scenes.length];
     this.thumbnailPollCursor = (this.thumbnailPollCursor + 1) % scenes.length;
     try {
-      const { imageData } = await this.obs.call('GetSourceScreenshot', {
+      const res = await this.obs.call('GetSourceScreenshot', {
         sourceName: scene,
         imageFormat: 'jpg',
         imageWidth: 320,
         imageHeight: 180,
       }) as { imageData: string };
+      const imageData = res.imageData;
+      if (!imageData) {
+        console.warn(`[obs] GetSourceScreenshot('${scene}') returned no imageData; keys=${Object.keys(res).join(',')}`);
+        return;
+      }
       const prev = this.sceneThumbnails.get(scene);
-      if (imageData && imageData !== prev) {
+      if (imageData !== prev) {
         this.sceneThumbnails.set(scene, imageData);
         this.emitChange();
       }
-    } catch {
-      // Scene may not exist (renamed / deleted) — drop from tracking.
-      // Next layout change will re-add it if it still appears.
+    } catch (err) {
+      console.warn(`[obs] GetSourceScreenshot('${scene}') failed: ${(err as Error).message}`);
     }
   }
 
