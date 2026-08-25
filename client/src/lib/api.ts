@@ -280,6 +280,9 @@ export type ObsStatus = {
   recordingStartedAtMs?: number;
   streamingStartedAtMs?: number;
   droppedFrames?: number;
+  /** Live scene preview thumbnails — sceneName → data URL. Populated by the
+   *  server for scenes referenced by set-scene tiles in the current layout. */
+  sceneThumbnails?: Record<string, string>;
 };
 
 export type ObsState_API = { config: ObsConfig; status: ObsStatus };

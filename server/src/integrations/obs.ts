@@ -60,6 +60,10 @@ export type ObsStatus = {
   /** Global output-skipped frame count from OBS's GetStats. Refreshed every
    *  few seconds while connected — cheap enough to always fetch. */
   droppedFrames?: number;
+  /** sceneName → base64 `data:image/jpg;base64,...` URL. Populated for scenes
+   *  referenced by set-scene tiles in the current layout; the tile-state
+   *  computation reads from this to render live scene previews as backgrounds. */
+  sceneThumbnails?: Record<string, string>;
   mutedInputs: string[];
   /** Per-input volume multiplier (0..1 typically; can be higher for overboost). */
   inputVolumes: Record<string, number>;
@@ -121,6 +125,16 @@ class ObsClient implements IntegrationLifecycle {
   private streamingStartedAtMs: number | undefined;
   private droppedFrames: number | undefined;
   private statsPollTimer: NodeJS.Timeout | null = null;
+  /** Scenes we want screenshots of — set by index.ts based on which scenes
+   *  the current layout's set-scene tiles reference. Empty → no polling,
+   *  no wasted screenshots for scenes nobody's watching. */
+  private trackedScenes = new Set<string>();
+  /** sceneName → last-fetched data URL. */
+  private sceneThumbnails = new Map<string, string>();
+  private thumbnailPollTimer: NodeJS.Timeout | null = null;
+  /** Cursor for round-robin polling across tracked scenes. Refreshing one
+   *  scene per tick keeps request volume steady even with many tiles. */
+  private thumbnailPollCursor = 0;
   private mutedInputs = new Set<string>();
   private inputVolumes = new Map<string, number>();
   /** "<sceneName>::<sourceName>" → enabled */
@@ -150,6 +164,8 @@ class ObsClient implements IntegrationLifecycle {
       this.streamingStartedAtMs = undefined;
       this.droppedFrames = undefined;
       if (this.statsPollTimer) { clearInterval(this.statsPollTimer); this.statsPollTimer = null; }
+      if (this.thumbnailPollTimer) { clearInterval(this.thumbnailPollTimer); this.thumbnailPollTimer = null; }
+      this.sceneThumbnails.clear();
       this.mutedInputs.clear();
       this.scheduleRetry();
       this.emitChange();
@@ -234,6 +250,7 @@ class ObsClient implements IntegrationLifecycle {
       recordingStartedAtMs: this.recordingStartedAtMs,
       streamingStartedAtMs: this.streamingStartedAtMs,
       droppedFrames: this.droppedFrames,
+      sceneThumbnails: this.buildSceneThumbnailsMap(),
       mutedInputs: [...this.mutedInputs],
       inputVolumes: Object.fromEntries(this.inputVolumes),
       sourceStates: Object.fromEntries(this.sourceStates),
@@ -404,6 +421,73 @@ class ObsClient implements IntegrationLifecycle {
     await this.obs.call('SetSceneItemEnabled', { sceneName, sceneItemId, sceneItemEnabled: enabled });
   }
 
+  /** Called from index.ts whenever the layout changes. Sets the set of scenes
+   *  we want screenshots for; scenes that fell out of the layout get dropped
+   *  from the cache so stale thumbnails don't leak across layout edits. */
+  setTrackedScenes(scenes: readonly string[]): void {
+    const next = new Set(scenes);
+    // Drop cached thumbnails for scenes no longer tracked.
+    let dirty = false;
+    for (const key of Array.from(this.sceneThumbnails.keys())) {
+      if (!next.has(key)) {
+        this.sceneThumbnails.delete(key);
+        dirty = true;
+      }
+    }
+    this.trackedScenes = next;
+    this.updateThumbnailPollSchedule();
+    // Fire once immediately so a freshly-added set-scene tile shows a thumbnail
+    // within a second rather than waiting for the next poll tick.
+    if (this.state === 'connected' && next.size > 0) {
+      void this.pollOneThumbnail();
+    }
+    if (dirty) this.emitChange();
+  }
+
+  private buildSceneThumbnailsMap(): Record<string, string> {
+    const out: Record<string, string> = {};
+    for (const [name, dataUrl] of this.sceneThumbnails) out[name] = dataUrl;
+    return out;
+  }
+
+  private updateThumbnailPollSchedule(): void {
+    const shouldPoll = this.state === 'connected' && this.trackedScenes.size > 0;
+    if (shouldPoll && !this.thumbnailPollTimer) {
+      // Round-robin across scenes at ~3-second cadence per scene. With 4
+      // tracked scenes that's one screenshot every ~750ms, cheap for OBS.
+      const perSceneMs = 3000;
+      const tickMs = Math.max(500, Math.floor(perSceneMs / Math.max(1, this.trackedScenes.size)));
+      this.thumbnailPollTimer = setInterval(() => { void this.pollOneThumbnail(); }, tickMs);
+    } else if (!shouldPoll && this.thumbnailPollTimer) {
+      clearInterval(this.thumbnailPollTimer);
+      this.thumbnailPollTimer = null;
+    }
+  }
+
+  private async pollOneThumbnail(): Promise<void> {
+    if (this.state !== 'connected' || this.trackedScenes.size === 0) return;
+    const scenes = Array.from(this.trackedScenes);
+    // Round-robin — one scene per tick keeps request pressure steady.
+    const scene = scenes[this.thumbnailPollCursor % scenes.length];
+    this.thumbnailPollCursor = (this.thumbnailPollCursor + 1) % scenes.length;
+    try {
+      const { imageData } = await this.obs.call('GetSourceScreenshot', {
+        sourceName: scene,
+        imageFormat: 'jpg',
+        imageWidth: 320,
+        imageHeight: 180,
+      }) as { imageData: string };
+      const prev = this.sceneThumbnails.get(scene);
+      if (imageData && imageData !== prev) {
+        this.sceneThumbnails.set(scene, imageData);
+        this.emitChange();
+      }
+    } catch {
+      // Scene may not exist (renamed / deleted) — drop from tracking.
+      // Next layout change will re-add it if it still appears.
+    }
+  }
+
   /** Start or stop the periodic GetStats poll based on whether recording or
    *  streaming is running. When nothing's active there's no dropped-frame
    *  reading worth publishing, so we save the WS traffic. */
@@ -495,6 +579,10 @@ class ObsClient implements IntegrationLifecycle {
           : undefined;
       } catch { /* ignore */ }
       this.updateStatsPollSchedule();
+      // Kick off the scene-thumbnail poll if the layout already told us which
+      // scenes to track before OBS finished connecting.
+      this.updateThumbnailPollSchedule();
+      if (this.trackedScenes.size > 0) void this.pollOneThumbnail();
       try {
         const vcam = await this.obs.call('GetVirtualCamStatus');
         this.virtualCam = !!vcam.outputActive;

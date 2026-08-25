@@ -308,6 +308,32 @@ export function collectStreamerLogins(layout: Layout): string[] {
   return [...set];
 }
 
+/** Collect every OBS scene name referenced by a set-scene action anywhere in
+ *  the layout — the OBS integration polls these for live preview thumbnails.
+ *  Walks both tap and long-press actions since either can target a scene. */
+export function collectObsSceneNames(layout: Layout): string[] {
+  const set = new Set<string>();
+  for (const page of layout.pages) {
+    for (const t of page.buttons) {
+      if (t.kind !== 'button') continue;
+      const all: Action[] = [];
+      const push = (act: ButtonAction | undefined) => {
+        if (!act) return;
+        if (Array.isArray(act)) all.push(...act);
+        else all.push(act);
+      };
+      push(t.action);
+      push(t.longPressAction);
+      for (const a of all) {
+        if (a.type === 'obs' && a.op === 'set-scene' && a.params?.sceneName) {
+          set.add(a.params.sceneName);
+        }
+      }
+    }
+  }
+  return [...set];
+}
+
 /** Collect every kick-streamer slug referenced in the layout (deduped, lowercased). */
 export function collectKickStreamerSlugs(layout: Layout): string[] {
   const set = new Set<string>();

@@ -2,7 +2,7 @@ import { createServer as createHttpServer } from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
 import { WebSocketServer, WebSocket } from 'ws';
 import { loadOrGenerateCert } from './https-cert.js';
-import { loadOrInitLayout, reloadLayout, toPublic, watchLayout, findTile, collectStreamerLogins, collectKickStreamerSlugs, LAYOUT_FILE } from './layout.js';
+import { loadOrInitLayout, reloadLayout, toPublic, watchLayout, findTile, collectStreamerLogins, collectKickStreamerSlugs, collectObsSceneNames, LAYOUT_FILE } from './layout.js';
 import { executeAction, setShellActionsGate, withPromptValues } from './actions/types.js';
 import { handleRequest } from './http.js';
 import { loadOrInitConfig, saveConfig, CONFIG_FILE } from './config.js';
@@ -121,6 +121,10 @@ streamers.start();
 const kickStreamers = getKickStreamers();
 kickStreamers.setSlugs(collectKickStreamerSlugs(layout));
 kickStreamers.start();
+
+// Same pattern for OBS scene-preview thumbnails: only fetch screenshots for
+// scenes actually referenced by set-scene tiles in the current layout.
+obs.setTrackedScenes(collectObsSceneNames(layout));
 
 const mic = getMic();
 mic.start();
@@ -272,6 +276,7 @@ watchLayout(async () => {
     console.log(`[layout reloaded] ${layout.pages.length} pages, ${total} buttons`);
     streamers.setLogins(collectStreamerLogins(layout));
     kickStreamers.setSlugs(collectKickStreamerSlugs(layout));
+    obs.setTrackedScenes(collectObsSceneNames(layout));
     broadcastLayout();
     scheduleStateBroadcast();
   } catch (err) {
@@ -441,6 +446,7 @@ startTray({
     console.log(`[tray] reloaded layout: ${layout.pages.length} pages, ${total} buttons`);
     streamers.setLogins(collectStreamerLogins(layout));
     kickStreamers.setSlugs(collectKickStreamerSlugs(layout));
+    obs.setTrackedScenes(collectObsSceneNames(layout));
     broadcastLayout();
     scheduleStateBroadcast();
   },

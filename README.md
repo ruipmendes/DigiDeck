@@ -334,6 +334,8 @@ Action types you can bind: toggle/start/stop recording, toggle/start/stop stream
 
 Example: a recording tile labeled `REC {obs.recordingTime}` renders as `REC 00:00:00` idle, `REC 01:23:45` while recording. The `+ from library` picker ships three starter presets (Recording timer, Streaming timer, Dropped frames indicator).
 
+**Live scene preview thumbnails.** *Switch to scene* tiles automatically render a live 320×180 JPEG preview of the target scene's contents as the tile background — click-this-photo-to-switch-to-it feel. Server polls `GetSourceScreenshot` for every scene referenced by a set-scene tile in the current layout (idle scenes get zero traffic). The preview refreshes on a round-robin cadence (~3 seconds per scene) so a busy scene grid stays smooth. Uploading your own image on the tile still overrides the live preview.
+
 Live state on the phone: recording / streaming / virtual cam / scene-active / muted buttons show a blue dot, source-visible buttons show a green dot, and any OBS button is dimmed with an "offline" pip if OBS isn't connected.
 
 > **Note:** this integration speaks the `obs-websocket` v5 protocol bundled with **OBS Studio 28+**. If you run **Streamlabs Desktop** instead, use the *Streamlabs Desktop* integration below — it speaks Streamlabs' own JSON-RPC protocol and lives entirely separately from OBS.

@@ -140,6 +140,7 @@ function computeStepState(a: Action, obs: ObsStatus, twitch: TwitchStatus, strea
     const unavailable = obs.state !== 'connected';
     let active: boolean | undefined;
     let kind: ButtonState['kind'];
+    let iconUrl: string | undefined;
     switch (a.op) {
       case 'toggle-record':
       case 'start-record':
@@ -154,9 +155,15 @@ function computeStepState(a: Action, obs: ObsStatus, twitch: TwitchStatus, strea
       case 'toggle-virtual-cam':
         active = obs.virtualCam;
         break;
-      case 'set-scene':
-        active = !!a.params?.sceneName && a.params.sceneName === obs.currentScene;
+      case 'set-scene': {
+        const sceneName = a.params?.sceneName;
+        active = !!sceneName && sceneName === obs.currentScene;
+        // Live scene preview as the tile background — the server polls a fresh
+        // screenshot every few seconds for every scene referenced by a
+        // set-scene tile, so users see what each scene contains at a glance.
+        if (sceneName) iconUrl = obs.sceneThumbnails?.[sceneName];
         break;
+      }
       case 'toggle-mute':
         active = !!a.params?.inputName && obs.mutedInputs.includes(a.params.inputName);
         break;
@@ -173,7 +180,7 @@ function computeStepState(a: Action, obs: ObsStatus, twitch: TwitchStatus, strea
         kind = 'source';
         break;
     }
-    return { active, kind, unavailable };
+    return { active, kind, unavailable, iconUrl };
   }
 
   if (a.type === 'streamlabs') {
