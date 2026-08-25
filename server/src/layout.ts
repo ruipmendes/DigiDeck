@@ -25,7 +25,7 @@ export type Button = {
  *  discord tiles is a fixed literal — 'input' or 'output' — instead of a
  *  user-facing device name. Kept in one field so the slider protocol shape
  *  doesn't fork per provider. */
-export type SliderProvider = 'obs' | 'streamlabs' | 'discord';
+export type SliderProvider = 'obs' | 'streamlabs' | 'discord' | 'spotify';
 
 export type SliderTile = {
   kind: 'slider';
@@ -487,8 +487,8 @@ function validateButtons(input: unknown[], seenIds: Set<number>): Tile[] {
       if (typeof tile.inputName !== 'string' || !tile.inputName) {
         throw new Error(`tile ${tile.id}: slider requires inputName`);
       }
-      if (tile.provider !== undefined && tile.provider !== 'obs' && tile.provider !== 'streamlabs' && tile.provider !== 'discord') {
-        throw new Error(`tile ${tile.id}: slider provider must be 'obs', 'streamlabs' or 'discord'`);
+      if (tile.provider !== undefined && tile.provider !== 'obs' && tile.provider !== 'streamlabs' && tile.provider !== 'discord' && tile.provider !== 'spotify') {
+        throw new Error(`tile ${tile.id}: slider provider must be 'obs', 'streamlabs', 'discord', or 'spotify'`);
       }
       if (tile.provider === 'discord' && tile.inputName !== 'input' && tile.inputName !== 'output' && tile.inputName !== 'sensitivity') {
         throw new Error(`tile ${tile.id}: discord slider inputName must be 'input', 'output', or 'sensitivity'`);

@@ -9,6 +9,10 @@
  *   {discord.channel}     → current voice channel name (or empty)
  *   {discord.mute}        → "muted" while self-muted, else empty
  *   {discord.deaf}        → "deafened" while self-deafened, else empty
+ *   {spotify.track}       → currently-playing track title (or empty)
+ *   {spotify.artist}      → currently-playing artist(s) (or empty)
+ *   {spotify.album}       → currently-playing album (or empty)
+ *   {spotify.playing}     → "playing" / "paused" / empty when nothing loaded
  *
  * Anything else is left as-is (`{foo.bar}` stays visible so misspellings are
  * obvious rather than silently blank). The renderer is called at every tile
@@ -32,6 +36,16 @@ export function renderLabel(label: string, meta: LiveMeta, nowMs: number = Date.
       if (key === 'channel') return d.currentVoiceChannelName ?? '';
       if (key === 'mute')    return d.mute ? 'muted' : '';
       if (key === 'deaf')    return d.deaf ? 'deafened' : '';
+    }
+    if (ns === 'spotify' && meta.spotify) {
+      const s = meta.spotify;
+      if (key === 'track')   return s.track ?? '';
+      if (key === 'artist')  return s.artist ?? '';
+      if (key === 'album')   return s.album ?? '';
+      if (key === 'playing') {
+        if (s.track === undefined || s.track === '') return '';
+        return s.isPlaying ? 'playing' : 'paused';
+      }
     }
     return raw;
   });

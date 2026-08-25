@@ -6,6 +6,7 @@ import { DEFAULT_TWITCH_CONFIG, type TwitchConfig } from './integrations/twitch.
 import { DEFAULT_STREAMLABS_CONFIG, type StreamlabsConfig } from './integrations/streamlabs.js';
 import { DEFAULT_KICK_CONFIG, type KickConfig } from './integrations/kick.js';
 import { DEFAULT_DISCORD_CONFIG, type DiscordConfig } from './integrations/discord.js';
+import { DEFAULT_SPOTIFY_CONFIG, type SpotifyConfig } from './integrations/spotify.js';
 // scaffold-integration: additional imports inserted above this line
 
 const APP_DIR = join(
@@ -20,6 +21,7 @@ export type IntegrationsConfig = {
   streamlabs: StreamlabsConfig;
   kick: KickConfig;
   discord: DiscordConfig;
+  spotify: SpotifyConfig;
   // scaffold-integration: additional fields inserted above this line
 };
 
@@ -61,6 +63,7 @@ function withDefaults(parsed: Partial<ServerConfig> | null | undefined): ServerC
       streamlabs: { ...DEFAULT_STREAMLABS_CONFIG, ...parsed?.integrations?.streamlabs },
       kick:       { ...DEFAULT_KICK_CONFIG,       ...parsed?.integrations?.kick },
       discord:    { ...DEFAULT_DISCORD_CONFIG,    ...parsed?.integrations?.discord },
+      spotify:    { ...DEFAULT_SPOTIFY_CONFIG,    ...parsed?.integrations?.spotify },
       // scaffold-integration: additional defaults inserted above this line
     },
     security: {

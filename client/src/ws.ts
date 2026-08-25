@@ -111,6 +111,14 @@ export type LiveMeta = {
     mute?: boolean;
     deaf?: boolean;
   };
+  spotify?: {
+    isPlaying?: boolean;
+    track?: string;
+    artist?: string;
+    album?: string;
+    coverUrl?: string;
+    volumePercent?: number;
+  };
 };
 
 type ServerMsg =

@@ -47,6 +47,7 @@ If you see no label, assume **PowerShell or cmd** is fine.
 | ---- | ---------------- | ----- |
 | OBS Studio 28+ | OBS actions (record / stream / scene / mute / source visibility) | Built-in WebSocket server replaces the old plugin. Enable in *Tools → WebSocket Server Settings*. |
 | Twitch Developer app | Twitch chat actions | Free; register at [dev.twitch.tv/console/apps](https://dev.twitch.tv/console/apps). |
+| Spotify Developer app | Spotify play/pause/skip actions + now-playing labels | Free; register at [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard). PKCE only — no client secret. **Requires Premium on both the linked account AND the Developer app owner** — see the Spotify section for the full story. |
 | Firefox | Pretty desktop-shortcut behaviour | `start.ps1` opens config in Firefox if installed; otherwise uses your default browser. |
 
 ### Not required
@@ -331,6 +332,10 @@ Action types you can bind: toggle/start/stop recording, toggle/start/stop stream
 | `{discord.channel}` | Current Discord voice channel name (or empty) |
 | `{discord.mute}` | `muted` while self-muted, else empty |
 | `{discord.deaf}` | `deafened` while self-deafened, else empty |
+| `{spotify.track}` | Currently-playing Spotify track title (or empty). Premium-linked account required — free tier gets a blank string. |
+| `{spotify.artist}` | Currently-playing Spotify artist(s). Same Premium requirement. |
+| `{spotify.album}` | Currently-playing Spotify album. Same Premium requirement. |
+| `{spotify.playing}` | `playing` / `paused` / empty when nothing loaded. Same Premium requirement. |
 
 Example: a recording tile labeled `REC {obs.recordingTime}` renders as `REC 00:00:00` idle, `REC 01:23:45` while recording. The `+ from library` picker ships three starter presets (Recording timer, Streaming timer, Dropped frames indicator).
 
@@ -432,6 +437,34 @@ Slider position and mute state live-update from Discord, so changing volume insi
 **Requires Discord running on the same PC.** Discord's local IPC pipe (`\\.\pipe\discord-ipc-N`) is the transport; if Discord isn't open, the Discord card shows *disconnected* and retries every few seconds until it appears.
 
 **Upgrading?** Every time this integration adds new capabilities, extra OAuth scopes come with them. On first "cannot list …" error or a stuck authorize dialog, open the Discord card → *Disconnect* → *Connect to Discord* — one round-trip re-approves with the current scope set (`rpc` + `guilds`).
+
+---
+
+## Spotify integration
+
+Play / pause / skip your Spotify playback from a tile, with the album cover rendered live as the tile background and a live *now playing* strip you can drop into any label with `{spotify.track}` / `{spotify.artist}`.
+
+> **Requires Spotify Premium — for both the linked account AND the Developer app owner.** Spotify's Web API paywalls the entire `/me/player` family (including read-only currently-playing state) at the app-owner level; a free-tier developer account 403s on every call. Digi Deck detects this via `GET /me` on connect. When the linked account isn't Premium, all Spotify tiles (and the Spotify slider provider) are **hidden from the tile / action pickers** — there's no viable free-tier surface in this integration today. The panel shows an orange *Free tier* chip and a **Recheck subscription** button that re-fetches `/me` after you upgrade, so tiles reappear without a full reconnect.
+
+One-time setup:
+
+1. Visit [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard) → *Create app*.
+2. Give it any name and description ("Digi Deck" works).
+3. **Redirect URI**: `http://127.0.0.1:8765/api/integrations/spotify/callback` (exactly this — Spotify requires the loopback IP form).
+4. Under *Which API/SDKs are you planning to use?*, tick **Web API**.
+5. Save. On the app's settings page, copy the **Client ID**.
+6. In the config UI → **Spotify** card → expand → paste Client ID → *Save Client ID*. No client secret needed — Digi Deck uses PKCE.
+7. Click **Connect to Spotify** → approve the scopes (`user-read-playback-state`, `user-modify-playback-state`) → the tab closes automatically.
+
+Action types: **Spotify** → Play / Pause (toggle), Play, Pause, Next track, Previous track.
+
+Slider: pick *Spotify* as the provider on any slider tile — the fader drives the current playback device's volume; tap the icon to toggle play/pause.
+
+**Live tile background.** Tiles with a *Play / Pause* action render the currently-playing album cover as the tile background, dimmed with a play/pause indicator overlaid. A curated preset — *Now playing (dynamic label)* — labels the tile with `{spotify.track}` so the tile shows the song title and cover art in one glance.
+
+**"No active device" errors.** Spotify's Web API needs an active playback session on some device — desktop app, phone, or web player. If you press *Play* and see *"no active device"*, start playback in any Spotify client once; from then on the API can transfer commands to it. Spotify also idles playback after ~15 minutes of pause — same fix, just play something once.
+
+Polling: currently-playing state polls every 5 seconds. Spotify's Web API doesn't push updates, so between polls, `{spotify.track}` reflects the last snapshot.
 
 ---
 

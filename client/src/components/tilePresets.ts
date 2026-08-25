@@ -19,6 +19,10 @@ export type TilePreset = {
   hint?: string;
   iconName?: string;
   keywords: string;
+  /** True for presets whose action needs a Premium tier the free user can't
+   *  reach (currently only Spotify). Hidden from the picker for free-tier
+   *  users — same policy as ActionPicker. */
+  requiresPremium?: boolean;
   create(id: number): Tile;
 };
 
@@ -116,6 +120,23 @@ export const TILE_PRESETS: TilePreset[] = [
   { key: 'discord-audio-slider', category: 'Discord', label: 'Discord mic slider', iconName: 'discord',
     keywords: 'discord mic microphone input slider volume',
     create: (id) => ({ kind: 'slider', id, label: 'Mic', provider: 'discord', inputName: 'input' }) },
+
+  // ─── Spotify ────────────────────────────────────────
+  { key: 'spotify-play-pause', category: 'Spotify', label: 'Play / Pause', hint: 'Auto-toggles; shows album cover as tile bg', iconName: 'spotify',
+    keywords: 'spotify play pause toggle music album cover', requiresPremium: true,
+    create: (id) => ({ kind: 'button', id, label: 'Play', icon: 'spotify', action: { type: 'spotify', op: 'toggle-play' } }) },
+  { key: 'spotify-next', category: 'Spotify', label: 'Next track', iconName: 'skip-forward',
+    keywords: 'spotify next skip forward track song music', requiresPremium: true,
+    create: (id) => ({ kind: 'button', id, label: 'Next', icon: 'skip-forward', action: { type: 'spotify', op: 'next' } }) },
+  { key: 'spotify-previous', category: 'Spotify', label: 'Previous track', iconName: 'skip-back',
+    keywords: 'spotify previous back track song music', requiresPremium: true,
+    create: (id) => ({ kind: 'button', id, label: 'Prev', icon: 'skip-back', action: { type: 'spotify', op: 'previous' } }) },
+  { key: 'spotify-now-playing', category: 'Spotify', label: 'Now playing (dynamic label)', hint: 'Live track + artist; tap toggles play', iconName: 'spotify',
+    keywords: 'spotify now playing track artist dynamic label live music', requiresPremium: true,
+    create: (id) => ({ kind: 'button', id, label: '{spotify.track}', icon: 'spotify', action: { type: 'spotify', op: 'toggle-play' } }) },
+  { key: 'spotify-volume-slider', category: 'Spotify', label: 'Spotify volume slider', hint: 'Controls the active device volume', iconName: 'spotify',
+    keywords: 'spotify volume slider music device fader mixer', requiresPremium: true,
+    create: (id) => ({ kind: 'slider', id, label: 'Spotify', provider: 'spotify', inputName: 'volume' }) },
 
   // ─── Flow ───────────────────────────────────────────
   { key: 'flow-goto', category: 'Flow', label: 'Go to page (folder)', hint: 'Pick destination page in editor', iconName: 'folder',

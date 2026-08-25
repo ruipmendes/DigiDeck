@@ -6,6 +6,7 @@ import { authorize, authorizeLocalhost, isLocalhost, isAllowedHost, isAllowedOri
 import { saveConfig, type ServerConfig } from './config.js';
 import { findIntegration } from './integrations/base.js';
 import { getDiscord } from './integrations/discord.js';
+import { getSpotify } from './integrations/spotify.js';
 import {
   saveImage, imagePath, imageExists, deleteImage, imageMime, MAX_IMAGE_BYTES,
 } from './images.js';
@@ -317,6 +318,21 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse, c
     try {
       const guilds = await getDiscord().getGuilds();
       json(res, 200, { guilds });
+    } catch (err) {
+      json(res, 400, { error: (err as Error).message });
+    }
+    return;
+  }
+
+  // ─── Spotify-specific: re-check subscription tier ────────────
+  // Sits above the auto-router so it wins over the fallthrough. Cheap
+  // one-shot /me refetch — used by the panel's "Recheck" button after a
+  // Premium upgrade.
+  if (pathname === '/api/integrations/spotify/recheck' && req.method === 'POST') {
+    if (!authorizeLocalhost(req, token())) return unauthorized(res);
+    try {
+      await getSpotify().recheckSubscription();
+      json(res, 200, { config: getSpotify().publicConfig(), status: getSpotify().status() });
     } catch (err) {
       json(res, 400, { error: (err as Error).message });
     }

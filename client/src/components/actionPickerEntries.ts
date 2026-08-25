@@ -28,6 +28,11 @@ export type ActionPickerEntry = {
   keywords: string;
   /** Which integration status flag gates this entry — undefined means always available. */
   requires?: keyof IntegrationStatus;
+  /** True when the target service requires a paid tier to use this action.
+   *  Spotify is the only case today: playback control is Premium-only. When
+   *  the user's account isn't Premium, the entry shows a lock icon and refuses
+   *  to be picked. Set on entries whose server-side execution would 403. */
+  requiresPremium?: boolean;
   create(): Action;
 };
 
@@ -189,6 +194,25 @@ const discordEntries = ((): ActionPickerEntry[] => {
   }));
 })();
 
+const spotifyEntries = ((): ActionPickerEntry[] => {
+  const rows: Array<{ op: string; label: string; hint?: string; kw: string }> = [
+    { op: 'toggle-play', label: 'Play / Pause',            hint: 'Auto-toggles based on current state',        kw: 'play pause toggle music' },
+    { op: 'play',        label: 'Play',                                                                        kw: 'play resume music start' },
+    { op: 'pause',       label: 'Pause',                                                                       kw: 'pause stop music' },
+    { op: 'next',        label: 'Next track',                                                                  kw: 'next skip forward track song' },
+    { op: 'previous',    label: 'Previous track',                                                              kw: 'previous back track song' },
+  ];
+  return rows.map((r) => ({
+    key: `spotify:${r.op}`, category: 'Spotify', label: r.label, hint: r.hint, iconName: 'spotify',
+    keywords: `spotify music ${r.kw}`, requires: 'spotify' as const,
+    // All Spotify playback ops go through Spotify's Web API player endpoints,
+    // which return 403 for free-tier accounts. Lock them in the picker so the
+    // user can't configure a tile that would always fail.
+    requiresPremium: true,
+    create: () => ({ type: 'spotify', op: r.op as never }) as Action,
+  }));
+})();
+
 const flow: ActionPickerEntry[] = [
   { key: 'goto-page', category: 'Flow', label: 'Go to page (folder)', iconName: 'folder', keywords: 'goto page folder navigate switch',
     create: () => ({ type: 'goto-page', pageId: 0 }) },
@@ -204,6 +228,7 @@ export const ACTION_PICKER_ENTRIES: ActionPickerEntry[] = [
   ...twitchEntries,
   ...kickEntries,
   ...discordEntries,
+  ...spotifyEntries,
   ...flow,
 ];
 
@@ -245,6 +270,7 @@ export function entryFor(action: Action): ActionPickerEntry | null {
     case 'kick':            return ACTION_PICKER_ENTRIES.find((e) => e.key === 'kick:chat') ?? null;
     case 'kick-streamer':   return ACTION_PICKER_ENTRIES.find((e) => e.key === 'kick-streamer') ?? null;
     case 'discord':         return byOp('discord', action.op);
+    case 'spotify':         return byOp('spotify', action.op);
     case 'goto-page':       return ACTION_PICKER_ENTRIES.find((e) => e.key === 'goto-page') ?? null;
     case 'wait':            return ACTION_PICKER_ENTRIES.find((e) => e.key === 'wait') ?? null;
     default:                return null;

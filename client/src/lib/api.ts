@@ -428,6 +428,85 @@ export async function reconnectTwitch(): Promise<TwitchState_API> {
   return res.json();
 }
 
+// ─── Spotify ────────────────────────────────────────────────────
+
+export type SpotifyState =
+  | 'disabled' | 'not-configured' | 'needs-auth'
+  | 'connecting' | 'connected' | 'error';
+
+export type SpotifyStatus = {
+  state: SpotifyState;
+  error?: string;
+  username?: string;
+  isPremium?: boolean;
+  isPlaying?: boolean;
+  track?: string;
+  artist?: string;
+  album?: string;
+  coverUrl?: string;
+  deviceName?: string;
+  volumePercent?: number;
+};
+
+export type SpotifyPublicConfig = {
+  enabled: boolean;
+  clientId: string;
+  hasRefreshToken: boolean;
+  username: string;
+  isPremium: boolean;
+};
+
+export type SpotifyState_API = { config: SpotifyPublicConfig; status: SpotifyStatus };
+
+export async function getSpotifyState(): Promise<SpotifyState_API> {
+  const res = await apiFetch('/api/integrations/spotify');
+  if (!res.ok) throw new Error(`GET spotify failed: ${res.status}`);
+  return res.json();
+}
+
+export async function putSpotifyConfig(c: { enabled: boolean; clientId: string }): Promise<SpotifyState_API> {
+  const res = await apiFetch('/api/integrations/spotify/config', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(c),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(body || `PUT spotify config failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function getSpotifyAuthorize(): Promise<{ url: string }> {
+  const res = await apiFetch('/api/integrations/spotify/authorize');
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(body || `authorize failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function disconnectSpotify(): Promise<SpotifyState_API> {
+  const res = await apiFetch('/api/integrations/spotify/disconnect', { method: 'POST' });
+  if (!res.ok) throw new Error(`disconnect failed: ${res.status}`);
+  return res.json();
+}
+
+export async function reconnectSpotify(): Promise<SpotifyState_API> {
+  const res = await apiFetch('/api/integrations/spotify/reconnect', { method: 'POST' });
+  if (!res.ok) throw new Error(`reconnect failed: ${res.status}`);
+  return res.json();
+}
+
+export async function recheckSpotifySubscription(): Promise<SpotifyState_API> {
+  const res = await apiFetch('/api/integrations/spotify/recheck', { method: 'POST' });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(body || `recheck failed: ${res.status}`);
+  }
+  return res.json();
+}
+
 // ─── Discord ────────────────────────────────────────────────────
 
 export type DiscordState =

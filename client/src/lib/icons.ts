@@ -17,7 +17,7 @@ import {
   Maximize, Minimize, Calendar, Clock,
 } from 'lucide-react';
 import {
-  DiscordBrandIcon, TwitchBrandIcon, KickBrandIcon, ObsBrandIcon, StreamlabsBrandIcon,
+  DiscordBrandIcon, TwitchBrandIcon, KickBrandIcon, ObsBrandIcon, StreamlabsBrandIcon, SpotifyBrandIcon,
 } from './brand-icons';
 
 /** Component shape both lucide icons and our custom brand icons conform to. */
@@ -52,6 +52,7 @@ export const ICONS: Record<string, IconComponent> = {
   'kick':       KickBrandIcon,
   'obs':        ObsBrandIcon,
   'streamlabs': StreamlabsBrandIcon,
+  'spotify':    SpotifyBrandIcon,
 };
 
 export const ICON_NAMES = Object.keys(ICONS).sort();

@@ -13,7 +13,7 @@
  * often configure buttons while a target integration is off.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Search, ChevronDown, X } from 'lucide-react';
+import { Search, ChevronDown, X, Lock } from 'lucide-react';
 import type { Action, IntegrationStatus } from '../lib/types';
 import { getIcon } from '../lib/icons';
 import { ACTION_PICKER_ENTRIES, filterEntries, entryFor, type ActionPickerEntry } from './actionPickerEntries';
@@ -31,7 +31,18 @@ export function ActionPicker({ current, onPick, integrationStatus }: Props) {
   const searchRef = useRef<HTMLInputElement>(null);
   const currentEntry = entryFor(current);
 
-  const filtered = useMemo(() => filterEntries(ACTION_PICKER_ENTRIES, query), [query]);
+  // Hide fully-paywalled entries when the user's account can't run them at all —
+  // Spotify playback is the only case today. Different from "not available":
+  // "needs X" entries still show (dimmed) so users can plan ahead. Spotify's
+  // premium wall isn't a temporary state we can encourage — free-tier accounts
+  // literally can't run any spotify op we ship — so we hide them outright.
+  const visibleEntries = useMemo(() => {
+    if (integrationStatus?.spotify && !integrationStatus?.spotifyPremium) {
+      return ACTION_PICKER_ENTRIES.filter((e) => !(e.requires === 'spotify' && e.requiresPremium));
+    }
+    return ACTION_PICKER_ENTRIES;
+  }, [integrationStatus?.spotify, integrationStatus?.spotifyPremium]);
+  const filtered = useMemo(() => filterEntries(visibleEntries, query), [visibleEntries, query]);
   // Reset the highlight to the first result any time the filter changes.
   useEffect(() => { setHighlighted(0); }, [query]);
 
@@ -66,6 +77,17 @@ export function ActionPicker({ current, onPick, integrationStatus }: Props) {
     if (!e.requires) return true;
     if (!integrationStatus) return true;
     return integrationStatus[e.requires];
+  };
+
+  // Premium-gated entries (Spotify playback control) get a lock icon and can't
+  // be picked when the linked account isn't Premium. Different from "needs X":
+  // integration IS connected, just the API refuses to run this specific op for
+  // free-tier accounts. Falls back to `available` when we have no status.
+  const isLocked = (e: ActionPickerEntry): boolean => {
+    if (!e.requiresPremium) return false;
+    if (!integrationStatus) return false;
+    if (e.requires === 'spotify') return !integrationStatus.spotifyPremium;
+    return false;
   };
 
   return (
@@ -125,8 +147,9 @@ export function ActionPicker({ current, onPick, integrationStatus }: Props) {
                       entry={e}
                       highlighted={filtered[highlighted]?.key === e.key}
                       available={isAvailable(e)}
+                      locked={isLocked(e)}
                       current={currentEntry?.key === e.key}
-                      onPick={() => pick(e)}
+                      onPick={() => { if (!isLocked(e)) pick(e); }}
                       onHover={() => setHighlighted(filtered.indexOf(e))}
                     />
                   ))}
@@ -138,8 +161,9 @@ export function ActionPicker({ current, onPick, integrationStatus }: Props) {
                   entry={e}
                   highlighted={i === highlighted}
                   available={isAvailable(e)}
+                  locked={isLocked(e)}
                   current={currentEntry?.key === e.key}
-                  onPick={() => pick(e)}
+                  onPick={() => { if (!isLocked(e)) pick(e); }}
                   onHover={() => setHighlighted(i)}
                 />
               ))}
@@ -150,10 +174,11 @@ export function ActionPicker({ current, onPick, integrationStatus }: Props) {
   );
 }
 
-function PickerRow({ entry, highlighted, available, current, onPick, onHover }: {
+function PickerRow({ entry, highlighted, available, locked, current, onPick, onHover }: {
   entry: ActionPickerEntry;
   highlighted: boolean;
   available: boolean;
+  locked: boolean;
   current: boolean;
   onPick: () => void;
   onHover: () => void;
@@ -164,15 +189,16 @@ function PickerRow({ entry, highlighted, available, current, onPick, onHover }: 
       aria-selected={highlighted}
       onMouseEnter={onHover}
       onClick={onPick}
+      title={locked ? 'Requires Spotify Premium' : undefined}
       style={{
         display: 'flex',
         alignItems: 'center',
         gap: 10,
         padding: '8px 12px',
-        cursor: 'pointer',
-        background: highlighted ? '#1f2937' : 'transparent',
+        cursor: locked ? 'not-allowed' : 'pointer',
+        background: highlighted && !locked ? '#1f2937' : 'transparent',
         borderLeft: current ? '3px solid #3b82f6' : '3px solid transparent',
-        opacity: available ? 1 : 0.6,
+        opacity: locked ? 0.45 : available ? 1 : 0.6,
       }}
     >
       <PickerRowIcon iconName={entry.iconName} />
@@ -186,7 +212,12 @@ function PickerRow({ entry, highlighted, available, current, onPick, onHover }: 
           </span>
         )}
       </div>
-      {!available && entry.requires && (
+      {locked && (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: 0.3 }}>
+          <Lock size={10} /> Premium
+        </span>
+      )}
+      {!locked && !available && entry.requires && (
         <span style={{ fontSize: 10, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: 0.3 }}>
           needs {String(entry.requires)}
         </span>

@@ -16,6 +16,7 @@ import { getStreamers } from './integrations/twitch-streamers.js';
 import { getKick } from './integrations/kick.js';
 import { getKickStreamers } from './integrations/kick-streamers.js';
 import { getDiscord } from './integrations/discord.js';
+import { getSpotify } from './integrations/spotify.js';
 // scaffold-integration: additional integration imports inserted above this line
 import { getIntegrations } from './integrations/base.js';
 import { getMic } from './actions/mic.js';
@@ -59,6 +60,14 @@ type LiveMeta = {
     mute?: boolean;
     deaf?: boolean;
   };
+  spotify?: {
+    isPlaying?: boolean;
+    track?: string;
+    artist?: string;
+    album?: string;
+    coverUrl?: string;
+    volumePercent?: number;
+  };
 };
 
 await migrateAppData();
@@ -101,6 +110,7 @@ const streamlabs = getStreamlabs();
 const twitch = getTwitch();
 const kick = getKick();
 const discord = getDiscord();
+const spotify = getSpotify();
 // scaffold-integration: additional singleton calls inserted above this line
 
 // Uniform lifecycle wiring — applyConfig / attachSave / start — so adding a
@@ -233,6 +243,17 @@ function buildLiveMeta(): LiveMeta {
       mute: discordStatus.mute,
       deaf: discordStatus.deaf,
     },
+    spotify: (() => {
+      const s = spotify.status();
+      return {
+        isPlaying: s.isPlaying,
+        track: s.track,
+        artist: s.artist,
+        album: s.album,
+        coverUrl: s.coverUrl,
+        volumePercent: s.volumePercent,
+      };
+    })(),
   };
 }
 
@@ -351,6 +372,9 @@ wss.on('connection', (ws: WebSocket) => {
           await streamlabs.setInputVolume(tile.inputName, msg.value);
         } else if (provider === 'discord') {
           await discord.setSliderVolume(tile.inputName === 'output' ? 'output' : 'input', msg.value);
+        } else if (provider === 'spotify') {
+          // Slider protocol is 0..1; Spotify wants 0..100.
+          await spotify.setPlayerVolume(msg.value * 100);
         } else {
           await obs.setInputVolume(tile.inputName, msg.value);
         }
@@ -372,6 +396,10 @@ wss.on('connection', (ws: WebSocket) => {
         } else if (provider === 'discord') {
           // Input slider mutes the mic (self-mute); output slider deafens.
           await discord.execute(tile.inputName === 'output' ? 'toggle-deafen' : 'toggle-mute');
+        } else if (provider === 'spotify') {
+          // Spotify volume slider "mute" == toggle play/pause: the natural
+          // "silence" action for a music tile.
+          await spotify.execute('toggle-play');
         } else {
           await obs.execute('toggle-mute', { inputName: tile.inputName });
         }

@@ -5,6 +5,8 @@ import type { StreamlabsStatus } from './integrations/streamlabs.js';
 import type { TwitchStatus } from './integrations/twitch.js';
 import type { KickStatus } from './integrations/kick.js';
 import type { DiscordStatus, DiscordChannelMember } from './integrations/discord.js';
+import type { SpotifyStatus } from './integrations/spotify.js';
+import { getSpotify } from './integrations/spotify.js';
 import { getStreamers } from './integrations/twitch-streamers.js';
 import { getKickStreamers } from './integrations/kick-streamers.js';
 import { getMic } from './actions/mic.js';
@@ -80,6 +82,17 @@ function computeOne(t: Tile, obs: ObsStatus, twitch: TwitchStatus, streamlabs: S
       const scale = isOutput ? 200 : 100;
       const value = Math.max(0, Math.min(1, raw / scale));
       const muted = isOutput ? !!discord.deaf : !!discord.mute;
+      return { id: t.id, sliderValue: value, sliderMuted: muted };
+    }
+    if (provider === 'spotify') {
+      const spotify = getSpotify().status();
+      if (spotify.state !== 'connected') return { id: t.id, unavailable: true };
+      if (spotify.volumePercent === undefined) return { id: t.id, unavailable: true };
+      // Spotify's active-device volume is 0..100; phone protocol is 0..1.
+      // The "muted" pip lights when playback is paused — the slider tile's
+      // tap-to-mute action maps to toggle-play for Spotify.
+      const value = Math.max(0, Math.min(1, spotify.volumePercent / 100));
+      const muted = !spotify.isPlaying;
       return { id: t.id, sliderValue: value, sliderMuted: muted };
     }
     const src = provider === 'streamlabs' ? streamlabs : obs;
@@ -285,6 +298,23 @@ function computeStepState(a: Action, obs: ObsStatus, twitch: TwitchStatus, strea
         active = discord.currentVoiceChannelId != null;
         break;
     }
+    return { active, unavailable, iconUrl };
+  }
+
+  if (a.type === 'spotify') {
+    const spotify: SpotifyStatus = getSpotify().status();
+    const unavailable = spotify.state !== 'connected';
+    let active: boolean | undefined;
+    switch (a.op) {
+      case 'toggle-play': case 'play': case 'pause':
+        // "Active" = something is playing. Same convention as OBS toggle-record.
+        active = spotify.isPlaying;
+        break;
+    }
+    // Album cover as the tile background for playback tiles, so users can see
+    // what's currently playing at a glance — same mechanism Discord uses for
+    // guild icons on join-channel tiles.
+    const iconUrl = spotify.coverUrl;
     return { active, unavailable, iconUrl };
   }
 

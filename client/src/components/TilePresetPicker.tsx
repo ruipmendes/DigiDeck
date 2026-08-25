@@ -7,17 +7,28 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Search, X } from 'lucide-react';
 import { getIcon } from '../lib/icons';
 import { TILE_PRESETS, filterPresets, type TilePreset } from './tilePresets';
+import type { IntegrationStatus } from '../lib/types';
 
 type Props = {
   onPick: (preset: TilePreset) => void;
   onCancel: () => void;
+  integrationStatus?: IntegrationStatus;
 };
 
-export function TilePresetPicker({ onPick, onCancel }: Props) {
+export function TilePresetPicker({ onPick, onCancel, integrationStatus }: Props) {
   const [query, setQuery] = useState('');
   const [highlighted, setHighlighted] = useState(0);
   const searchRef = useRef<HTMLInputElement>(null);
-  const filtered = useMemo(() => filterPresets(query), [query]);
+  // Hide fully-paywalled presets when the user's account can't run them —
+  // Spotify's playback ops today, applied wholesale to any preset flagged
+  // `requiresPremium`. Same policy as ActionPicker.
+  const visiblePresets = useMemo(() => {
+    if (integrationStatus?.spotify && !integrationStatus?.spotifyPremium) {
+      return TILE_PRESETS.filter((p) => !p.requiresPremium);
+    }
+    return TILE_PRESETS;
+  }, [integrationStatus?.spotify, integrationStatus?.spotifyPremium]);
+  const filtered = useMemo(() => filterPresets(query).filter((p) => visiblePresets.includes(p)), [query, visiblePresets]);
 
   useEffect(() => { setHighlighted(0); }, [query]);
   useEffect(() => { setTimeout(() => searchRef.current?.focus(), 0); }, []);
@@ -32,9 +43,9 @@ export function TilePresetPicker({ onPick, onCancel }: Props) {
   const grouped = useMemo(() => {
     if (query.trim()) return null;
     const groups: Record<string, TilePreset[]> = {};
-    for (const p of TILE_PRESETS) (groups[p.category] ??= []).push(p);
+    for (const p of visiblePresets) (groups[p.category] ??= []).push(p);
     return groups;
-  }, [query]);
+  }, [query, visiblePresets]);
 
   return (
     <div role="dialog" aria-modal="true" onClick={onCancel} style={backdrop}>

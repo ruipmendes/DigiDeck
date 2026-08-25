@@ -406,6 +406,7 @@ function summarizeAction(a: Action): string {
     case 'kick':             return a.text ? `Kick · "${ellipsis(a.text, 20)}"` : 'Kick chat';
     case 'kick-streamer':    return a.slug ? `Kick · ${a.slug}` : 'Kick streamer';
     case 'discord':          return `Discord · ${a.op}`;
+    case 'spotify':          return `Spotify · ${a.op}`;
     case 'goto-page':        return `Go to page ${a.pageId}`;
     case 'wait':             return `Wait ${a.ms}ms`;
   }
@@ -486,6 +487,19 @@ function SliderEditor({
       }, 4000);
       return () => { alive = false; clearInterval(t); };
     }
+    if (provider === 'spotify') {
+      // Spotify has one player volume — no input list to fetch.
+      let alive = true;
+      api.getSpotifyState()
+        .then((d) => { if (alive) { setInputs([]); setConnected(d.status.state === 'connected'); } })
+        .catch(() => { if (alive) { setInputs([]); setConnected(false); } });
+      const t = setInterval(() => {
+        api.getSpotifyState()
+          .then((d) => { if (alive) setConnected(d.status.state === 'connected'); })
+          .catch(() => { if (alive) setConnected(false); });
+      }, 4000);
+      return () => { alive = false; clearInterval(t); };
+    }
     let alive = true;
     function load() {
       const fetcher = provider === 'streamlabs'
@@ -509,6 +523,7 @@ function SliderEditor({
   const providerLabel =
     provider === 'streamlabs' ? 'Streamlabs Desktop' :
     provider === 'discord'    ? 'Discord' :
+    provider === 'spotify'    ? 'Spotify' :
                                 'OBS Studio';
 
   // Build the provider option list: include configured integrations, plus the
@@ -519,11 +534,20 @@ function SliderEditor({
   if (integrationStatus.obs        || provider === 'obs')        providerOpts.push({ value: 'obs',        label: 'OBS Studio' });
   if (integrationStatus.streamlabs || provider === 'streamlabs') providerOpts.push({ value: 'streamlabs', label: 'Streamlabs Desktop' });
   if (integrationStatus.discord    || provider === 'discord')    providerOpts.push({ value: 'discord',    label: 'Discord' });
+  // Spotify slider is playback-control (Premium-only). Free-tier users literally
+  // can't drive it, so hide the option — mirrors the ActionPicker policy.
+  if ((integrationStatus.spotify && integrationStatus.spotifyPremium) || provider === 'spotify') {
+    providerOpts.push({ value: 'spotify', label: 'Spotify' });
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#9ca3af' }}>
-        <Sliders size={12} /> {providerLabel} {provider === 'discord' ? 'voice volume slider — drag-to-set + tap to mute/deafen' : 'audio mixer slider — drag-to-set-volume + tap-to-mute'}
+        <Sliders size={12} /> {providerLabel} {
+          provider === 'discord' ? 'voice volume slider — drag-to-set + tap to mute/deafen' :
+          provider === 'spotify' ? 'player volume slider — drag-to-set + tap to play/pause' :
+          'audio mixer slider — drag-to-set-volume + tap-to-mute'
+        }
       </div>
       {providerOpts.length > 0 && (
         <select

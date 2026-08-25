@@ -55,12 +55,14 @@ export function ConfigApp() {
       return next;
     });
   }
-  const [integrationStatus, setIntegrationStatus] = useState<{ obs: boolean; twitch: boolean; streamlabs: boolean; kick: boolean; discord: boolean }>({
+  const [integrationStatus, setIntegrationStatus] = useState<{ obs: boolean; twitch: boolean; streamlabs: boolean; kick: boolean; discord: boolean; spotify: boolean; spotifyPremium: boolean }>({
     obs: false,
     twitch: false,
     streamlabs: false,
     kick: false,
     discord: false,
+    spotify: false,
+    spotifyPremium: false,
   });
   const importInputRef = useRef<HTMLInputElement>(null);
 
@@ -70,12 +72,13 @@ export function ConfigApp() {
     let alive = true;
     async function load() {
       try {
-        const [obs, twitch, streamlabs, kick, discord] = await Promise.all([
+        const [obs, twitch, streamlabs, kick, discord, spotify] = await Promise.all([
           api.getObsState().catch(() => null),
           api.getTwitchState().catch(() => null),
           api.getStreamlabsState().catch(() => null),
           api.getKickState().catch(() => null),
           api.getDiscordState().catch(() => null),
+          api.getSpotifyState().catch(() => null),
         ]);
         if (!alive) return;
         setIntegrationStatus({
@@ -84,6 +87,8 @@ export function ConfigApp() {
           streamlabs: !!streamlabs?.config.enabled,
           kick: !!kick?.config.enabled,
           discord: !!discord?.config.enabled,
+          spotify: !!spotify?.config.enabled,
+          spotifyPremium: !!spotify?.config.isPremium,
         });
       } catch { /* harmless */ }
     }
@@ -520,6 +525,7 @@ export function ConfigApp() {
             addFromPreset(pageId, preset);
           }}
           onCancel={() => setPresetPickerPageId(null)}
+          integrationStatus={integrationStatus}
         />
       )}
       <TemplatesPanel

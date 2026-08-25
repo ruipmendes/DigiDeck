@@ -15,7 +15,7 @@
  * so touching Twitch doesn't force a re-review of Discord and vice-versa.
  */
 import { ArrowUp, ArrowDown, X, Plus } from 'lucide-react';
-import type { Action, ButtonAction, IntegrationStatus, MicOp } from '../../lib/types';
+import type { Action, ButtonAction, IntegrationStatus, MicOp, SpotifyOp } from '../../lib/types';
 import { defaultAction } from '../../lib/types';
 import { HotkeyInput } from '../HotkeyInput';
 import { ActionPicker } from '../ActionPicker';
@@ -191,6 +191,14 @@ const MIC_OPS: { value: MicOp; label: string }[] = [
   { value: 'unmute',      label: 'Unmute mic' },
 ];
 
+const SPOTIFY_OPS: { value: SpotifyOp; label: string }[] = [
+  { value: 'toggle-play', label: 'Play / Pause (toggle)' },
+  { value: 'play',        label: 'Play' },
+  { value: 'pause',       label: 'Pause' },
+  { value: 'next',        label: 'Next track' },
+  { value: 'previous',    label: 'Previous track' },
+];
+
 type StepEditorProps = {
   action: Action;
   onChange: (a: Action) => void;
@@ -325,6 +333,16 @@ function Body({ action, onChange, pages }: StepEditorProps) {
     case 'streamlabs': return <StreamlabsBody action={action} onChange={onChange} />;
     case 'twitch':     return <TwitchBody action={action} onChange={onChange} />;
     case 'discord':    return <DiscordBody action={action} onChange={onChange} />;
+    case 'spotify':
+      return (
+        <select
+          value={action.op}
+          onChange={(e) => onChange({ type: 'spotify', op: e.target.value as SpotifyOp })}
+          style={selectStyle}
+        >
+          {SPOTIFY_OPS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      );
     case 'twitch-streamer':
       return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>

@@ -14,6 +14,8 @@ import { getKick } from '../integrations/kick.js';
 import type { KickOp } from '../integrations/kick.js';
 import { getDiscord } from '../integrations/discord.js';
 import type { DiscordOp, DiscordActionParams, DiscordPrompt } from '../integrations/discord.js';
+import { getSpotify } from '../integrations/spotify.js';
+import type { SpotifyOp } from '../integrations/spotify.js';
 import { getMic } from './mic.js';
 import type { MicOp } from './mic.js';
 
@@ -32,6 +34,7 @@ export type Action =
   | { type: 'kick'; op: KickOp; text: string }
   | { type: 'kick-streamer'; slug: string; avatarUrl?: string }
   | { type: 'discord'; op: DiscordOp; params?: DiscordActionParams; prompts?: DiscordPrompt[] }
+  | { type: 'spotify'; op: SpotifyOp }
   | { type: 'goto-page'; pageId: number }
   | { type: 'wait'; ms: number };
 
@@ -72,6 +75,7 @@ async function executeStep(step: Action): Promise<void> {
     case 'kick-streamer':
       return execUrl(`https://kick.com/${step.slug}`);
     case 'discord': return getDiscord().execute(step.op, step.params);
+    case 'spotify': return getSpotify().execute(step.op);
     case 'goto-page':
       // Navigation is handled entirely on the phone — server has nothing to do.
       return;
