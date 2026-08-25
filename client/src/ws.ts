@@ -94,11 +94,30 @@ export type ButtonState = {
 
 export type PreviewInfo = { name: string; title: string };
 
+/** Global integration state — drives dynamic tile labels between broadcasts.
+ *  Field shapes mirror the LiveMeta from the server; every field is optional
+ *  so the phone tolerates older servers that don't send this. */
+export type LiveMeta = {
+  obs?: {
+    recording?: boolean;
+    streaming?: boolean;
+    recordingStartedAtMs?: number;
+    streamingStartedAtMs?: number;
+    droppedFrames?: number;
+    currentScene?: string;
+  };
+  discord?: {
+    currentVoiceChannelName?: string | null;
+    mute?: boolean;
+    deaf?: boolean;
+  };
+};
+
 type ServerMsg =
   | { type: 'layout'; layout: Layout; preview?: PreviewInfo }
   | { type: 'ack'; id: number }
   | { type: 'nack'; id: number; error: string }
-  | { type: 'states'; states: ButtonState[] };
+  | { type: 'states'; states: ButtonState[]; meta?: LiveMeta };
 
 export type WSStatus = 'connecting' | 'open' | 'closed';
 
@@ -115,6 +134,7 @@ export function useMacroWS(url: string, token: string | null) {
   const [lastAck, setLastAck] = useState<{ id: number; at: number } | null>(null);
   const [lastNack, setLastNack] = useState<{ id: number; error: string; at: number } | null>(null);
   const [buttonStates, setButtonStates] = useState<Map<number, ButtonState>>(new Map());
+  const [liveMeta, setLiveMeta] = useState<LiveMeta>({});
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
@@ -146,6 +166,7 @@ export function useMacroWS(url: string, token: string | null) {
             const m = new Map<number, ButtonState>();
             for (const s of msg.states) m.set(s.id, s);
             setButtonStates(m);
+            if (msg.meta) setLiveMeta(msg.meta);
           }
         } catch {
           /* ignore malformed */
@@ -179,5 +200,5 @@ export function useMacroWS(url: string, token: string | null) {
   function voicePanelVolume(id: number, userId: string, value: number) { send({ type: 'voice-panel-volume', id, userId, value }); }
   function voicePanelMute(id: number, userId: string) { send({ type: 'voice-panel-mute', id, userId }); }
 
-  return { status, layout, preview, lastAck, lastNack, buttonStates, press, sliderValue, sliderMute, voicePanelVolume, voicePanelMute };
+  return { status, layout, preview, lastAck, lastNack, buttonStates, liveMeta, press, sliderValue, sliderMute, voicePanelVolume, voicePanelMute };
 }

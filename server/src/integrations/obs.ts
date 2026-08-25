@@ -51,6 +51,15 @@ export type ObsStatus = {
   recording: boolean;
   streaming: boolean;
   virtualCam: boolean;
+  /** Client-side clock reference so the phone can tick between broadcasts.
+   *  `recordingStartedAtMs` is the epoch-ms the current recording began; the
+   *  phone computes `elapsed = Date.now() - recordingStartedAtMs`. Undefined
+   *  when not currently recording. Same shape for streaming. */
+  recordingStartedAtMs?: number;
+  streamingStartedAtMs?: number;
+  /** Global output-skipped frame count from OBS's GetStats. Refreshed every
+   *  few seconds while connected — cheap enough to always fetch. */
+  droppedFrames?: number;
   mutedInputs: string[];
   /** Per-input volume multiplier (0..1 typically; can be higher for overboost). */
   inputVolumes: Record<string, number>;
@@ -108,6 +117,10 @@ class ObsClient implements IntegrationLifecycle {
   private recording = false;
   private streaming = false;
   private virtualCam = false;
+  private recordingStartedAtMs: number | undefined;
+  private streamingStartedAtMs: number | undefined;
+  private droppedFrames: number | undefined;
+  private statsPollTimer: NodeJS.Timeout | null = null;
   private mutedInputs = new Set<string>();
   private inputVolumes = new Map<string, number>();
   /** "<sceneName>::<sourceName>" → enabled */
@@ -133,6 +146,10 @@ class ObsClient implements IntegrationLifecycle {
       this.recording = false;
       this.streaming = false;
       this.virtualCam = false;
+      this.recordingStartedAtMs = undefined;
+      this.streamingStartedAtMs = undefined;
+      this.droppedFrames = undefined;
+      if (this.statsPollTimer) { clearInterval(this.statsPollTimer); this.statsPollTimer = null; }
       this.mutedInputs.clear();
       this.scheduleRetry();
       this.emitChange();
@@ -150,11 +167,17 @@ class ObsClient implements IntegrationLifecycle {
     this.obs.on('SceneItemListReindexed', () => { void this.refreshSnapshot(); });
 
     this.obs.on('RecordStateChanged', (data) => {
-      this.recording = !!data.outputActive;
+      const active = !!data.outputActive;
+      this.recording = active;
+      this.recordingStartedAtMs = active ? Date.now() : undefined;
+      this.updateStatsPollSchedule();
       this.emitChange();
     });
     this.obs.on('StreamStateChanged', (data) => {
-      this.streaming = !!data.outputActive;
+      const active = !!data.outputActive;
+      this.streaming = active;
+      this.streamingStartedAtMs = active ? Date.now() : undefined;
+      this.updateStatsPollSchedule();
       this.emitChange();
     });
     this.obs.on('VirtualcamStateChanged', (data) => {
@@ -208,6 +231,9 @@ class ObsClient implements IntegrationLifecycle {
       recording: this.recording,
       streaming: this.streaming,
       virtualCam: this.virtualCam,
+      recordingStartedAtMs: this.recordingStartedAtMs,
+      streamingStartedAtMs: this.streamingStartedAtMs,
+      droppedFrames: this.droppedFrames,
       mutedInputs: [...this.mutedInputs],
       inputVolumes: Object.fromEntries(this.inputVolumes),
       sourceStates: Object.fromEntries(this.sourceStates),
@@ -259,6 +285,10 @@ class ObsClient implements IntegrationLifecycle {
     this.recording = false;
     this.streaming = false;
     this.virtualCam = false;
+    this.recordingStartedAtMs = undefined;
+    this.streamingStartedAtMs = undefined;
+    this.droppedFrames = undefined;
+    if (this.statsPollTimer) { clearInterval(this.statsPollTimer); this.statsPollTimer = null; }
     this.mutedInputs.clear();
     this.inputVolumes.clear();
     this.sourceStates.clear();
@@ -374,6 +404,44 @@ class ObsClient implements IntegrationLifecycle {
     await this.obs.call('SetSceneItemEnabled', { sceneName, sceneItemId, sceneItemEnabled: enabled });
   }
 
+  /** Start or stop the periodic GetStats poll based on whether recording or
+   *  streaming is running. When nothing's active there's no dropped-frame
+   *  reading worth publishing, so we save the WS traffic. */
+  private updateStatsPollSchedule(): void {
+    const shouldPoll = this.state === 'connected' && (this.recording || this.streaming);
+    if (shouldPoll && !this.statsPollTimer) {
+      // Fire once immediately so labels update as soon as OBS starts recording.
+      void this.pollStats();
+      this.statsPollTimer = setInterval(() => { void this.pollStats(); }, 3000);
+    } else if (!shouldPoll && this.statsPollTimer) {
+      clearInterval(this.statsPollTimer);
+      this.statsPollTimer = null;
+      // Clear the stale reading so the tile label doesn't linger post-stop.
+      if (this.droppedFrames !== undefined) {
+        this.droppedFrames = undefined;
+        this.emitChange();
+      }
+    }
+  }
+
+  private async pollStats(): Promise<void> {
+    if (this.state !== 'connected') return;
+    try {
+      const stats = await this.obs.call('GetStats') as {
+        outputSkippedFrames?: number;
+        renderSkippedFrames?: number;
+      };
+      // outputSkippedFrames is the "dropped frames due to encoding lag" count
+      // streamers watch during a stream. Falls back to render-skipped when
+      // OBS didn't report one (older builds).
+      const next = stats.outputSkippedFrames ?? stats.renderSkippedFrames ?? 0;
+      if (next !== this.droppedFrames) {
+        this.droppedFrames = next;
+        this.emitChange();
+      }
+    } catch { /* transient — try again in 3s */ }
+  }
+
   private async refreshSnapshot(): Promise<void> {
     if (this.state !== 'connected') return;
     try {
@@ -411,13 +479,22 @@ class ObsClient implements IntegrationLifecycle {
       this.sceneItems = sceneItems;
 
       try {
-        const rec = await this.obs.call('GetRecordStatus');
+        const rec = await this.obs.call('GetRecordStatus') as { outputActive?: boolean; outputDuration?: number };
         this.recording = !!rec.outputActive;
+        // Back-date the start time when OBS was already recording before we
+        // connected — outputDuration is the elapsed ms already accumulated.
+        this.recordingStartedAtMs = rec.outputActive
+          ? Date.now() - (rec.outputDuration ?? 0)
+          : undefined;
       } catch { /* ignore */ }
       try {
-        const stream = await this.obs.call('GetStreamStatus');
+        const stream = await this.obs.call('GetStreamStatus') as { outputActive?: boolean; outputDuration?: number };
         this.streaming = !!stream.outputActive;
+        this.streamingStartedAtMs = stream.outputActive
+          ? Date.now() - (stream.outputDuration ?? 0)
+          : undefined;
       } catch { /* ignore */ }
+      this.updateStatsPollSchedule();
       try {
         const vcam = await this.obs.call('GetVirtualCamStatus');
         this.virtualCam = !!vcam.outputActive;

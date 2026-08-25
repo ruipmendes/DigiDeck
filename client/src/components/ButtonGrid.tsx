@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Volume2, VolumeX, ArrowLeft, Home, Headphones, MicOff } from 'lucide-react';
-import type { ButtonState, Layout, PressPrompt, Tile, VoicePanelMember } from '../ws';
+import type { ButtonState, Layout, LiveMeta, PressPrompt, Tile, VoicePanelMember } from '../ws';
 import { getIcon } from '../lib/icons';
 import { imageUrl, fetchPromptChoices } from '../lib/api';
+import { isDynamicLabel, renderLabel } from '../lib/labelTemplate';
 
 /** Convert "#abc" or "#aabbcc" to rgba(...). Falls back to the alpha-only black if parsing fails. */
 function hexToRgba(hex: string, alpha: number): string {
@@ -26,6 +27,7 @@ type Props = {
   onSliderMute: (id: number) => void;
   onVoicePanelVolume: (id: number, userId: string, value: number) => void;
   onVoicePanelMute: (id: number, userId: string) => void;
+  liveMeta: LiveMeta;
 };
 
 const LONG_PRESS_MS = 500;
@@ -33,11 +35,24 @@ const LONG_PRESS_MS = 500;
 const PAGE_KEY = 'digi-deck:active_page';
 const BACK_TILE_ID = -1; // synthetic id; never collides with real tile ids (which are >= 0)
 
-export function ButtonGrid({ layout, lastAck, lastNack, buttonStates, onPress, onSliderChange, onSliderMute, onVoicePanelVolume, onVoicePanelMute }: Props) {
+export function ButtonGrid({ layout, lastAck, lastNack, buttonStates, onPress, onSliderChange, onSliderMute, onVoicePanelVolume, onVoicePanelMute, liveMeta }: Props) {
   // Flash state carries the tile id AND the kind of flash so failed actions
   // can briefly tint red while successful ones tint blue/accent.
   const [flash, setFlash] = useState<{ id: number; kind: 'ack' | 'nack' } | null>(null);
   const [toast, setToast] = useState<{ message: string; at: number } | null>(null);
+  // Re-render every 500ms only when the current layout has at least one tile
+  // whose label references a live template variable. Static-label layouts pay
+  // nothing for the label mechanism.
+  const [, setLabelTick] = useState(0);
+  const hasDynamicLabel = useMemo(
+    () => layout?.pages.some((p) => p.buttons.some((t) => 'label' in t && isDynamicLabel(t.label))) ?? false,
+    [layout],
+  );
+  useEffect(() => {
+    if (!hasDynamicLabel) return;
+    const t = setInterval(() => setLabelTick((n) => n + 1), 500);
+    return () => clearInterval(t);
+  }, [hasDynamicLabel]);
   const [prompt, setPrompt] = useState<{ tileId: number; longPress: boolean; prompts: PressPrompt[] } | null>(null);
   const [activePageId, setActivePageId] = useState<number>(() => {
     const stored = localStorage.getItem(PAGE_KEY);
@@ -220,6 +235,7 @@ export function ButtonGrid({ layout, lastAck, lastNack, buttonStates, onPress, o
                 key={t.id}
                 tile={t}
                 state={state}
+                liveMeta={liveMeta}
                 onChange={(v) => onSliderChange(t.id, v)}
                 onMute={() => onSliderMute(t.id)}
               />
@@ -232,6 +248,7 @@ export function ButtonGrid({ layout, lastAck, lastNack, buttonStates, onPress, o
                 tile={t}
                 state={state}
                 cols={activePage.cols ?? 2}
+                liveMeta={liveMeta}
                 onMemberVolume={(uid, v) => onVoicePanelVolume(t.id, uid, v)}
                 onMemberMute={(uid) => onVoicePanelMute(t.id, uid)}
               />
@@ -245,6 +262,7 @@ export function ButtonGrid({ layout, lastAck, lastNack, buttonStates, onPress, o
               state={state}
               flash={!!tileFlash}
               flashKind={tileFlash}
+              liveMeta={liveMeta}
               onPress={(longPress) => handlePress(t, longPress)}
             />
           );
@@ -466,13 +484,15 @@ function ActionFailureToast({ message, onDismiss }: { message: string; onDismiss
   );
 }
 
-function VoicePanelTileView({ tile, state, cols, onMemberVolume, onMemberMute }: {
+function VoicePanelTileView({ tile, state, cols, liveMeta, onMemberVolume, onMemberMute }: {
   tile: Extract<Tile, { kind: 'discord-voice-panel' }>;
   state: ButtonState | undefined;
   cols: number;
+  liveMeta: LiveMeta;
   onMemberVolume: (userId: string, value: number) => void;
   onMemberMute: (userId: string) => void;
 }) {
+  const label = renderLabel(tile.label, liveMeta);
   const disconnected = !!state?.voicePanelDisconnected;
   const members = state?.voicePanelMembers ?? [];
   const accent = tile.accentColor ?? '#5865f2';
@@ -495,7 +515,7 @@ function VoicePanelTileView({ tile, state, cols, onMemberVolume, onMemberMute }:
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <Headphones size={14} style={{ color: accent }} />
-        <span style={{ fontSize: 13, fontWeight: 600 }}>{tile.label}</span>
+        <span style={{ fontSize: 13, fontWeight: 600 }}>{label}</span>
         {!disconnected && (
           <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 'auto' }}>
             {members.length} {members.length === 1 ? 'member' : 'members'}
@@ -697,15 +717,18 @@ function ButtonTileView({
   state,
   flash,
   flashKind,
+  liveMeta,
   onPress,
 }: {
   tile: Extract<Tile, { kind: 'button' }>;
   state: ButtonState | undefined;
   flash: boolean;
   flashKind?: 'ack' | 'nack';
+  liveMeta: LiveMeta;
   onPress: (longPress: boolean) => void;
 }) {
   const Icon = getIcon(tile.icon);
+  const label = renderLabel(tile.label, liveMeta);
   const active = !!state?.active;
   const unavailable = !!state?.unavailable;
   const isSource = state?.kind === 'source';
@@ -817,7 +840,7 @@ function ButtonTileView({
               pointerEvents: 'none',
             }}
           />
-          {tile.label && (
+          {label && (
             <span
               style={{
                 position: 'absolute', left: 0, right: 0, bottom: 0,
@@ -831,7 +854,7 @@ function ButtonTileView({
                 pointerEvents: 'none',
               }}
             >
-              {tile.label}
+              {label}
             </span>
           )}
         </>
@@ -898,7 +921,7 @@ function ButtonTileView({
           ) : Icon ? (
             <Icon size={32} strokeWidth={1.75} />
           ) : null}
-          <span>{tile.label}</span>
+          <span>{label}</span>
         </>
       )}
       {active && !isStreamer && (
@@ -931,14 +954,17 @@ function ButtonTileView({
 function SliderTileView({
   tile,
   state,
+  liveMeta,
   onChange,
   onMute,
 }: {
   tile: Extract<Tile, { kind: 'slider' }>;
   state: ButtonState | undefined;
+  liveMeta: LiveMeta;
   onChange: (value: number) => void;
   onMute: () => void;
 }) {
+  const label = renderLabel(tile.label, liveMeta);
   const unavailable = !!state?.unavailable;
   const serverValue = state?.sliderValue ?? 0;
   const muted = !!state?.sliderMuted;
@@ -1042,7 +1068,7 @@ function SliderTileView({
       {/* Top row: label + mute button */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 500 }}>
         <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {tile.label}
+          {label}
         </span>
         <span style={{ fontSize: 11, color: '#9ca3af', fontVariantNumeric: 'tabular-nums' }}>
           {muted ? 'muted' : `${percent}%`}

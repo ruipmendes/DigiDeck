@@ -272,6 +272,14 @@ export type ObsStatus = {
   sourceStates: Record<string, boolean>;
   currentScene?: string;
   retryStopped: boolean;
+  /** Whether OBS is currently recording. */
+  recording?: boolean;
+  streaming?: boolean;
+  /** Epoch-ms when the current recording started — the client uses this to tick
+   *  a live "REC 01:23:45" label between broadcasts. Undefined when not recording. */
+  recordingStartedAtMs?: number;
+  streamingStartedAtMs?: number;
+  droppedFrames?: number;
 };
 
 export type ObsState_API = { config: ObsConfig; status: ObsStatus };

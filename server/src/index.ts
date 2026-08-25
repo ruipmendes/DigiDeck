@@ -40,7 +40,26 @@ type ServerMsg =
   | { type: 'layout'; layout: PublicLayout; preview?: { name: string; title: string } }
   | { type: 'ack'; id: number }
   | { type: 'nack'; id: number; error: string }
-  | { type: 'states'; states: ButtonState[] };
+  | { type: 'states'; states: ButtonState[]; meta?: LiveMeta };
+
+/** Global integration state used for dynamic tile labels (e.g. "REC 01:23:45").
+ *  Sent alongside per-tile ButtonState so the phone has everything it needs to
+ *  render templates without additional polling. */
+type LiveMeta = {
+  obs?: {
+    recording?: boolean;
+    streaming?: boolean;
+    recordingStartedAtMs?: number;
+    streamingStartedAtMs?: number;
+    droppedFrames?: number;
+    currentScene?: string;
+  };
+  discord?: {
+    currentVoiceChannelName?: string | null;
+    mute?: boolean;
+    deaf?: boolean;
+  };
+};
 
 await migrateAppData();
 const serverConfig = await loadOrInitConfig();
@@ -194,8 +213,25 @@ function broadcastLayout() {
 }
 
 function broadcastStates() {
-  const states = computeButtonStates(activeLayout(), obs.status(), twitch.status(), streamlabs.status(), kick.status(), discord.status());
-  const data = JSON.stringify({ type: 'states', states } satisfies ServerMsg);
+  const obsStatus = obs.status();
+  const discordStatus = discord.status();
+  const states = computeButtonStates(activeLayout(), obsStatus, twitch.status(), streamlabs.status(), kick.status(), discordStatus);
+  const meta: LiveMeta = {
+    obs: {
+      recording: obsStatus.recording,
+      streaming: obsStatus.streaming,
+      recordingStartedAtMs: obsStatus.recordingStartedAtMs,
+      streamingStartedAtMs: obsStatus.streamingStartedAtMs,
+      droppedFrames: obsStatus.droppedFrames,
+      currentScene: obsStatus.currentScene,
+    },
+    discord: {
+      currentVoiceChannelName: discordStatus.currentVoiceChannelName,
+      mute: discordStatus.mute,
+      deaf: discordStatus.deaf,
+    },
+  };
+  const data = JSON.stringify({ type: 'states', states, meta } satisfies ServerMsg);
   for (const ws of wss.clients) {
     if (ws.readyState === ws.OPEN) ws.send(data);
   }

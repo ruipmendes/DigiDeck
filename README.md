@@ -320,6 +320,20 @@ In Digi Deck's config UI: expand the **OBS Studio** card, tick *Enable*, paste t
 
 Action types you can bind: toggle/start/stop recording, toggle/start/stop streaming, toggle virtual camera, toggle/save replay buffer, switch scene (dropdown of your scenes), toggle input mute (dropdown of your inputs), toggle source visibility in a scene (dropdown of scene → sources in that scene), **media controls** (play/pause/restart/stop/next/previous — dropdown of your media sources), **refresh browser source** (dropdown of your browser sources — great for reloading chat overlays without cache).
 
+**Dynamic tile labels.** Any tile label can embed a live template variable in `{integration.value}` form. The phone ticks the display locally (every 500 ms) so time counters advance smoothly between server broadcasts. Available variables:
+
+| Variable | Renders as |
+| --- | --- |
+| `{obs.recordingTime}` | Elapsed recording time (`01:23:45`) or empty when not recording |
+| `{obs.streamingTime}` | Elapsed streaming time |
+| `{obs.droppedFrames}` | Global dropped-frame count from `GetStats` |
+| `{obs.currentScene}` | Active OBS scene name |
+| `{discord.channel}` | Current Discord voice channel name (or empty) |
+| `{discord.mute}` | `muted` while self-muted, else empty |
+| `{discord.deaf}` | `deafened` while self-deafened, else empty |
+
+Example: a recording tile labeled `REC {obs.recordingTime}` renders as `REC 00:00:00` idle, `REC 01:23:45` while recording. The `+ from library` picker ships three starter presets (Recording timer, Streaming timer, Dropped frames indicator).
+
 Live state on the phone: recording / streaming / virtual cam / scene-active / muted buttons show a blue dot, source-visible buttons show a green dot, and any OBS button is dimmed with an "offline" pip if OBS isn't connected.
 
 > **Note:** this integration speaks the `obs-websocket` v5 protocol bundled with **OBS Studio 28+**. If you run **Streamlabs Desktop** instead, use the *Streamlabs Desktop* integration below — it speaks Streamlabs' own JSON-RPC protocol and lives entirely separately from OBS.
