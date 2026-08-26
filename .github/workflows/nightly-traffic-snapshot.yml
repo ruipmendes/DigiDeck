@@ -1,0 +1,49 @@
+name: Nightly traffic snapshot
+
+# GitHub's Insights → Traffic tab only shows the trailing 14 days and is
+# non-cumulative. Snapshot the raw JSON once a day so we retain a full
+# history — clones and views per day — for the whole life of the repo.
+#
+# Commits to metrics/ in this repo (idempotent on same-day runs — the file
+# name includes the date, so a re-run just overwrites that day's file).
+
+on:
+  schedule:
+    # 03:12 UTC daily — off the exact hour so it doesn't fight the peak.
+    - cron: '12 3 * * *'
+  workflow_dispatch: # so you can trigger it manually to backfill
+
+permissions:
+  contents: write
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch clones + views
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          today=$(date -u +%F)
+          mkdir -p metrics
+          gh api "repos/${GITHUB_REPOSITORY}/traffic/clones" > "metrics/clones-${today}.json"
+          gh api "repos/${GITHUB_REPOSITORY}/traffic/views"  > "metrics/views-${today}.json"
+
+      - name: Commit if changed
+        run: |
+          set -euo pipefail
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          # Add and commit only when there's something actually different —
+          # a manual re-run on the same day is a no-op then.
+          git add metrics/
+          if git diff --staged --quiet; then
+            echo "No traffic changes to commit."
+            exit 0
+          fi
+          today=$(date -u +%F)
+          git commit -m "metrics: nightly traffic snapshot ${today}"
+          git push

@@ -1,0 +1,80 @@
+name: Release
+
+# On a pushed v* tag, build a distributable zip and publish it as a GitHub
+# Release asset. GitHub only counts downloads for release *assets* — not
+# source zipballs or `main.zip` — so shipping through this workflow is what
+# turns the update path into a real, countable install signal.
+#
+# The zip mirrors the tree the old `main.zip` update path used to fetch:
+# source only, no node_modules / dist. install.ps1 handles the build after
+# extraction, same as before.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build (e.g. v0.3.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Determine tag
+        id: tag
+        run: |
+          if [ -n "${{ inputs.tag }}" ]; then
+            echo "value=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            # Extract from refs/tags/vX.Y.Z
+            echo "value=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.tag.outputs.value }}
+
+      - name: Build source zip
+        env:
+          TAG: ${{ steps.tag.outputs.value }}
+        run: |
+          set -euo pipefail
+          # Mirror the layout of the raw source zip so apply-update-zip.ps1's
+          # overlay logic doesn't need to change. The extracted top-level dir
+          # is DigiDeck-<tag-without-v> — matches the archive/refs/tags shape.
+          version="${TAG#v}"
+          staging="DigiDeck-${version}"
+          mkdir -p "packaging/${staging}"
+          # Copy everything except vcs / build artefacts / lockfiles for user data
+          rsync -a \
+            --exclude='.git' \
+            --exclude='node_modules' \
+            --exclude='dist' \
+            --exclude='packaging' \
+            --exclude='.DS_Store' \
+            ./ "packaging/${staging}/"
+          (cd packaging && zip -qr9 "../digi-deck.zip" "${staging}")
+          ls -lh digi-deck.zip
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.tag.outputs.value }}
+        run: |
+          set -euo pipefail
+          # If a release already exists for this tag, upload the asset instead
+          # of failing — makes re-runs from workflow_dispatch idempotent.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" digi-deck.zip --clobber
+          else
+            gh release create "$TAG" digi-deck.zip \
+              --title "$TAG" \
+              --generate-notes
+          fi

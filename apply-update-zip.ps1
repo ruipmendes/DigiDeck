@@ -52,17 +52,27 @@ try {
     Write-Host '  (server not running)' -ForegroundColor DarkGray
   }
 
-  # 2. Download the latest source zip from GitHub.
-  Step 2 6 'Downloading latest source...'
+  # 2. Download the latest release zip from GitHub.
+  #    GitHub counts downloads for release *assets* — not for `archive/refs/heads/main.zip`
+  #    — so we hit the release URL first. If no release has an asset yet (or the
+  #    tagged release predates the release workflow), fall back to the main-branch
+  #    source zip so the update still works.
+  Step 2 6 'Downloading latest release...'
   $tempDir = Join-Path $env:TEMP "digi-deck-update-$(Get-Date -Format 'yyyyMMddHHmmss')"
   New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
-  $zipPath = Join-Path $tempDir 'main.zip'
+  $zipPath = Join-Path $tempDir 'digi-deck.zip'
   # Silencing the progress bar makes Invoke-WebRequest dramatically faster on
   # PS 5.1 (default progress rendering can add 30+ seconds on medium-size zips).
   $ProgressPreference = 'SilentlyContinue'
-  Invoke-WebRequest -Uri 'https://github.com/ruipmendes/DigiDeck/archive/refs/heads/main.zip' `
-                    -OutFile $zipPath `
-                    -UseBasicParsing
+  $releaseUrl  = 'https://github.com/ruipmendes/DigiDeck/releases/latest/download/digi-deck.zip'
+  $fallbackUrl = 'https://github.com/ruipmendes/DigiDeck/archive/refs/heads/main.zip'
+  try {
+    Invoke-WebRequest -Uri $releaseUrl -OutFile $zipPath -UseBasicParsing -ErrorAction Stop
+    Write-Host "  downloaded release asset." -ForegroundColor DarkGray
+  } catch {
+    Write-Host "  release asset not available yet; falling back to main.zip" -ForegroundColor DarkGray
+    Invoke-WebRequest -Uri $fallbackUrl -OutFile $zipPath -UseBasicParsing
+  }
   Write-Host "  saved to $zipPath" -ForegroundColor DarkGray
 
   # 3. Extract to temp so we can copy from a stable source.
