@@ -1,5 +1,8 @@
 import { createServer as createHttpServer } from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve as resolvePath } from 'node:path';
 import { WebSocketServer, WebSocket } from 'ws';
 import { loadOrGenerateCert } from './https-cert.js';
 import { loadOrInitLayout, reloadLayout, toPublic, watchLayout, findTile, collectStreamerLogins, collectKickStreamerSlugs, collectObsSceneNames, layoutUsesAppAudioSlider, layoutSystemMetricsNeeded, LAYOUT_FILE } from './layout.js';
@@ -549,7 +552,22 @@ startTray({
     console.log('[tray] quit requested');
     await shutdown();
   },
-}, currentTrayMenu());
+}, currentTrayMenu(), readServerVersion());
+
+function readServerVersion(): string {
+  // index.ts lives at server/src/index.ts in dev (tsx) and server/dist/index.js
+  // in prod (tsc). Both resolve one level up to `server/`, where package.json
+  // lives — so the version stays authoritative without duplicating the string.
+  try {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const pkgPath = resolvePath(here, '..', 'package.json');
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf8')) as { version?: string };
+    return typeof pkg.version === 'string' ? pkg.version : 'unknown';
+  } catch (err) {
+    console.warn('[tray] could not read package.json version:', (err as Error).message);
+    return 'unknown';
+  }
+}
 
 function showUpdateDialog(result: UpdateCheck, applyAvailable: boolean, applyScript: string): void {
   const rendered = renderUpdateDialog(result, applyAvailable);

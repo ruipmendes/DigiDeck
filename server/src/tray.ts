@@ -17,7 +17,7 @@ export type TrayActions = {
  */
 export type TrayMenu = Array<{ name: string; displayName: string; enabled: boolean }>;
 
-function buildPsScript(menu: TrayMenu): string {
+function buildPsScript(menu: TrayMenu, version: string): string {
   const restartItems: string[] = [];
   let idx = 0;
   for (const entry of menu) {
@@ -34,6 +34,12 @@ function buildPsScript(menu: TrayMenu): string {
     ? `${restartItems.join('\n')}\n[void]$menu.Items.Add('-')`
     : '';
 
+  // Same escape as the integration labels — single quotes double up inside PS
+  // single-quoted string literals.
+  const safeVersion = version.replace(/'/g, "''");
+  // Windows caps the NotifyIcon tooltip at 63 chars; keep it well under.
+  const tooltipText = `Digi Deck v${safeVersion}`.slice(0, 60);
+
   return `
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
@@ -43,7 +49,7 @@ $ErrorActionPreference = 'Stop'
 $notify = New-Object System.Windows.Forms.NotifyIcon
 $notify.Icon = [System.Drawing.SystemIcons]::Application
 $notify.Visible = $true
-$notify.Text = 'Digi Deck'
+$notify.Text = '${tooltipText}'
 
 function Send-Cmd([string]$cmd) {
   [Console]::Out.WriteLine($cmd)
@@ -51,6 +57,13 @@ function Send-Cmd([string]$cmd) {
 }
 
 $menu = New-Object System.Windows.Forms.ContextMenuStrip
+
+# Grey version label at the top — non-clickable, just for quick "what am I on"
+# checks. Rendered as a disabled menu item since ContextMenuStrip has no
+# dedicated label element that plays nicely with the rest of the menu.
+$versionItem = $menu.Items.Add('Version ${safeVersion}')
+$versionItem.Enabled = $false
+[void]$menu.Items.Add('-')
 
 $openItem = $menu.Items.Add('Open config')
 $openItem.Add_Click({ Send-Cmd 'OPEN' })
@@ -103,11 +116,12 @@ try {
 let trayProc: ChildProcess | null = null;
 let currentActions: TrayActions | null = null;
 let currentMenu: TrayMenu | null = null;
+let currentVersion = '';
 
-function spawnTray(actions: TrayActions, menu: TrayMenu): void {
+function spawnTray(actions: TrayActions, menu: TrayMenu, version: string): void {
   if (process.platform !== 'win32') return;
 
-  const encoded = Buffer.from(buildPsScript(menu), 'utf16le').toString('base64');
+  const encoded = Buffer.from(buildPsScript(menu, version), 'utf16le').toString('base64');
 
   try {
     trayProc = spawn(
@@ -143,11 +157,12 @@ function spawnTray(actions: TrayActions, menu: TrayMenu): void {
   });
 }
 
-export function startTray(actions: TrayActions, menu: TrayMenu): void {
+export function startTray(actions: TrayActions, menu: TrayMenu, version: string): void {
   currentActions = actions;
   currentMenu = menu;
-  spawnTray(actions, menu);
-  console.log(`[tray] system tray icon installed (restart items: ${menuLabel(menu)})`);
+  currentVersion = version;
+  spawnTray(actions, menu, version);
+  console.log(`[tray] system tray icon installed for v${version} (restart items: ${menuLabel(menu)})`);
 }
 
 /** Rebuild the tray with a new menu config. Idempotent — skips if the menu hasn't changed. */
@@ -160,7 +175,7 @@ export function updateTrayMenu(menu: TrayMenu): void {
     try { trayProc.kill(); } catch { /* ignore */ }
   }
   trayProc = null;
-  spawnTray(currentActions, menu);
+  spawnTray(currentActions, menu, currentVersion);
   console.log(`[tray] refreshed menu (restart items: ${menuLabel(menu)})`);
 }
 
