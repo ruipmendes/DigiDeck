@@ -68,6 +68,10 @@ export type KickStatus = {
   error?: string;
   slug?: string;
   channel?: string;
+  /** True when the authenticated account is currently streaming. */
+  isLive?: boolean;
+  /** Current viewer count (0 when live-but-stream-set-to-private or hidden). */
+  viewerCount?: number;
 };
 
 export type KickOp =
@@ -189,6 +193,8 @@ class KickClient implements IntegrationLifecycle {
       error: state === 'error' ? this.err : undefined,
       slug: this.cfg.slug || undefined,
       channel: this.cfg.slug ? `kick.com/${this.cfg.slug}` : undefined,
+      isLive: this.isLive,
+      viewerCount: this.viewerCount,
     };
   }
 
@@ -285,6 +291,7 @@ class KickClient implements IntegrationLifecycle {
       }
       this.internal = 'connected';
       this.emitChange();
+      this.startLiveStatsPoll();
     } catch (err) {
       this.err = (err as Error).message;
       this.internal = 'error';
@@ -295,6 +302,7 @@ class KickClient implements IntegrationLifecycle {
 
   async stop(): Promise<void> {
     this.internal = 'idle';
+    this.stopLiveStatsPoll();
     this.emitChange();
   }
 
@@ -476,6 +484,46 @@ class KickClient implements IntegrationLifecycle {
 
   private userIdCache = new Map<string, { id: number; expires: number }>();
   private categoryIdCache = new Map<string, { id: number; expires: number }>();
+
+  /** Own live status + viewer count, polled every 30 s while connected. Feeds
+   *  the `{kick.viewerCount}` / `{kick.live}` label variables and the chart
+   *  source. Undefined until the first poll returns. */
+  private isLive: boolean | undefined;
+  private viewerCount: number | undefined;
+  private liveStatsTimer: NodeJS.Timeout | null = null;
+
+  private startLiveStatsPoll(): void {
+    if (this.liveStatsTimer) return;
+    void this.pollLiveStats();
+    this.liveStatsTimer = setInterval(() => { void this.pollLiveStats(); }, 30_000);
+  }
+
+  private stopLiveStatsPoll(): void {
+    if (this.liveStatsTimer) { clearInterval(this.liveStatsTimer); this.liveStatsTimer = null; }
+    this.isLive = undefined;
+    this.viewerCount = undefined;
+  }
+
+  private async pollLiveStats(): Promise<void> {
+    if (!this.cfg.broadcasterUserId) return;
+    try {
+      const data = await this.apiGet<{ data?: Array<{ viewer_count?: number }> }>(
+        '/users/livestreams',
+        { 'user_id[]': String(this.cfg.broadcasterUserId) },
+      );
+      const first = data.data?.[0];
+      const nextLive = !!first;
+      const nextViewers = first?.viewer_count;
+      if (nextLive !== this.isLive || nextViewers !== this.viewerCount) {
+        this.isLive = nextLive;
+        this.viewerCount = nextViewers;
+        this.emitChange();
+      }
+    } catch (err) {
+      // Don't spam the log — some Kick accounts get rate-limited briefly.
+      console.warn(`[kick] live stats poll failed: ${(err as Error).message}`);
+    }
+  }
 
   private async ensureAccessToken(): Promise<void> {
     if (this.accessToken && Date.now() < this.accessTokenExpires) return;

@@ -69,6 +69,7 @@ export type DiscordVoicePanelTile = {
 export type ChartSource =
   | 'obs.droppedFrames'
   | 'spotify.volumePercent'
+  | 'kick.viewerCount'
   | 'system.cpu'
   | 'system.ram'
   | 'system.gpu';
@@ -454,6 +455,7 @@ const VALID_ACTION_TYPES = new Set(['hotkey', 'text', 'launch', 'url', 'script',
 const VALID_CHART_SOURCES = new Set<string>([
   'obs.droppedFrames',
   'spotify.volumePercent',
+  'kick.viewerCount',
   'system.cpu',
   'system.ram',
   'system.gpu',

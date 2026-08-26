@@ -210,7 +210,7 @@ export type DiscordVoicePanelTile = {
 };
 
 /** Numeric LiveMeta sources that can feed a chart tile. */
-export type ChartSource = 'obs.droppedFrames' | 'spotify.volumePercent' | 'system.cpu' | 'system.ram' | 'system.gpu';
+export type ChartSource = 'obs.droppedFrames' | 'spotify.volumePercent' | 'kick.viewerCount' | 'system.cpu' | 'system.ram' | 'system.gpu';
 
 /** Small sparkline tile — no tap action; renders a rolling trace of a
  *  numeric LiveMeta value. Value mode plots raw; delta mode plots

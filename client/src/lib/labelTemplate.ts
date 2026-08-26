@@ -13,6 +13,8 @@
  *   {spotify.artist}      → currently-playing artist(s) (or empty)
  *   {spotify.album}       → currently-playing album (or empty)
  *   {spotify.playing}     → "playing" / "paused" / empty when nothing loaded
+ *   {kick.viewerCount}    → current viewer count of authenticated Kick stream
+ *   {kick.live}           → "live" while streaming, empty otherwise
  *
  * Anything else is left as-is (`{foo.bar}` stays visible so misspellings are
  * obvious rather than silently blank). The renderer is called at every tile
@@ -47,6 +49,11 @@ export function renderLabel(label: string, meta: LiveMeta, nowMs: number = Date.
         return s.isPlaying ? 'playing' : 'paused';
       }
     }
+    if (ns === 'kick' && meta.kick) {
+      const k = meta.kick;
+      if (key === 'viewerCount') return k.viewerCount !== undefined ? String(k.viewerCount) : '';
+      if (key === 'live')        return k.isLive ? 'live' : '';
+    }
     return raw;
   });
 }
@@ -76,6 +83,7 @@ export function getNumericValue(source: string, meta: import('../ws').LiveMeta):
   switch (source) {
     case 'obs.droppedFrames':      return meta.obs?.droppedFrames;
     case 'spotify.volumePercent':  return meta.spotify?.volumePercent;
+    case 'kick.viewerCount':       return meta.kick?.viewerCount;
     case 'system.cpu':             return meta.system?.cpuPercent;
     case 'system.ram':             return meta.system?.ramPercent;
     case 'system.gpu':             return meta.system?.gpuPercent;

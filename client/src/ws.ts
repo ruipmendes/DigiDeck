@@ -55,7 +55,7 @@ export type DiscordVoicePanelTile = {
   accentColor?: string;
 };
 
-export type ChartSource = 'obs.droppedFrames' | 'spotify.volumePercent' | 'system.cpu' | 'system.ram' | 'system.gpu';
+export type ChartSource = 'obs.droppedFrames' | 'spotify.volumePercent' | 'kick.viewerCount' | 'system.cpu' | 'system.ram' | 'system.gpu';
 
 /** Small sparkline tile that traces a numeric LiveMeta value over a rolling
  *  window. No tap action; purely display. */
@@ -136,6 +136,10 @@ export type LiveMeta = {
     album?: string;
     coverUrl?: string;
     volumePercent?: number;
+  };
+  kick?: {
+    isLive?: boolean;
+    viewerCount?: number;
   };
   system?: {
     cpuPercent?: number;

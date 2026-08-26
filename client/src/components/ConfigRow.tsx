@@ -471,6 +471,7 @@ const metaLabel: React.CSSProperties = {
 const CHART_SOURCES: { value: ChartSource; label: string; defaultMode: 'value' | 'delta'; hint?: string }[] = [
   { value: 'obs.droppedFrames',     label: 'OBS · dropped frames',   defaultMode: 'delta', hint: 'Use delta mode — the counter climbs monotonically, delta shows when drops actually happen.' },
   { value: 'spotify.volumePercent', label: 'Spotify · volume %',     defaultMode: 'value' },
+  { value: 'kick.viewerCount',      label: 'Kick · viewer count',    defaultMode: 'value', hint: 'Value only populates while the authenticated Kick account is live.' },
   { value: 'system.cpu',            label: 'System · CPU %',         defaultMode: 'value' },
   { value: 'system.ram',            label: 'System · RAM %',         defaultMode: 'value' },
   { value: 'system.gpu',            label: 'System · GPU %',         defaultMode: 'value', hint: 'Windows only — sampled via PowerShell perf counter every ~3 s (MAX across GPU engines, matches Task Manager).' },

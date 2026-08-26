@@ -74,6 +74,10 @@ type LiveMeta = {
     coverUrl?: string;
     volumePercent?: number;
   };
+  kick?: {
+    isLive?: boolean;
+    viewerCount?: number;
+  };
   system?: {
     cpuPercent?: number;
     ramPercent?: number;
@@ -295,6 +299,13 @@ function buildLiveMeta(): LiveMeta {
         album: s.album,
         coverUrl: s.coverUrl,
         volumePercent: s.volumePercent,
+      };
+    })(),
+    kick: (() => {
+      const s = kick.status();
+      return {
+        isLive: s.isLive,
+        viewerCount: s.viewerCount,
       };
     })(),
     system: systemMetrics.status(),

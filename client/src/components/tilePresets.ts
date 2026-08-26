@@ -107,6 +107,14 @@ export const TILE_PRESETS: TilePreset[] = [
       prompts: [{ field: 'target', label: 'Streamer', placeholder: 'e.g. ninja (login, no @)' }],
     } }) },
 
+  // ─── Kick ───────────────────────────────────────────
+  { key: 'kick-viewer-count', category: 'Kick', label: 'Viewer count label', hint: 'Live {kick.viewerCount} label — polled every 30 s', iconName: 'kick',
+    keywords: 'kick viewer count viewers live dynamic label stream',
+    create: (id) => ({ kind: 'button', id, label: '{kick.viewerCount}\nviewers', icon: 'kick', action: { type: 'url', url: 'https://kick.com/' } }) },
+  { key: 'kick-viewer-chart', category: 'Kick', label: 'Viewer count sparkline', hint: 'Live chart of your Kick viewer count', iconName: 'kick',
+    keywords: 'kick viewer count viewers chart sparkline graph trend live',
+    create: (id) => ({ kind: 'chart', id, label: 'Viewers', source: 'kick.viewerCount', mode: 'value' }) },
+
   // ─── Discord ────────────────────────────────────────
   { key: 'discord-mute', category: 'Discord', label: 'Toggle mic mute', iconName: 'discord',
     keywords: 'discord mic mute toggle voice',
