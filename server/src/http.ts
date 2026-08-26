@@ -8,6 +8,7 @@ import { findIntegration } from './integrations/base.js';
 import { getDiscord } from './integrations/discord.js';
 import { getSpotify } from './integrations/spotify.js';
 import { getAppAudio } from './actions/appAudio.js';
+import { listIconPacks, readIcon, ICON_PACKS_DIR, invalidateIconPacksCache } from './icon-packs.js';
 import {
   saveImage, imagePath, imageExists, deleteImage, imageMime, MAX_IMAGE_BYTES,
 } from './images.js';
@@ -279,6 +280,60 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse, c
       }
       return;
     }
+  }
+
+  // ─── Icon packs ─────────────────────────────────────────────
+  // Discovery is filesystem-based — users drop unzipped icon sets into
+  // %APPDATA%/digi-deck/icon-packs/<pack>/. The `dir` field is returned so
+  // the manage-packs UI can show the user where to drop new ones.
+  if (pathname === '/api/icon-packs' && req.method === 'GET') {
+    if (!authorize(req, token())) return unauthorized(res);
+    try {
+      const packs = await listIconPacks();
+      json(res, 200, { packs, dir: ICON_PACKS_DIR });
+    } catch (err) {
+      json(res, 500, { error: (err as Error).message });
+    }
+    return;
+  }
+  if (pathname === '/api/icon-packs/refresh' && req.method === 'POST') {
+    if (!authorize(req, token())) return unauthorized(res);
+    invalidateIconPacksCache();
+    const packs = await listIconPacks();
+    json(res, 200, { packs, dir: ICON_PACKS_DIR });
+    return;
+  }
+  // Serve an individual SVG. Path shape: /api/icon-packs/<pack>/<iconName>.svg
+  // where iconName may contain forward slashes (subfolder prefixes).
+  if (pathname.startsWith('/api/icon-packs/') && pathname.endsWith('.svg') && req.method === 'GET') {
+    if (!authorize(req, token())) return unauthorized(res);
+    const rest = pathname.slice('/api/icon-packs/'.length, -'.svg'.length);
+    const slashIdx = rest.indexOf('/');
+    if (slashIdx <= 0) {
+      res.writeHead(400, { 'Content-Type': 'text/plain' });
+      res.end('bad path');
+      return;
+    }
+    const pack = decodeURIComponent(rest.slice(0, slashIdx));
+    const iconName = decodeURIComponent(rest.slice(slashIdx + 1));
+    const buf = await readIcon(pack, iconName);
+    if (!buf) {
+      res.writeHead(404);
+      res.end();
+      return;
+    }
+    res.writeHead(200, {
+      'Content-Type': 'image/svg+xml; charset=utf-8',
+      'Content-Length': String(buf.length),
+      // SVGs are user-controlled but come from their own AppData folder — cache
+      // aggressively, they only change when the user replaces the file.
+      'Cache-Control': 'public, max-age=86400',
+      // SVG can carry inline <script> — the `<img src>` context browsers use to
+      // render tile icons blocks script execution, but set CSP as belt+braces.
+      'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'",
+    });
+    res.end(buf);
+    return;
   }
 
   // ─── Discord-specific: choice lists for prompt-at-tap dropdowns ─

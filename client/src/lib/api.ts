@@ -507,6 +507,30 @@ export async function recheckSpotifySubscription(): Promise<SpotifyState_API> {
   return res.json();
 }
 
+// ─── Icon packs ─────────────────────────────────────────────────
+
+export type IconPack = { name: string; icons: string[] };
+
+export async function listIconPacks(): Promise<{ packs: IconPack[]; dir: string }> {
+  const res = await apiFetch('/api/icon-packs');
+  if (!res.ok) throw new Error(`GET icon-packs failed: ${res.status}`);
+  return res.json();
+}
+
+export async function refreshIconPacks(): Promise<{ packs: IconPack[]; dir: string }> {
+  const res = await apiFetch('/api/icon-packs/refresh', { method: 'POST' });
+  if (!res.ok) throw new Error(`POST icon-packs/refresh failed: ${res.status}`);
+  return res.json();
+}
+
+/** URL for one pack SVG — includes token when one is stored so <img src>
+ *  passes auth (the phone browser can't add an Authorization header there). */
+export function iconPackUrl(pack: string, iconName: string): string {
+  const base = `/api/icon-packs/${encodeURIComponent(pack)}/${iconName.split('/').map(encodeURIComponent).join('/')}.svg`;
+  const token = getStoredToken();
+  return token ? `${base}?token=${encodeURIComponent(token)}` : base;
+}
+
 // ─── App-audio ──────────────────────────────────────────────────
 
 export type AppAudioSession = {

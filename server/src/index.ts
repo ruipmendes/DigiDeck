@@ -18,6 +18,7 @@ import { getKickStreamers } from './integrations/kick-streamers.js';
 import { getDiscord } from './integrations/discord.js';
 import { getSpotify } from './integrations/spotify.js';
 import { getAppAudio } from './actions/appAudio.js';
+import { ensureIconPacksDir } from './icon-packs.js';
 // scaffold-integration: additional integration imports inserted above this line
 import { getIntegrations } from './integrations/base.js';
 import { getMic } from './actions/mic.js';
@@ -139,6 +140,10 @@ obs.setTrackedScenes(collectObsSceneNames(layout));
 
 const mic = getMic();
 mic.start();
+
+// Materialize the icon-packs dir on first run so the picker's help text
+// points at a real folder — no "hunt for a hidden AppData path" step.
+void ensureIconPacksDir();
 
 // Per-app audio (Discord ducking, Spotify volume, etc.) only polls the Core
 // Audio session list while there's a slider tile that needs the live values.

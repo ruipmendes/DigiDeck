@@ -214,6 +214,8 @@ Add `https://localhost:8765/api/integrations/<twitch|kick>/callback` to your Twi
 
 **By hand**: edit `%APPDATA%\digi-deck\layout.json` directly. The server watches the file and hot-reloads on save. Schema: `{ pages: [{ id, name, icon?, buttons: [...] }] }`.
 
+**Icon packs (bulk brand icons).** Digi Deck ships with ~80 built-in Lucide icons plus 6 brand marks (Discord / Twitch / Kick / OBS / Streamlabs / Spotify). For anything else — YouTube, PowerPoint, VS Code, Photoshop, whatever you're launching — drop an *icon pack* into `%APPDATA%\digi-deck\icon-packs\<pack-name>\` and every `.svg` under that folder becomes pickable. Nested subfolders are honoured (`icon-packs\simple-icons\brands\steam.svg` shows up as `simple-icons:brands/steam`). The poster child is [Simple Icons](https://github.com/simple-icons/simple-icons) — download their zip, extract into `icon-packs\simple-icons\`, hit the ↻ button in the icon picker, and 3000+ brand marks appear. Packs survive updates (they live in AppData, not the install folder) and can be removed by deleting the folder. Pack icons in the picker/tile show as `<pack>:<name>` in the icon field.
+
 Each button is `{ id, label, icon?, action }`. Action shapes:
 
 ```jsonc
