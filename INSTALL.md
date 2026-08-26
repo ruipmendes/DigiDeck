@@ -8,7 +8,7 @@ A ~10 minute setup, no programming knowledge required. Follow each step in order
 
 - Windows 10 or 11
 - A phone on the same Wi-Fi as your PC
-- The `digi-deck.zip` file (sent to you separately, or "Code → Download ZIP" from GitHub)
+- The `digi-deck.zip` file — grab it from the [latest release](https://github.com/ruipmendes/DigiDeck/releases/latest) (recommended — counts toward download totals and gives you release notes), or use "Code → Download ZIP" on the main repo page.
 
 ## Quick legend
 
@@ -38,7 +38,7 @@ Expect `v22.x` (or higher) and `10.x` (or higher).
 
 - Move `digi-deck.zip` to your user folder (`C:\Users\<your-username>\`)
 - Right-click → **Extract All...** → make sure the destination is `C:\Users\<your-username>\` → Extract
-- You should now have a folder `C:\Users\<your-username>\digi-deck\` containing `server`, `client`, `README.md`, and `start.ps1`
+- You should now have a folder like `DigiDeck-0.3.0\` (release install) or `DigiDeck-main\` (source zip) containing `server`, `client`, `README.md`, and `start.ps1`. Rename it to just `digi-deck` if you like — the rest of this guide assumes that.
 
 ---
 

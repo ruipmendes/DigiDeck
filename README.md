@@ -8,8 +8,8 @@ A single Node process runs on the PC (port 8765) — it owns the layout file, ex
 
 ## tl;dr
 
-1. Download [**main.zip**](https://github.com/ruipmendes/DigiDeck/archive/refs/heads/main.zip). Right-click it → *Properties* → tick **Unblock** → OK.
-2. Extract it (anywhere — `C:\Users\<you>\` works fine). You'll get a `DigiDeck-main\` folder.
+1. Download [**digi-deck.zip**](https://github.com/ruipmendes/DigiDeck/releases/latest/download/digi-deck.zip) from the [latest release](https://github.com/ruipmendes/DigiDeck/releases/latest). Right-click it → *Properties* → tick **Unblock** → OK.
+2. Extract it (anywhere — `C:\Users\<you>\` works fine). You'll get a `DigiDeck-<version>\` folder.
 3. Double-click **install.bat** inside it. Installs Node.js if missing, builds, creates a Desktop shortcut, and launches. First run takes 2–3 min.
 4. In the config UI that opens → **Pair phone** → scan the QR from your phone's camera. Done.
 
@@ -45,16 +45,19 @@ If you see no label, assume **PowerShell or cmd** is fine.
 
 | What | When you need it | Notes |
 | ---- | ---------------- | ----- |
-| OBS Studio 28+ | OBS actions (record / stream / scene / mute / source visibility) | Built-in WebSocket server replaces the old plugin. Enable in *Tools → WebSocket Server Settings*. |
-| Twitch Developer app | Twitch chat actions | Free; register at [dev.twitch.tv/console/apps](https://dev.twitch.tv/console/apps). |
-| Spotify Developer app | Spotify play/pause/skip actions + now-playing labels | Free; register at [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard). PKCE only — no client secret. **Requires Premium on both the linked account AND the Developer app owner** — see the Spotify section for the full story. |
+| OBS Studio 28+ | OBS actions (record / stream / scene / source visibility / media / browser-source refresh / scene thumbnails) | Built-in WebSocket server replaces the old plugin. Enable in *Tools → WebSocket Server Settings*. |
+| Streamlabs Desktop | Streamlabs actions (record / stream / scene / source visibility) | Alternative to OBS Studio — they can be used together or separately. Copy the API token from *Settings → Remote Control*. |
+| Twitch Developer app | Twitch chat + native controls (ads, clips, poll / prediction, chat modes, raid / shoutout, …) | Free; register at [dev.twitch.tv/console/apps](https://dev.twitch.tv/console/apps). |
+| Kick Developer app | Kick chat + streamer tiles | Free; register at [kick.com/settings/developer](https://kick.com/settings/developer). |
+| Discord Developer app | Discord voice actions (mute / deafen / join / leave / voice panel / per-member volume). Optional bot token unlocks pull / move / kick. | Free; register at [discord.com/developers/applications](https://discord.com/developers/applications). Discord must be running locally — the integration uses the local IPC pipe. |
+| Spotify Developer app | Spotify play / pause / skip actions + now-playing labels | Free; register at [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard). PKCE only — no client secret. **Requires Premium on both the linked account AND the Developer app owner** — see the Spotify section for the full story. |
 | Firefox | Pretty desktop-shortcut behaviour | `start.ps1` opens config in Firefox if installed; otherwise uses your default browser. |
 
 ### Not required
 
 - Admin rights — installs run as your user; AppData and Desktop are user-writable.
 - Visual Studio Build Tools — `@nut-tree-fork/nut-js` ships prebuilt binaries for Node 22 on Windows.
-- Internet at runtime (unless you use Twitch — OAuth talks to `id.twitch.tv` / `api.twitch.tv`).
+- Internet at runtime — unless you use Twitch / Kick / Spotify (OAuth + API calls). OBS / Streamlabs / Discord all run over local IPC and work offline.
 
 ---
 

@@ -4,7 +4,7 @@ Digi Deck is a personal / hobby project, but the integration architecture is des
 
 ## Ways to contribute
 
-- **New integration** — Discord RPC, Spotify, Home Assistant, whatever your streaming setup uses. See the walkthrough below.
+- **New integration** — Home Assistant, Philips Hue, VoiceMeeter, Elgato Wave Link, whatever your streaming setup uses. OBS / Streamlabs / Twitch / Kick / Discord / Spotify are already shipped. See the walkthrough below.
 - **New starter template** — a curated layout bundle for a persona (gamer, podcaster, music-producer). Content-only, no code required. Drop a JSON in `server/src/templates/` following the existing shape.
 - **Bug fix, docs, polish** — normal PR.
 
