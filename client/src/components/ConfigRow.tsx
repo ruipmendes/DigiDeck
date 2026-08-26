@@ -410,7 +410,9 @@ function summarizeAction(a: Action): string {
     case 'streamlabs':       return a.params?.sceneName ? `Streamlabs · ${a.op} (${a.params.sceneName})` : `Streamlabs · ${a.op}`;
     case 'twitch':           return a.text ? `Twitch · "${ellipsis(a.text, 20)}"` : 'Twitch chat';
     case 'twitch-streamer':  return a.login ? `Streamer · ${a.login}` : 'Twitch streamer';
-    case 'kick':             return a.text ? `Kick · "${ellipsis(a.text, 20)}"` : 'Kick chat';
+    case 'kick':             return a.op === 'chat'
+      ? (a.text ? `Kick · "${ellipsis(a.text, 20)}"` : 'Kick chat')
+      : `Kick · ${a.op}`;
     case 'kick-streamer':    return a.slug ? `Kick · ${a.slug}` : 'Kick streamer';
     case 'discord':          return `Discord · ${a.op}`;
     case 'spotify':          return `Spotify · ${a.op}`;

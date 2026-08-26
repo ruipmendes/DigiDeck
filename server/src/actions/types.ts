@@ -11,7 +11,7 @@ import type { StreamlabsOp, StreamlabsActionParams } from '../integrations/strea
 import { getTwitch } from '../integrations/twitch.js';
 import type { TwitchOp, TwitchActionParams, TwitchPrompt } from '../integrations/twitch.js';
 import { getKick } from '../integrations/kick.js';
-import type { KickOp } from '../integrations/kick.js';
+import type { KickOp, KickActionParams, KickPrompt } from '../integrations/kick.js';
 import { getDiscord } from '../integrations/discord.js';
 import type { DiscordOp, DiscordActionParams, DiscordPrompt } from '../integrations/discord.js';
 import { getSpotify } from '../integrations/spotify.js';
@@ -34,7 +34,7 @@ export type Action =
   | { type: 'streamlabs'; op: StreamlabsOp; params?: StreamlabsActionParams }
   | { type: 'twitch'; op: TwitchOp; text?: string; params?: TwitchActionParams; prompts?: TwitchPrompt[] }
   | { type: 'twitch-streamer'; login: string }
-  | { type: 'kick'; op: KickOp; text: string }
+  | { type: 'kick'; op: KickOp; text?: string; params?: KickActionParams; prompts?: KickPrompt[] }
   | { type: 'kick-streamer'; slug: string; avatarUrl?: string }
   | { type: 'discord'; op: DiscordOp; params?: DiscordActionParams; prompts?: DiscordPrompt[] }
   | { type: 'spotify'; op: SpotifyOp }
@@ -75,7 +75,7 @@ async function executeStep(step: Action): Promise<void> {
       // Open the channel in the PC's default browser — same machine that's
       // running OBS/streaming, so the host can put it on screen.
       return execUrl(`https://twitch.tv/${step.login}`);
-    case 'kick': return getKick().execute(step.op, { text: step.text });
+    case 'kick': return getKick().execute(step.op, { ...step.params, text: step.text ?? step.params?.text });
     case 'kick-streamer':
       return execUrl(`https://kick.com/${step.slug}`);
     case 'discord': return getDiscord().execute(step.op, step.params);
@@ -107,6 +107,15 @@ export function withPromptValues(action: ButtonAction, promptValues: Record<stri
       return { ...step, params: { ...step.params, ...merged } };
     }
     if (step.type === 'discord' && step.prompts?.length) {
+      const merged: Record<string, string> = {};
+      for (const p of step.prompts) {
+        const v = promptValues[p.field];
+        if (v !== undefined) merged[p.field] = v;
+      }
+      if (Object.keys(merged).length === 0) return step;
+      return { ...step, params: { ...step.params, ...merged } };
+    }
+    if (step.type === 'kick' && step.prompts?.length) {
       const merged: Record<string, string> = {};
       for (const p of step.prompts) {
         const v = promptValues[p.field];

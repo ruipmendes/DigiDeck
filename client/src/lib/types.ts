@@ -58,7 +58,28 @@ export type TwitchActionParams = {
 export type TwitchPromptField = 'target' | 'title' | 'gameName';
 export type TwitchPrompt = { field: TwitchPromptField; label: string; placeholder?: string };
 
-export type KickOp = 'chat';
+export type KickOp =
+  | 'chat'
+  | 'delete-message'
+  | 'ban-user'
+  | 'unban-user'
+  | 'update-title'
+  | 'update-category'
+  | 'run-ad';
+
+export type KickActionParams = {
+  text?: string;
+  messageId?: string;
+  target?: string;
+  banDuration?: number;
+  banReason?: string;
+  title?: string;
+  category?: string;
+  adLength?: number;
+};
+
+export type KickPromptField = 'text' | 'messageId' | 'target' | 'title' | 'category' | 'banReason';
+export type KickPrompt = { field: KickPromptField; label: string; placeholder?: string };
 
 export type DiscordOp =
   | 'toggle-mute' | 'mute' | 'unmute'
@@ -125,7 +146,7 @@ export type Action =
   | { type: 'streamlabs'; op: StreamlabsOp; params?: StreamlabsActionParams }
   | { type: 'twitch'; op: TwitchOp; text?: string; params?: TwitchActionParams; prompts?: TwitchPrompt[] }
   | { type: 'twitch-streamer'; login: string }
-  | { type: 'kick'; op: KickOp; text: string }
+  | { type: 'kick'; op: KickOp; text?: string; params?: KickActionParams; prompts?: KickPrompt[] }
   | { type: 'kick-streamer'; slug: string; avatarUrl?: string }
   | { type: 'discord'; op: DiscordOp; params?: DiscordActionParams; prompts?: DiscordPrompt[] }
   | { type: 'spotify'; op: SpotifyOp }

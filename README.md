@@ -508,18 +508,30 @@ Polling: currently-playing state polls every 5 seconds. Spotify's Web API doesn'
 
 ## Kick chat integration
 
-Same idea as Twitch, for Kick. Send chat to your own Kick channel, plus optional Kick-streamer thumbnail tiles.
+Send chat, plus native mod / broadcast ops: delete message, ban / timeout / unban, update stream title, update category, run ad. Streamer thumbnail tiles are still there too.
 
 One-time setup:
 
 1. Visit [kick.com/settings/developer](https://kick.com/settings/developer) → *Create a new application*.
 2. **Redirect URI**: `http://localhost:8765/api/integrations/kick/callback` (add the `https://` variant too if you enable HTTPS later).
-3. Enable the **user:read**, **channel:read**, and **chat:write** scopes.
+3. Enable the scopes below (Digi Deck asks for the union of all of them; the ones you don't have grant enabled just disable the matching ops):
+   - **user:read** — identify the linked account
+   - **channel:read** / **channel:write** — get channel info, update title / category
+   - **chat:write** — send chat
+   - **moderation:ban** — ban / timeout / unban
+   - **moderation:chat_message:manage** — delete chat messages
+   - **ads:read** / **ads:write** — check status + run ads
 4. Copy the **Client ID** and **Client Secret** after creating.
 5. In the config UI → **Kick chat** card → expand → paste Client ID + Secret → *Save credentials*.
 6. Click **Connect to Kick** → approve in the new tab → close when it says "Connected".
 
-Action types: *Kick chat* (sends `text` to your channel) and *Kick streamer* (opens `kick.com/<slug>` on tap). One quirk on the streamer tiles: Kick's OAuth API doesn't expose other users' profile pictures, so the tile falls back to the initial letter or, if you paste a custom URL in the action's *avatar URL* field, that image (right-click the streamer's avatar on kick.com → *Copy image address*). Live-stream thumbnails also render on the tile while the streamer is broadcasting.
+Action types on the *Kick* action: **chat** (send text), **delete-message** (paste / prompt for the message id), **ban-user** (username + preset timeout duration + optional reason), **unban-user**, **update-title** (new title — preset or ask on tap), **update-category** (name — Digi Deck resolves it to Kick's category id via `GET /public/v2/categories?name=…`), **run-ad** (preset length, 7–300 s). *Kick streamer* tile is unchanged: opens `kick.com/<slug>` on tap, live thumbnail while streaming.
+
+**Ask on tap.** For ban target, ban reason, delete-message id, title, and category — anything decided in the moment — tick the *Ask on tap* checkbox and the phone pops a small dialog before firing.
+
+**Upgrading?** Users who authorized before this expansion need to click *Disconnect* → *Connect to Kick* once so the new scopes get granted. Anything you don't grant just makes those ops return a scope-required error.
+
+One quirk on the streamer tiles: Kick's OAuth API doesn't expose other users' profile pictures, so the tile falls back to the initial letter or, if you paste a custom URL in the action's *avatar URL* field, that image (right-click the streamer's avatar on kick.com → *Copy image address*). Live-stream thumbnails also render on the tile while the streamer is broadcasting.
 
 ---
 

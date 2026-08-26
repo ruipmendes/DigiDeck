@@ -168,6 +168,24 @@ const kickEntries: ActionPickerEntry[] = [
   { key: 'kick:chat', category: 'Kick', label: 'Send chat message', iconName: 'kick',
     keywords: 'kick chat message send command', requires: 'kick',
     create: () => ({ type: 'kick', op: 'chat', text: '' }) },
+  { key: 'kick:delete-message', category: 'Kick', label: 'Delete chat message', hint: 'Prompts for the message id at press time',
+    iconName: 'kick', keywords: 'kick chat delete message moderation mod remove', requires: 'kick',
+    create: () => ({ type: 'kick', op: 'delete-message', params: {}, prompts: [{ field: 'messageId', label: 'Message id', placeholder: 'kick message id (uuid)' }] }) },
+  { key: 'kick:ban-user', category: 'Kick', label: 'Ban / timeout user', hint: 'Preset duration + prompt for target username',
+    iconName: 'kick', keywords: 'kick ban timeout moderation mod user chat', requires: 'kick',
+    create: () => ({ type: 'kick', op: 'ban-user', params: { banDuration: 60 }, prompts: [{ field: 'target', label: 'User to ban', placeholder: 'kick username' }, { field: 'banReason', label: 'Reason (optional)', placeholder: 'why?' }] }) },
+  { key: 'kick:unban-user', category: 'Kick', label: 'Unban user', hint: 'Prompt for target username',
+    iconName: 'kick', keywords: 'kick unban timeout remove moderation mod user', requires: 'kick',
+    create: () => ({ type: 'kick', op: 'unban-user', params: {}, prompts: [{ field: 'target', label: 'User to unban', placeholder: 'kick username' }] }) },
+  { key: 'kick:update-title', category: 'Kick', label: 'Update stream title', hint: 'Prompt for the new title on tap',
+    iconName: 'kick', keywords: 'kick title update change stream broadcast', requires: 'kick',
+    create: () => ({ type: 'kick', op: 'update-title', params: {}, prompts: [{ field: 'title', label: 'New stream title', placeholder: 'stream title' }] }) },
+  { key: 'kick:update-category', category: 'Kick', label: 'Update category', hint: 'Prompt for category name; Kick resolves the id',
+    iconName: 'kick', keywords: 'kick category game update change directory', requires: 'kick',
+    create: () => ({ type: 'kick', op: 'update-category', params: {}, prompts: [{ field: 'category', label: 'Category name', placeholder: 'e.g. Just Chatting' }] }) },
+  { key: 'kick:run-ad', category: 'Kick', label: 'Run ad', hint: 'Preset length (7–300 s)',
+    iconName: 'kick', keywords: 'kick ad advertisement commercial run play break', requires: 'kick',
+    create: () => ({ type: 'kick', op: 'run-ad', params: { adLength: 60 } }) },
   { key: 'kick-streamer', category: 'Kick', label: 'Streamer tile', hint: 'Live thumbnail + click-to-open — not an action',
     iconName: 'kick', keywords: 'kick streamer tile thumbnail live indicator profile',
     requires: 'kick',
@@ -276,7 +294,7 @@ export function entryFor(action: Action): ActionPickerEntry | null {
     case 'streamlabs':      return byOp('streamlabs', action.op);
     case 'twitch':          return byOp('twitch', action.op);
     case 'twitch-streamer': return ACTION_PICKER_ENTRIES.find((e) => e.key === 'twitch-streamer') ?? null;
-    case 'kick':            return ACTION_PICKER_ENTRIES.find((e) => e.key === 'kick:chat') ?? null;
+    case 'kick':            return byOp('kick', action.op);
     case 'kick-streamer':   return ACTION_PICKER_ENTRIES.find((e) => e.key === 'kick-streamer') ?? null;
     case 'discord':         return byOp('discord', action.op);
     case 'spotify':         return byOp('spotify', action.op);

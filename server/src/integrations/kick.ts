@@ -70,14 +70,55 @@ export type KickStatus = {
   channel?: string;
 };
 
-export type KickOp = 'chat';
-export type KickActionParams = { text?: string };
+export type KickOp =
+  | 'chat'
+  | 'delete-message'
+  | 'ban-user'
+  | 'unban-user'
+  | 'update-title'
+  | 'update-category'
+  | 'run-ad';
+
+export type KickActionParams = {
+  /** For 'chat'. Baked-in text or prompt-provided. */
+  text?: string;
+  /** For 'delete-message'. Raw Kick message id (usually pasted at press time). */
+  messageId?: string;
+  /** For 'ban-user' / 'unban-user'. Kick username (slug); resolved to numeric
+   *  user_id server-side via GET /public/v1/channels?slug=…. */
+  target?: string;
+  /** For 'ban-user'. Timeout duration in minutes (1–10080). Omit to permaban. */
+  banDuration?: number;
+  /** For 'ban-user'. Optional public reason (max 100 chars). */
+  banReason?: string;
+  /** For 'update-title'. New stream title. */
+  title?: string;
+  /** For 'update-category'. Category *name* — resolved to numeric category_id
+   *  server-side via GET /public/v2/categories?name=…. */
+  category?: string;
+  /** For 'run-ad'. Ad break duration in seconds (7–300). */
+  adLength?: number;
+};
+
+/** Runtime prompt shown on the phone before executing the action. Field names
+ *  map to `KickActionParams` keys — the merged value lands in `params[field]`. */
+export type KickPromptField = 'text' | 'messageId' | 'target' | 'title' | 'category' | 'banReason';
+export type KickPrompt = { field: KickPromptField; label: string; placeholder?: string };
 
 const AUTHORIZE_URL = 'https://id.kick.com/oauth/authorize';
 const TOKEN_URL = 'https://id.kick.com/oauth/token';
 const API_BASE = 'https://api.kick.com/public/v1';
 const REDIRECT_URI = 'http://localhost:8765/api/integrations/kick/callback';
-const SCOPES = ['user:read', 'channel:read', 'chat:write'];
+const SCOPES = [
+  'user:read',
+  'channel:read',
+  'channel:write',
+  'chat:write',
+  'moderation:ban',
+  'moderation:chat_message:manage',
+  'ads:read',
+  'ads:write',
+];
 
 type PendingAuth = { verifier: string; expires: number };
 
@@ -287,32 +328,154 @@ class KickClient implements IntegrationLifecycle {
   }
 
   async execute(op: KickOp, params: KickActionParams = {}): Promise<void> {
-    if (op !== 'chat') throw new Error(`unknown Kick op: ${op}`);
-    const text = params.text?.trim();
-    if (!text) throw new Error('Kick chat: text required');
     if (!this.cfg.broadcasterUserId) throw new Error('Kick: not authorized');
-    const safe = text.replace(/[\r\n]+/g, ' ').slice(0, 500);
-
     await this.ensureAccessToken();
     if (!this.accessToken) throw new Error('Kick access token missing');
 
-    const res = await fetch(`${API_BASE}/chat`, {
-      method: 'POST',
+    switch (op) {
+      case 'chat': return this.doChat(params);
+      case 'delete-message': return this.doDeleteMessage(params);
+      case 'ban-user': return this.doBanUser(params);
+      case 'unban-user': return this.doUnbanUser(params);
+      case 'update-title': return this.doUpdateChannel({ stream_title: requireField(params.title, 'title') });
+      case 'update-category': return this.doUpdateCategory(params);
+      case 'run-ad': return this.doRunAd(params);
+      default: throw new Error(`unknown Kick op: ${op as string}`);
+    }
+  }
+
+  private async doChat(params: KickActionParams): Promise<void> {
+    const text = params.text?.trim();
+    if (!text) throw new Error('Kick chat: text required');
+    const safe = text.replace(/[\r\n]+/g, ' ').slice(0, 500);
+    await this.apiFetch('POST', '/chat', {
+      broadcaster_user_id: this.cfg.broadcasterUserId,
+      content: safe,
+      type: 'user',
+    });
+  }
+
+  private async doDeleteMessage(params: KickActionParams): Promise<void> {
+    const id = params.messageId?.trim();
+    if (!id) throw new Error('Kick delete-message: messageId required');
+    await this.apiFetch('DELETE', `/chat/${encodeURIComponent(id)}`);
+  }
+
+  private async doBanUser(params: KickActionParams): Promise<void> {
+    const target = params.target?.trim();
+    if (!target) throw new Error('Kick ban-user: target required');
+    const userId = await this.resolveUserId(target);
+    const body: Record<string, unknown> = {
+      broadcaster_user_id: this.cfg.broadcasterUserId,
+      user_id: userId,
+    };
+    if (typeof params.banDuration === 'number' && params.banDuration > 0) {
+      const clamped = Math.max(1, Math.min(10080, Math.round(params.banDuration)));
+      body.duration = clamped;
+    }
+    if (params.banReason) body.reason = params.banReason.slice(0, 100);
+    await this.apiFetch('POST', '/moderation/bans', body);
+  }
+
+  private async doUnbanUser(params: KickActionParams): Promise<void> {
+    const target = params.target?.trim();
+    if (!target) throw new Error('Kick unban-user: target required');
+    const userId = await this.resolveUserId(target);
+    await this.apiFetch('DELETE', '/moderation/bans', {
+      broadcaster_user_id: this.cfg.broadcasterUserId,
+      user_id: userId,
+    });
+  }
+
+  private async doUpdateChannel(body: Record<string, unknown>): Promise<void> {
+    await this.apiFetch('PATCH', '/channels', body);
+  }
+
+  private async doUpdateCategory(params: KickActionParams): Promise<void> {
+    const name = params.category?.trim();
+    if (!name) throw new Error('Kick update-category: category name required');
+    const categoryId = await this.resolveCategoryId(name);
+    await this.doUpdateChannel({ category_id: categoryId });
+  }
+
+  private async doRunAd(params: KickActionParams): Promise<void> {
+    const seconds = Math.max(7, Math.min(300, Math.round(params.adLength ?? 60)));
+    // ad-break requires a client-generated UUID id — Kick uses it for
+    // dedup so retries with the same value don't fire twice.
+    const id = randomUuid();
+    await this.apiFetch('POST', '/ads/ad-break', {
+      break_duration_seconds: seconds,
+      id,
+    });
+  }
+
+  /** Resolve a Kick username/slug to its numeric broadcaster_user_id via
+   *  GET /public/v1/channels?slug=…. Cached briefly so repeated actions on
+   *  the same target don't hammer the API. Accepts a raw numeric string too
+   *  (advanced users pasting a known user_id). */
+  private async resolveUserId(target: string): Promise<number> {
+    // Direct numeric — skip the lookup.
+    if (/^\d+$/.test(target)) return Number.parseInt(target, 10);
+    const slug = target.toLowerCase().replace(/^@/, '');
+    const cached = this.userIdCache.get(slug);
+    if (cached && Date.now() < cached.expires) return cached.id;
+    const data = await this.apiGet<{ data?: Array<{ broadcaster_user_id?: number; slug?: string }> }>(
+      '/channels',
+      { slug },
+    );
+    const first = data.data?.[0];
+    const id = first?.broadcaster_user_id;
+    if (!id || typeof id !== 'number') {
+      throw new Error(`Kick: no channel found for "${target}"`);
+    }
+    this.userIdCache.set(slug, { id, expires: Date.now() + 5 * 60 * 1000 });
+    return id;
+  }
+
+  /** Resolve a category *name* to its numeric id via
+   *  GET /public/v2/categories?name=…. Accepts a raw numeric string.
+   *  Kick shipped v2 categories as a separate versioned base; `apiGet` is
+   *  v1-only, so we hit the URL directly here. */
+  private async resolveCategoryId(name: string): Promise<number> {
+    if (/^\d+$/.test(name)) return Number.parseInt(name, 10);
+    const trimmed = name.trim();
+    const cached = this.categoryIdCache.get(trimmed.toLowerCase());
+    if (cached && Date.now() < cached.expires) return cached.id;
+    if (!this.accessToken) throw new Error('Kick access token missing');
+    const url = new URL('https://api.kick.com/public/v2/categories');
+    url.searchParams.set('name', trimmed);
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${this.accessToken}` } });
+    if (!res.ok) throw new Error(`Kick GET /v2/categories: ${res.status} ${await res.text()}`);
+    const data = await res.json() as { data?: Array<{ id?: number; name?: string }> };
+    const first = data.data?.[0];
+    const id = first?.id;
+    if (!id || typeof id !== 'number') {
+      throw new Error(`Kick: no category found matching "${name}"`);
+    }
+    this.categoryIdCache.set(trimmed.toLowerCase(), { id, expires: Date.now() + 60 * 60 * 1000 });
+    return id;
+  }
+
+  /** Shared helper for POST/PATCH/DELETE with an optional JSON body. GET
+   *  keeps its own path (apiGet) since it also handles query params. */
+  private async apiFetch(method: 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<void> {
+    if (!this.accessToken) throw new Error('Kick access token missing');
+    const res = await fetch(`${API_BASE}${path}`, {
+      method,
       headers: {
         Authorization: `Bearer ${this.accessToken}`,
-        'Content-Type': 'application/json',
+        ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
       },
-      body: JSON.stringify({
-        broadcaster_user_id: this.cfg.broadcasterUserId,
-        content: safe,
-        type: 'user',
-      }),
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     });
     if (!res.ok) {
       const txt = await res.text();
-      throw new Error(`Kick chat failed: ${res.status} ${txt}`);
+      throw new Error(`Kick ${method} ${path}: ${res.status} ${txt}`);
     }
   }
+
+  private userIdCache = new Map<string, { id: number; expires: number }>();
+  private categoryIdCache = new Map<string, { id: number; expires: number }>();
 
   private async ensureAccessToken(): Promise<void> {
     if (this.accessToken && Date.now() < this.accessTokenExpires) return;
@@ -368,6 +531,22 @@ class KickClient implements IntegrationLifecycle {
   private async persistCfg(): Promise<void> {
     if (this.saveCb) await this.saveCb({ ...this.cfg });
   }
+}
+
+function requireField<T>(v: T | undefined, name: string): T {
+  if (v === undefined || v === null || (typeof v === 'string' && v.trim() === '')) {
+    throw new Error(`Kick: ${name} required`);
+  }
+  return v;
+}
+
+/** RFC 4122 v4 UUID from crypto — used as the client-generated ad-break id. */
+function randomUuid(): string {
+  const b = randomBytes(16);
+  b[6] = (b[6] & 0x0f) | 0x40; // version 4
+  b[8] = (b[8] & 0x3f) | 0x80; // variant 10
+  const h = b.toString('hex');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 }
 
 let _instance: KickClient | null = null;

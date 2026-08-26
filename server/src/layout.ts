@@ -314,7 +314,7 @@ export function toPublic(layout: Layout): PublicLayout {
           const list: PublicPrompt[] = [];
           const seen = new Set<string>();
           for (const s of actionSteps) {
-            if ((s.type !== 'twitch' && s.type !== 'discord') || !s.prompts?.length) continue;
+            if ((s.type !== 'twitch' && s.type !== 'discord' && s.type !== 'kick') || !s.prompts?.length) continue;
             for (const p of s.prompts) {
               if (seen.has(p.field)) continue;
               seen.add(p.field);

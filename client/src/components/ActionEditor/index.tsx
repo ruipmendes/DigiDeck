@@ -27,6 +27,7 @@ import { StreamlabsBody } from './StreamlabsBody';
 import { TwitchBody } from './TwitchBody';
 import { DiscordBody } from './DiscordBody';
 import { AppAudioBody } from './AppAudioBody';
+import { KickBody } from './KickBody';
 
 export type { IntegrationStatus };
 
@@ -361,15 +362,7 @@ function Body({ action, onChange, pages }: StepEditorProps) {
           </span>
         </div>
       );
-    case 'kick':
-      return (
-        <input
-          value={action.text}
-          onChange={(e) => onChange({ type: 'kick', op: 'chat', text: e.target.value })}
-          placeholder="!command or chat message (e.g. !discord)"
-          style={inputStyle}
-        />
-      );
+    case 'kick':       return <KickBody action={action} onChange={onChange} />;
     case 'kick-streamer':
       return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
