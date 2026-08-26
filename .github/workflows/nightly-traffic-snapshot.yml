@@ -15,12 +15,6 @@ on:
 
 permissions:
   contents: write
-  # /repos/../traffic/{clones,views} needs Administration:read — GITHUB_TOKEN
-  # doesn't grant it by default and the fetch step 403s. Adding it here bumps
-  # the token's scope for this job only. If your repo's Actions permission
-  # settings don't allow granting Administration to the default token, replace
-  # the gh api calls with a PAT stored in secrets.
-  administration: read
 
 jobs:
   snapshot:
@@ -30,9 +24,22 @@ jobs:
 
       - name: Fetch clones + views
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # /repos/../traffic/{clones,views} requires the Administration:read
+          # permission, which GitHub deliberately locks out of the default
+          # GITHUB_TOKEN — you need a fine-grained PAT (or classic PAT with
+          # `repo` scope) stored as the `TRAFFIC_TOKEN` secret on this repo.
+          # Setup: Settings → Developer settings → Personal access tokens →
+          # Fine-grained tokens → Generate. Repo access = this repo only.
+          # Permissions → Administration: Read-only. Then Settings → Secrets
+          # and variables → Actions → New repository secret named
+          # TRAFFIC_TOKEN, paste the token.
+          GH_TOKEN: ${{ secrets.TRAFFIC_TOKEN }}
         run: |
           set -euo pipefail
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::error::TRAFFIC_TOKEN secret is not set. See workflow comment for setup."
+            exit 1
+          fi
           today=$(date -u +%F)
           mkdir -p metrics
           gh api "repos/${GITHUB_REPOSITORY}/traffic/clones" > "metrics/clones-${today}.json"
