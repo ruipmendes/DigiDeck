@@ -15,12 +15,18 @@ on:
 
 permissions:
   contents: write
+  # /repos/../traffic/{clones,views} needs Administration:read — GITHUB_TOKEN
+  # doesn't grant it by default and the fetch step 403s. Adding it here bumps
+  # the token's scope for this job only. If your repo's Actions permission
+  # settings don't allow granting Administration to the default token, replace
+  # the gh api calls with a PAT stored in secrets.
+  administration: read
 
 jobs:
   snapshot:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Fetch clones + views
         env:
