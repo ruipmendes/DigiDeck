@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "exportedAt": "2026-08-26T00:00:00.000Z",
+  "title": "Voice Chat",
+  "description": "Discord-centric layout: voice channel panel with live speaking indicators, self-mute / deafen / PTT, voice channel navigation, per-app ducking sliders, and a live channel indicator. Built for podcasters, hosts, and community mods.",
+  "layout": {
+    "navigation": "tabs",
+    "pages": [
+      {
+        "id": 0,
+        "name": "Voice",
+        "icon": "discord",
+        "cols": 2,
+        "buttons": [
+          { "kind": "button", "id": 0, "label": "Mute\n{discord.mute}",     "icon": "mic-off",          "action": { "type": "discord", "op": "toggle-mute" } },
+          { "kind": "button", "id": 1, "label": "Deafen\n{discord.deaf}",   "icon": "headphones",       "action": { "type": "discord", "op": "toggle-deafen" } },
+          { "kind": "button", "id": 2, "label": "PTT\nToggle",              "icon": "zap",              "action": { "type": "discord", "op": "toggle-ptt" } },
+          { "kind": "button", "id": 3, "label": "Noise\nSuppression",       "icon": "sliders",          "action": { "type": "discord", "op": "toggle-noise-suppression" } },
+          { "kind": "button", "id": 4, "label": "Auto\nGain",               "icon": "settings",         "action": { "type": "discord", "op": "toggle-auto-gain" } },
+          { "kind": "button", "id": 5, "label": "Echo\nCancel",             "icon": "refresh-cw",       "action": { "type": "discord", "op": "toggle-echo-cancellation" } },
+          { "kind": "button", "id": 6, "label": "Join\nChannel",            "icon": "arrow-right",      "action": { "type": "discord", "op": "join-channel", "prompts": [{ "field": "channelId", "label": "Voice channel", "placeholder": "channel id", "choicesSource": "discord-voice-channels" }] } },
+          { "kind": "button", "id": 7, "label": "Leave\nChannel",           "icon": "x",                "action": { "type": "discord", "op": "leave-channel" } }
+        ]
+      },
+      {
+        "id": 1,
+        "name": "Panel",
+        "icon": "grid",
+        "cols": 1,
+        "buttons": [
+          { "kind": "discord-voice-panel", "id": 10, "label": "Chan: {discord.channel}", "icon": "discord" }
+        ]
+      },
+      {
+        "id": 2,
+        "name": "Sliders",
+        "icon": "sliders",
+        "cols": 1,
+        "buttons": [
+          { "kind": "slider", "id": 20, "label": "Mic",         "icon": "mic",         "provider": "discord",   "inputName": "input" },
+          { "kind": "slider", "id": 21, "label": "Output",      "icon": "headphones",  "provider": "discord",   "inputName": "output" },
+          { "kind": "slider", "id": 22, "label": "Sensitivity", "icon": "zap",         "provider": "discord",   "inputName": "sensitivity" }
+        ]
+      },
+      {
+        "id": 3,
+        "name": "Ducking",
+        "icon": "volume-1",
+        "cols": 1,
+        "buttons": [
+          { "kind": "slider", "id": 30, "label": "Discord", "icon": "discord",   "provider": "app-audio", "inputName": "Discord" },
+          { "kind": "slider", "id": 31, "label": "Browser", "icon": "globe",     "provider": "app-audio", "inputName": "chrome" },
+          { "kind": "slider", "id": 32, "label": "Music",   "icon": "music",     "provider": "app-audio", "inputName": "Spotify" }
+        ]
+      },
+      {
+        "id": 4,
+        "name": "Room",
+        "icon": "home",
+        "cols": 3,
+        "buttons": [
+          { "kind": "button", "id": 40, "label": "Mic\nMute",       "icon": "mic-off",     "action": { "type": "mic", "op": "toggle-mute" } },
+          { "kind": "button", "id": 41, "label": "Vol\nDown",       "icon": "volume-1",    "action": { "type": "volume", "delta": -2 } },
+          { "kind": "button", "id": 42, "label": "Vol\nUp",         "icon": "volume-2",    "action": { "type": "volume", "delta": 2 } },
+          { "kind": "button", "id": 43, "label": "Screenshot",      "icon": "camera",      "action": { "type": "hotkey", "keys": ["LeftSuper", "PrintScreen"] } },
+          { "kind": "button", "id": 44, "label": "Lock",            "icon": "lock",        "action": { "type": "hotkey", "keys": ["LeftSuper", "L"] } },
+          { "kind": "button", "id": 45, "label": "Play/\nPause",    "icon": "play",        "action": { "type": "hotkey", "keys": ["AudioPlay"] } }
+        ]
+      }
+    ]
+  },
+  "images": {}
+}

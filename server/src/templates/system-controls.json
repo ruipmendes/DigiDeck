@@ -1,8 +1,8 @@
 {
   "version": 1,
-  "exportedAt": "2026-05-28T00:00:00.000Z",
+  "exportedAt": "2026-08-26T00:00:00.000Z",
   "title": "System Controls",
-  "description": "Volume, media keys, mute, and quick app launchers. Edit launch paths to point at your apps.",
+  "description": "Media keys, mic mute, quick app launchers, plus per-app volume sliders (Discord / Spotify / Chrome) and Spotify playback controls with a live now-playing label.",
   "layout": {
     "navigation": "tabs",
     "pages": [
@@ -26,15 +26,39 @@
       {
         "id": 1,
         "name": "Apps",
-        "icon": "app-window",
+        "icon": "folder",
         "cols": 2,
         "buttons": [
           { "kind": "button", "id": 10, "label": "Notepad",    "icon": "file-text",  "action": { "type": "launch", "path": "notepad.exe" } },
-          { "kind": "button", "id": 11, "label": "Calculator", "icon": "calculator", "action": { "type": "launch", "path": "calc.exe" } },
+          { "kind": "button", "id": 11, "label": "Calculator", "icon": "settings",   "action": { "type": "launch", "path": "calc.exe" } },
           { "kind": "button", "id": 12, "label": "Browser",    "icon": "globe",      "action": { "type": "url", "url": "https://github.com" } },
-          { "kind": "button", "id": 13, "label": "Discord",    "icon": "users",      "action": { "type": "url", "url": "https://discord.com/channels/@me" } },
-          { "kind": "button", "id": 14, "label": "Twitch",     "icon": "tv",         "action": { "type": "url", "url": "https://twitch.tv" } },
-          { "kind": "button", "id": 15, "label": "Spotify",    "icon": "music",      "action": { "type": "url", "url": "https://open.spotify.com" } }
+          { "kind": "button", "id": 13, "label": "Discord",    "icon": "discord",    "action": { "type": "url", "url": "https://discord.com/channels/@me" } },
+          { "kind": "button", "id": 14, "label": "Twitch",     "icon": "twitch",     "action": { "type": "url", "url": "https://twitch.tv" } },
+          { "kind": "button", "id": 15, "label": "Spotify",    "icon": "spotify",    "action": { "type": "url", "url": "https://open.spotify.com" } }
+        ]
+      },
+      {
+        "id": 2,
+        "name": "Ducking",
+        "icon": "sliders",
+        "cols": 1,
+        "buttons": [
+          { "kind": "slider", "id": 20, "label": "Discord",  "icon": "discord",   "provider": "app-audio", "inputName": "Discord" },
+          { "kind": "slider", "id": 21, "label": "Spotify",  "icon": "spotify",   "provider": "app-audio", "inputName": "Spotify" },
+          { "kind": "slider", "id": 22, "label": "Browser",  "icon": "globe",     "provider": "app-audio", "inputName": "chrome" }
+        ]
+      },
+      {
+        "id": 3,
+        "name": "Spotify",
+        "icon": "spotify",
+        "cols": 3,
+        "buttons": [
+          { "kind": "button", "id": 30, "label": "{spotify.track}",   "icon": "spotify",       "action": { "type": "spotify", "op": "toggle-play" } },
+          { "kind": "button", "id": 31, "label": "Prev",              "icon": "skip-back",     "action": { "type": "spotify", "op": "previous" } },
+          { "kind": "button", "id": 32, "label": "Play/\nPause",      "icon": "play",          "action": { "type": "spotify", "op": "toggle-play" } },
+          { "kind": "button", "id": 33, "label": "Next",              "icon": "skip-forward",  "action": { "type": "spotify", "op": "next" } },
+          { "kind": "button", "id": 34, "label": "{spotify.artist}",  "icon": "music",         "action": { "type": "spotify", "op": "toggle-play" } }
         ]
       }
     ]

@@ -1,8 +1,8 @@
 {
   "version": 1,
-  "exportedAt": "2026-05-28T00:00:00.000Z",
+  "exportedAt": "2026-08-26T00:00:00.000Z",
   "title": "Chat Commands",
-  "description": "Twitch chat shortcuts. Tap to drop a command in chat. Edit the text to match your own bot setup.",
+  "description": "Twitch chat shortcuts + native mod controls (chat modes, run/snooze ad, clip, marker, shoutout, announcement). Edit chat text and shoutout target to match your setup.",
   "layout": {
     "navigation": "tabs",
     "pages": [
@@ -12,28 +12,44 @@
         "icon": "message-circle",
         "cols": 2,
         "buttons": [
-          { "kind": "button", "id": 0, "label": "!website",  "icon": "globe",   "action": { "type": "twitch", "op": "chat", "text": "!website" } },
-          { "kind": "button", "id": 1, "label": "!discord",  "icon": "users",   "action": { "type": "twitch", "op": "chat", "text": "!discord" } },
-          { "kind": "button", "id": 2, "label": "!kofi",     "icon": "coffee",  "action": { "type": "twitch", "op": "chat", "text": "!kofi" } },
-          { "kind": "button", "id": 3, "label": "!lurk",     "icon": "eye-off", "action": { "type": "twitch", "op": "chat", "text": "!lurk" } },
-          { "kind": "button", "id": 4, "label": "!socials",  "icon": "share-2", "action": { "type": "twitch", "op": "chat", "text": "!socials" } },
-          { "kind": "button", "id": 5, "label": "!specs",    "icon": "cpu",     "action": { "type": "twitch", "op": "chat", "text": "!specs" } },
-          { "kind": "button", "id": 6, "label": "!commands", "icon": "list",    "action": { "type": "twitch", "op": "chat", "text": "!commands" } },
-          { "kind": "button", "id": 7, "label": "!uptime",   "icon": "timer",   "action": { "type": "twitch", "op": "chat", "text": "!uptime" } }
+          { "kind": "button", "id": 0, "label": "!website",  "icon": "globe",         "action": { "type": "twitch", "op": "chat", "text": "!website" } },
+          { "kind": "button", "id": 1, "label": "!discord",  "icon": "discord",       "action": { "type": "twitch", "op": "chat", "text": "!discord" } },
+          { "kind": "button", "id": 2, "label": "!kofi",     "icon": "heart",         "action": { "type": "twitch", "op": "chat", "text": "!kofi" } },
+          { "kind": "button", "id": 3, "label": "!lurk",     "icon": "eye-off",       "action": { "type": "twitch", "op": "chat", "text": "!lurk" } },
+          { "kind": "button", "id": 4, "label": "!socials",  "icon": "send",          "action": { "type": "twitch", "op": "chat", "text": "!socials" } },
+          { "kind": "button", "id": 5, "label": "!specs",    "icon": "settings",      "action": { "type": "twitch", "op": "chat", "text": "!specs" } },
+          { "kind": "button", "id": 6, "label": "!commands", "icon": "menu",          "action": { "type": "twitch", "op": "chat", "text": "!commands" } },
+          { "kind": "button", "id": 7, "label": "!uptime",   "icon": "clock",         "action": { "type": "twitch", "op": "chat", "text": "!uptime" } }
         ]
       },
       {
         "id": 1,
         "name": "Mod",
-        "icon": "shield",
+        "icon": "lock",
         "cols": 2,
         "buttons": [
-          { "kind": "button", "id": 10, "label": "!clear",    "icon": "trash-2",     "action": { "type": "twitch", "op": "chat", "text": "/clear" } },
-          { "kind": "button", "id": 11, "label": "Slow 10s",  "icon": "hourglass",   "action": { "type": "twitch", "op": "chat", "text": "/slow 10" } },
-          { "kind": "button", "id": 12, "label": "Slow off",  "icon": "x",           "action": { "type": "twitch", "op": "chat", "text": "/slowoff" } },
-          { "kind": "button", "id": 13, "label": "Subs only", "icon": "star",        "action": { "type": "twitch", "op": "chat", "text": "/subscribers" } },
-          { "kind": "button", "id": 14, "label": "Subs off",  "icon": "star-off",    "action": { "type": "twitch", "op": "chat", "text": "/subscribersoff" } },
-          { "kind": "button", "id": 15, "label": "Followers", "icon": "user-check",  "action": { "type": "twitch", "op": "chat", "text": "/followers 10" } }
+          { "kind": "button", "id": 10, "label": "Shield\nMode",   "icon": "lock",        "action": { "type": "twitch", "op": "toggle-shield-mode" } },
+          { "kind": "button", "id": 11, "label": "Emote\nOnly",    "icon": "star",        "action": { "type": "twitch", "op": "toggle-emote-only" } },
+          { "kind": "button", "id": 12, "label": "Subs\nOnly",     "icon": "heart",       "action": { "type": "twitch", "op": "toggle-sub-only" } },
+          { "kind": "button", "id": 13, "label": "Follower\nOnly", "icon": "check",       "action": { "type": "twitch", "op": "toggle-follower-only" } },
+          { "kind": "button", "id": 14, "label": "Slow\nMode",     "icon": "clock",       "action": { "type": "twitch", "op": "toggle-slow-mode" } },
+          { "kind": "button", "id": 15, "label": "Clear\nChat",    "icon": "x",           "action": { "type": "twitch", "op": "clear-chat" } }
+        ]
+      },
+      {
+        "id": 2,
+        "name": "Live",
+        "icon": "video",
+        "cols": 2,
+        "buttons": [
+          { "kind": "button", "id": 20, "label": "Clip",           "icon": "scissors",    "action": { "type": "twitch", "op": "create-clip" } },
+          { "kind": "button", "id": 21, "label": "Stream\nMarker", "icon": "bell",        "action": { "type": "twitch", "op": "stream-marker" } },
+          { "kind": "button", "id": 22, "label": "Run Ad\n60s",    "icon": "bell",        "action": { "type": "twitch", "op": "run-ad", "params": { "adLength": 60 } } },
+          { "kind": "button", "id": 23, "label": "Run Ad\n180s",   "icon": "bell",        "action": { "type": "twitch", "op": "run-ad", "params": { "adLength": 180 } } },
+          { "kind": "button", "id": 24, "label": "Snooze\nAd",     "icon": "moon",        "action": { "type": "twitch", "op": "snooze-ad" } },
+          { "kind": "button", "id": 25, "label": "Announce",       "icon": "send",        "action": { "type": "twitch", "op": "chat-announcement", "prompts": [{ "field": "text", "label": "Announcement", "placeholder": "raid in 5!" }] } },
+          { "kind": "button", "id": 26, "label": "Shoutout",       "icon": "star",        "action": { "type": "twitch", "op": "shoutout", "prompts": [{ "field": "target", "label": "Streamer to shoutout", "placeholder": "e.g. skullbizarre" }] } },
+          { "kind": "button", "id": 27, "label": "Raid",           "icon": "zap",         "action": { "type": "twitch", "op": "start-raid", "prompts": [{ "field": "target", "label": "Raid target", "placeholder": "streamer login" }] } }
         ]
       }
     ]
