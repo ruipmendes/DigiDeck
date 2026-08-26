@@ -351,6 +351,10 @@ Example: a recording tile labeled `REC {obs.recordingTime}` renders as `REC 00:0
 
 **Live scene preview thumbnails.** *Switch to scene* tiles automatically render a live 320×180 JPEG preview of the target scene's contents as the tile background — click-this-photo-to-switch-to-it feel. Server polls `GetSourceScreenshot` for every scene referenced by a set-scene tile in the current layout (idle scenes get zero traffic). The preview refreshes on a round-robin cadence (~3 seconds per scene) so a busy scene grid stays smooth. Uploading your own image on the tile still overrides the live preview.
 
+**Chart tiles.** A new tile kind that plots one numeric integration variable as a rolling sparkline (~90 s of history at 1 Hz). Sources today: `obs.droppedFrames` (chart it in *delta* mode so you see spikes as they happen, not a monotonically-rising counter), `spotify.volumePercent`, and system metrics `system.cpu` / `system.ram` / `system.gpu`. Range auto-scales unless you pin min/max in the editor.
+
+CPU and RAM sample from Node's built-in `os` module — essentially free. GPU sampling calls a PowerShell perf counter (`\GPU Engine(*)\Utilization Percentage`, MAX across engines to match Task Manager's headline number) every ~3 s and only when a `system.gpu` chart is actually on your deck. Layouts that don't chart system metrics pay zero polling cost. Curated presets: *Drops sparkline* (OBS), *Spotify volume chart*, *CPU / RAM / GPU % sparklines* (System).
+
 Live state on the phone: recording / streaming / virtual cam / scene-active / muted buttons show a blue dot, source-visible buttons show a green dot, and any OBS button is dimmed with an "offline" pip if OBS isn't connected.
 
 > **Note:** this integration speaks the `obs-websocket` v5 protocol bundled with **OBS Studio 28+**. If you run **Streamlabs Desktop** instead, use the *Streamlabs Desktop* integration below — it speaks Streamlabs' own JSON-RPC protocol and lives entirely separately from OBS.

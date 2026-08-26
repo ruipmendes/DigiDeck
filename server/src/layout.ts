@@ -63,7 +63,40 @@ export type DiscordVoicePanelTile = {
   accentColor?: string;
 };
 
-export type Tile = Button | SliderTile | BlankTile | DiscordVoicePanelTile;
+/** Chart source keys — must match the {ns.key} template names in labelTemplate
+ *  so the chart tile can reuse the same LiveMeta the labels read from. Only
+ *  numeric-shaped fields work; boolean/string fields aren't chartable. */
+export type ChartSource =
+  | 'obs.droppedFrames'
+  | 'spotify.volumePercent'
+  | 'system.cpu'
+  | 'system.ram'
+  | 'system.gpu';
+
+/** Small sparkline tile — no action, no tap; renders a rolling trace of a
+ *  numeric LiveMeta value. Value mode plots the raw number; delta mode plots
+ *  the change since the previous sample (useful for monotonically-increasing
+ *  counters like droppedFrames — the raw counter climbs forever but the
+ *  delta trace shows *when* drops are happening). */
+export type ChartTile = {
+  kind: 'chart';
+  id: number;
+  label: string;
+  icon?: string;
+  image?: string;
+  accentColor?: string;
+  source: ChartSource;
+  /** 'value' = plot raw. 'delta' = plot raw - previous. Default: 'value'. */
+  mode?: 'value' | 'delta';
+  /** Hex stroke color for the sparkline. Falls back to accentColor / #3b82f6. */
+  color?: string;
+  /** Fix the y-axis min. When absent (or both min/max absent) the trace
+   *  auto-scales across the window. */
+  min?: number;
+  max?: number;
+};
+
+export type Tile = Button | SliderTile | BlankTile | DiscordVoicePanelTile | ChartTile;
 export type Page = {
   id: number;
   name: string;
@@ -135,7 +168,21 @@ export type PublicDiscordVoicePanel = {
   accentColor?: string;
 };
 
-export type PublicTile = PublicButton | PublicSlider | PublicBlank | PublicDiscordVoicePanel;
+export type PublicChart = {
+  kind: 'chart';
+  id: number;
+  label: string;
+  icon?: string;
+  image?: string;
+  accentColor?: string;
+  source: ChartSource;
+  mode?: 'value' | 'delta';
+  color?: string;
+  min?: number;
+  max?: number;
+};
+
+export type PublicTile = PublicButton | PublicSlider | PublicBlank | PublicDiscordVoicePanel | PublicChart;
 export type PublicPage = { id: number; name: string; icon?: string; image?: string; cols?: number; background?: string; backgroundImage?: string; buttons: PublicTile[] };
 export type PublicLayout = { navigation?: NavigationMode; pages: PublicPage[] };
 
@@ -243,6 +290,9 @@ export function toPublic(layout: Layout): PublicLayout {
         if (t.kind === 'discord-voice-panel') {
           return { kind: 'discord-voice-panel', id: t.id, label: t.label, icon: t.icon, image: t.image, accentColor: t.accentColor };
         }
+        if (t.kind === 'chart') {
+          return { kind: 'chart', id: t.id, label: t.label, icon: t.icon, image: t.image, accentColor: t.accentColor, source: t.source, mode: t.mode, color: t.color, min: t.min, max: t.max };
+        }
         const out: PublicButton = { kind: 'button', id: t.id, label: t.label, icon: t.icon, image: t.image, imageFit: t.imageFit, accentColor: t.accentColor };
         if (t.longPressAction !== undefined) out.hasLongPress = true;
         const steps = Array.isArray(t.action) ? t.action : [t.action];
@@ -345,6 +395,22 @@ export function layoutUsesAppAudioSlider(layout: Layout): boolean {
   return false;
 }
 
+/** Which of the three system-metric sources any chart tile references. Drives
+ *  the SystemMetricsSampler's poll schedule — CPU / RAM are free but GPU
+ *  spawns PowerShell every 3 s, so we only run it when actually needed. */
+export function layoutSystemMetricsNeeded(layout: Layout): { cpu: boolean; ram: boolean; gpu: boolean } {
+  const out = { cpu: false, ram: false, gpu: false };
+  for (const page of layout.pages) {
+    for (const t of page.buttons) {
+      if (t.kind !== 'chart') continue;
+      if (t.source === 'system.cpu') out.cpu = true;
+      else if (t.source === 'system.ram') out.ram = true;
+      else if (t.source === 'system.gpu') out.gpu = true;
+    }
+  }
+  return out;
+}
+
 /** Collect every kick-streamer slug referenced in the layout (deduped, lowercased). */
 export function collectKickStreamerSlugs(layout: Layout): string[] {
   const set = new Set<string>();
@@ -382,6 +448,16 @@ export function watchLayout(onChange: () => void): () => void {
 }
 
 const VALID_ACTION_TYPES = new Set(['hotkey', 'text', 'launch', 'url', 'script', 'volume', 'mic', 'app-audio', 'obs', 'streamlabs', 'twitch', 'twitch-streamer', 'kick', 'kick-streamer', 'discord', 'spotify', 'goto-page', 'wait']);
+
+/** Numeric LiveMeta paths that can feed a chart tile. Kept in sync with the
+ *  ChartSource union above and with resolveChartValue() on the client. */
+const VALID_CHART_SOURCES = new Set<string>([
+  'obs.droppedFrames',
+  'spotify.volumePercent',
+  'system.cpu',
+  'system.ram',
+  'system.gpu',
+]);
 
 export function validateLayout(input: unknown): Layout {
   if (!input || typeof input !== 'object') throw new Error('layout must be an object');
@@ -515,6 +591,20 @@ function validateButtons(input: unknown[], seenIds: Set<number>): Tile[] {
     } else if (kind === 'discord-voice-panel') {
       // Voice-panel tiles are fully content-driven — no action, no inputName,
       // no per-tile config beyond label + cosmetics (which are validated above).
+    } else if (kind === 'chart') {
+      if (typeof tile.source !== 'string' || !VALID_CHART_SOURCES.has(tile.source as string)) {
+        throw new Error(`tile ${tile.id}: chart source must be one of ${[...VALID_CHART_SOURCES].join(', ')}`);
+      }
+      if (tile.mode !== undefined && tile.mode !== 'value' && tile.mode !== 'delta') {
+        throw new Error(`tile ${tile.id}: chart mode must be 'value' or 'delta'`);
+      }
+      validateColorField(tile.color, `tile ${tile.id}`, 'color');
+      if (tile.min !== undefined && typeof tile.min !== 'number') {
+        throw new Error(`tile ${tile.id}: chart min must be a number`);
+      }
+      if (tile.max !== undefined && typeof tile.max !== 'number') {
+        throw new Error(`tile ${tile.id}: chart max must be a number`);
+      }
     } else {
       throw new Error(`tile ${tile.id}: unknown kind "${kind}"`);
     }

@@ -71,6 +71,9 @@ export const TILE_PRESETS: TilePreset[] = [
   { key: 'obs-dropped-frames', category: 'OBS Studio', label: 'Dropped frames indicator', hint: 'Live dropped-frame count', iconName: 'obs',
     keywords: 'obs dropped frames indicator health monitor stats live dynamic label',
     create: (id) => ({ kind: 'button', id, label: 'Dropped: {obs.droppedFrames}', icon: 'obs', action: { type: 'obs', op: 'toggle-record' } }) },
+  { key: 'obs-drops-chart', category: 'OBS Studio', label: 'Drops sparkline', hint: 'Live chart tile of dropped-frames rate', iconName: 'obs',
+    keywords: 'obs drops dropped frames chart sparkline graph trend delta',
+    create: (id) => ({ kind: 'chart', id, label: 'Drops', source: 'obs.droppedFrames', mode: 'delta' }) },
   { key: 'obs-replay-save', category: 'OBS Studio', label: 'Save replay buffer', iconName: 'obs',
     keywords: 'obs replay buffer save instant clip',
     create: (id) => ({ kind: 'button', id, label: 'Replay', icon: 'obs', action: { type: 'obs', op: 'save-replay-buffer' } }) },
@@ -143,6 +146,20 @@ export const TILE_PRESETS: TilePreset[] = [
   { key: 'spotify-volume-slider', category: 'Spotify', label: 'Spotify volume slider', hint: 'Controls the active device volume', iconName: 'spotify',
     keywords: 'spotify volume slider music device fader mixer', requiresPremium: true,
     create: (id) => ({ kind: 'slider', id, label: 'Spotify', provider: 'spotify', inputName: 'volume' }) },
+  { key: 'spotify-volume-chart', category: 'Spotify', label: 'Spotify volume chart', hint: 'Live sparkline of the current device volume', iconName: 'spotify',
+    keywords: 'spotify volume chart sparkline graph trend music', requiresPremium: true,
+    create: (id) => ({ kind: 'chart', id, label: 'Vol %', source: 'spotify.volumePercent', mode: 'value', min: 0, max: 100 }) },
+
+  // ─── System metrics (chart tiles) ───────────────────
+  { key: 'system-cpu-chart', category: 'System', label: 'CPU % sparkline', hint: 'Live chart of the PC\'s CPU utilisation', iconName: 'zap',
+    keywords: 'system cpu chart sparkline graph load monitor performance',
+    create: (id) => ({ kind: 'chart', id, label: 'CPU', source: 'system.cpu', mode: 'value', min: 0, max: 100 }) },
+  { key: 'system-ram-chart', category: 'System', label: 'RAM % sparkline', hint: 'Live chart of used memory %', iconName: 'settings',
+    keywords: 'system ram memory chart sparkline graph load monitor performance',
+    create: (id) => ({ kind: 'chart', id, label: 'RAM', source: 'system.ram', mode: 'value', min: 0, max: 100 }) },
+  { key: 'system-gpu-chart', category: 'System', label: 'GPU % sparkline', hint: 'Live chart of GPU utilisation (Windows perf counter)', iconName: 'monitor',
+    keywords: 'system gpu graphics chart sparkline graph load monitor performance',
+    create: (id) => ({ kind: 'chart', id, label: 'GPU', source: 'system.gpu', mode: 'value', min: 0, max: 100 }) },
 
   // ─── Flow ───────────────────────────────────────────
   { key: 'flow-goto', category: 'Flow', label: 'Go to page (folder)', hint: 'Pick destination page in editor', iconName: 'folder',

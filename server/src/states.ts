@@ -110,6 +110,11 @@ function computeOne(t: Tile, obs: ObsStatus, twitch: TwitchStatus, streamlabs: S
     if (value === undefined) return { id: t.id, unavailable: true };
     return { id: t.id, sliderValue: value, sliderMuted: muted };
   }
+  if (t.kind === 'chart') {
+    // Chart tiles read their value directly from LiveMeta on the client —
+    // no server-side ButtonState needed. Skip entirely.
+    return null;
+  }
 
   const steps: Action[] = Array.isArray(t.action) ? t.action : [t.action];
 

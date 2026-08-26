@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, Trash2, Sliders, Hand, ChevronDown, ChevronRight, Square } from 'lucide-react';
-import type { Tile, Page, TileKind, Layout, ButtonAction, SliderProvider, Action } from '../lib/types';
+import type { Tile, Page, TileKind, Layout, ButtonAction, SliderProvider, Action, ChartSource } from '../lib/types';
 import { defaultTile, defaultAction } from '../lib/types';
 import { ActionEditor } from './ActionEditor';
 import { IconPicker } from './IconPicker';
@@ -189,6 +189,7 @@ function NonBlankConfigRow({ button, pages, currentPageId, layout, integrationSt
               <option value="slider">Slider</option>
               <option value="blank">Blank (spacer)</option>
               <option value="discord-voice-panel">Discord voice panel</option>
+              <option value="chart">Chart (sparkline)</option>
             </select>
             <span style={{ ...metaLabel, marginLeft: 'auto' }}>id: {button.id}</span>
           </div>
@@ -205,6 +206,8 @@ function NonBlankConfigRow({ button, pages, currentPageId, layout, integrationSt
               you're currently in. Each row has a volume slider (0–200 %) and a
               mute-for-me toggle. No config beyond label / cosmetics.
             </span>
+          ) : button.kind === 'chart' ? (
+            <ChartEditor tile={button} onChange={onChange} />
           ) : (
             <>
               <ActionEditor
@@ -374,6 +377,7 @@ function SummaryChip({ text, onClick }: { text: string; onClick: () => void }) {
 function summarizeTile(tile: Tile): string {
   if (tile.kind === 'blank') return 'Spacer · empty grid slot';
   if (tile.kind === 'discord-voice-panel') return 'Discord voice panel · live channel roster';
+  if (tile.kind === 'chart') return `Chart · ${tile.source}${tile.mode === 'delta' ? ' (delta)' : ''}`;
   if (tile.kind === 'slider') {
     const provider =
       tile.provider === 'streamlabs' ? 'Streamlabs' :
@@ -461,6 +465,85 @@ const metaLabel: React.CSSProperties = {
   letterSpacing: 0.3,
   textTransform: 'uppercase',
 };
+
+const CHART_SOURCES: { value: ChartSource; label: string; defaultMode: 'value' | 'delta'; hint?: string }[] = [
+  { value: 'obs.droppedFrames',     label: 'OBS · dropped frames',   defaultMode: 'delta', hint: 'Use delta mode — the counter climbs monotonically, delta shows when drops actually happen.' },
+  { value: 'spotify.volumePercent', label: 'Spotify · volume %',     defaultMode: 'value' },
+  { value: 'system.cpu',            label: 'System · CPU %',         defaultMode: 'value' },
+  { value: 'system.ram',            label: 'System · RAM %',         defaultMode: 'value' },
+  { value: 'system.gpu',            label: 'System · GPU %',         defaultMode: 'value', hint: 'Windows only — sampled via PowerShell perf counter every ~3 s (MAX across GPU engines, matches Task Manager).' },
+];
+
+function ChartEditor({
+  tile,
+  onChange,
+}: {
+  tile: Extract<Tile, { kind: 'chart' }>;
+  onChange: (patch: Partial<Tile>) => void;
+}) {
+  const src = CHART_SOURCES.find((s) => s.value === tile.source);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ fontSize: 11, color: '#9ca3af' }}>
+        Rolling sparkline of a numeric integration variable. Samples once per second,
+        keeps ~90 s of history. No tap action.
+      </div>
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 12, color: '#9ca3af', minWidth: 46 }}>Source</span>
+        <select
+          value={tile.source}
+          onChange={(e) => {
+            const value = e.target.value as typeof CHART_SOURCES[number]['value'];
+            const next = CHART_SOURCES.find((s) => s.value === value);
+            onChange({ source: value, mode: next?.defaultMode ?? 'value' });
+          }}
+          style={selectStyle}
+        >
+          {CHART_SOURCES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+        </select>
+      </div>
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 12, color: '#9ca3af', minWidth: 46 }}>Mode</span>
+        <select
+          value={tile.mode ?? 'value'}
+          onChange={(e) => onChange({ mode: e.target.value as 'value' | 'delta' })}
+          style={selectStyle}
+        >
+          <option value="value">Value — plot raw number</option>
+          <option value="delta">Delta — plot change since previous sample</option>
+        </select>
+      </div>
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 12, color: '#9ca3af', minWidth: 46 }}>Range</span>
+        <input
+          type="number"
+          value={tile.min ?? ''}
+          onChange={(e) => {
+            const v = e.target.value;
+            onChange({ min: v === '' ? undefined : Number(v) });
+          }}
+          placeholder="auto min"
+          style={{ ...inputStyle, width: 100 }}
+        />
+        <span style={{ color: '#6b7280' }}>→</span>
+        <input
+          type="number"
+          value={tile.max ?? ''}
+          onChange={(e) => {
+            const v = e.target.value;
+            onChange({ max: v === '' ? undefined : Number(v) });
+          }}
+          placeholder="auto max"
+          style={{ ...inputStyle, width: 100 }}
+        />
+        <span style={{ fontSize: 11, color: '#6b7280' }}>leave blank to auto-scale</span>
+      </div>
+      {src?.hint && (
+        <span style={{ fontSize: 11, color: '#f59e0b' }}>{src.hint}</span>
+      )}
+    </div>
+  );
+}
 
 function SliderEditor({
   inputName,

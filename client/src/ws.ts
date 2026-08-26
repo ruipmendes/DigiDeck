@@ -55,7 +55,25 @@ export type DiscordVoicePanelTile = {
   accentColor?: string;
 };
 
-export type Tile = Button | SliderTile | BlankTile | DiscordVoicePanelTile;
+export type ChartSource = 'obs.droppedFrames' | 'spotify.volumePercent' | 'system.cpu' | 'system.ram' | 'system.gpu';
+
+/** Small sparkline tile that traces a numeric LiveMeta value over a rolling
+ *  window. No tap action; purely display. */
+export type ChartTile = {
+  kind: 'chart';
+  id: number;
+  label: string;
+  icon?: string;
+  image?: string;
+  accentColor?: string;
+  source: ChartSource;
+  mode?: 'value' | 'delta';
+  color?: string;
+  min?: number;
+  max?: number;
+};
+
+export type Tile = Button | SliderTile | BlankTile | DiscordVoicePanelTile | ChartTile;
 
 export type VoicePanelMember = {
   id: string;
@@ -118,6 +136,11 @@ export type LiveMeta = {
     album?: string;
     coverUrl?: string;
     volumePercent?: number;
+  };
+  system?: {
+    cpuPercent?: number;
+    ramPercent?: number;
+    gpuPercent?: number;
   };
 };
 

@@ -188,7 +188,27 @@ export type DiscordVoicePanelTile = {
   accentColor?: string;
 };
 
-export type Tile = Button | SliderTile | BlankTile | DiscordVoicePanelTile;
+/** Numeric LiveMeta sources that can feed a chart tile. */
+export type ChartSource = 'obs.droppedFrames' | 'spotify.volumePercent' | 'system.cpu' | 'system.ram' | 'system.gpu';
+
+/** Small sparkline tile — no tap action; renders a rolling trace of a
+ *  numeric LiveMeta value. Value mode plots raw; delta mode plots
+ *  raw - previous (useful for monotonic counters like droppedFrames). */
+export type ChartTile = {
+  kind: 'chart';
+  id: number;
+  label: string;
+  icon?: string;
+  image?: string;
+  accentColor?: string;
+  source: ChartSource;
+  mode?: 'value' | 'delta';
+  color?: string;
+  min?: number;
+  max?: number;
+};
+
+export type Tile = Button | SliderTile | BlankTile | DiscordVoicePanelTile | ChartTile;
 export type Page = {
   id: number;
   name: string;
@@ -214,6 +234,9 @@ export function defaultTile(kind: TileKind, id: number): Tile {
   }
   if (kind === 'discord-voice-panel') {
     return { kind: 'discord-voice-panel', id, label: 'Voice channel' };
+  }
+  if (kind === 'chart') {
+    return { kind: 'chart', id, label: 'Drops', source: 'obs.droppedFrames', mode: 'delta' };
   }
   return { kind: 'button', id, label: 'New', action: defaultAction('hotkey') };
 }

@@ -2,7 +2,7 @@ import { createServer as createHttpServer } from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
 import { WebSocketServer, WebSocket } from 'ws';
 import { loadOrGenerateCert } from './https-cert.js';
-import { loadOrInitLayout, reloadLayout, toPublic, watchLayout, findTile, collectStreamerLogins, collectKickStreamerSlugs, collectObsSceneNames, layoutUsesAppAudioSlider, LAYOUT_FILE } from './layout.js';
+import { loadOrInitLayout, reloadLayout, toPublic, watchLayout, findTile, collectStreamerLogins, collectKickStreamerSlugs, collectObsSceneNames, layoutUsesAppAudioSlider, layoutSystemMetricsNeeded, LAYOUT_FILE } from './layout.js';
 import { executeAction, setShellActionsGate, withPromptValues } from './actions/types.js';
 import { handleRequest } from './http.js';
 import { loadOrInitConfig, saveConfig, CONFIG_FILE } from './config.js';
@@ -19,6 +19,7 @@ import { getDiscord } from './integrations/discord.js';
 import { getSpotify } from './integrations/spotify.js';
 import { getAppAudio } from './actions/appAudio.js';
 import { ensureIconPacksDir } from './icon-packs.js';
+import { getSystemMetrics } from './system-metrics.js';
 // scaffold-integration: additional integration imports inserted above this line
 import { getIntegrations } from './integrations/base.js';
 import { getMic } from './actions/mic.js';
@@ -69,6 +70,11 @@ type LiveMeta = {
     album?: string;
     coverUrl?: string;
     volumePercent?: number;
+  };
+  system?: {
+    cpuPercent?: number;
+    ramPercent?: number;
+    gpuPercent?: number;
   };
 };
 
@@ -162,6 +168,16 @@ function reconcileAppAudioSliderPoll(l: Layout): void {
 }
 reconcileAppAudioSliderPoll(layout);
 appAudio.onChange(() => scheduleStateBroadcast());
+
+// System metrics (CPU / RAM / GPU) — poll schedule is driven by whether any
+// chart tile in the current layout references a system.* source. Zero cost
+// on layouts that don't chart system metrics.
+const systemMetrics = getSystemMetrics();
+function reconcileSystemMetrics(l: Layout): void {
+  systemMetrics.setNeeded(layoutSystemMetricsNeeded(l));
+}
+reconcileSystemMetrics(layout);
+systemMetrics.onChange(() => scheduleStateBroadcast());
 
 function activeLayout(): Layout { return getPreview()?.layout ?? layout; }
 
@@ -278,6 +294,7 @@ function buildLiveMeta(): LiveMeta {
         volumePercent: s.volumePercent,
       };
     })(),
+    system: systemMetrics.status(),
   };
 }
 
@@ -323,6 +340,7 @@ watchLayout(async () => {
     kickStreamers.setSlugs(collectKickStreamerSlugs(layout));
     obs.setTrackedScenes(collectObsSceneNames(layout));
     reconcileAppAudioSliderPoll(layout);
+    reconcileSystemMetrics(layout);
     broadcastLayout();
     scheduleStateBroadcast();
   } catch (err) {
@@ -505,6 +523,7 @@ startTray({
     kickStreamers.setSlugs(collectKickStreamerSlugs(layout));
     obs.setTrackedScenes(collectObsSceneNames(layout));
     reconcileAppAudioSliderPoll(layout);
+    reconcileSystemMetrics(layout);
     broadcastLayout();
     scheduleStateBroadcast();
   },

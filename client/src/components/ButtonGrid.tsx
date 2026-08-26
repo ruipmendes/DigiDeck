@@ -4,6 +4,7 @@ import type { ButtonState, Layout, LiveMeta, PressPrompt, Tile, VoicePanelMember
 import { getIcon } from '../lib/icons';
 import { imageUrl, fetchPromptChoices } from '../lib/api';
 import { isDynamicLabel, renderLabel } from '../lib/labelTemplate';
+import { ChartTileView } from './ChartTile';
 
 /** Convert "#abc" or "#aabbcc" to rgba(...). Falls back to the alpha-only black if parsing fails. */
 function hexToRgba(hex: string, alpha: number): string {
@@ -251,6 +252,16 @@ export function ButtonGrid({ layout, lastAck, lastNack, buttonStates, onPress, o
                 liveMeta={liveMeta}
                 onMemberVolume={(uid, v) => onVoicePanelVolume(t.id, uid, v)}
                 onMemberMute={(uid) => onVoicePanelMute(t.id, uid)}
+              />
+            );
+          }
+          if (t.kind === 'chart') {
+            return (
+              <ChartTileView
+                key={t.id}
+                tile={t}
+                liveMeta={liveMeta}
+                colorFallback="#3b82f6"
               />
             );
           }

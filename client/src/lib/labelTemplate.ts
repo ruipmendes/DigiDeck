@@ -66,3 +66,19 @@ function formatDuration(ms: number): string {
 export function isDynamicLabel(label: string): boolean {
   return /\{[a-z]+\.[a-zA-Z]+\}/.test(label);
 }
+
+/** Extract a numeric value from LiveMeta by a `<ns>.<key>` path — used by
+ *  chart tiles to sample the value on each tick. Returns undefined when the
+ *  source isn't currently populated (integration disconnected, nothing
+ *  playing, etc.). Only numeric-shaped fields are exposed here; boolean and
+ *  string variables (`discord.mute`, `spotify.track`) aren't chartable. */
+export function getNumericValue(source: string, meta: import('../ws').LiveMeta): number | undefined {
+  switch (source) {
+    case 'obs.droppedFrames':      return meta.obs?.droppedFrames;
+    case 'spotify.volumePercent':  return meta.spotify?.volumePercent;
+    case 'system.cpu':             return meta.system?.cpuPercent;
+    case 'system.ram':             return meta.system?.ramPercent;
+    case 'system.gpu':             return meta.system?.gpuPercent;
+    default: return undefined;
+  }
+}
