@@ -399,6 +399,9 @@ function summarizeAction(a: Action): string {
     case 'script':           return 'PowerShell';
     case 'volume':           return a.mute ? 'Mute toggle' : `Volume ${(a.delta ?? 0) >= 0 ? '+' : ''}${a.delta ?? 2}`;
     case 'mic':              return `Mic · ${a.op}`;
+    case 'app-audio':        return a.op === 'set-volume'
+      ? `${a.params?.appName || 'App'} · ${a.params?.volumePercent ?? 50}%`
+      : `${a.params?.appName || 'App'} · ${a.op}`;
     case 'obs':              return a.params?.sceneName ? `OBS · ${a.op} (${a.params.sceneName})` : `OBS · ${a.op}`;
     case 'streamlabs':       return a.params?.sceneName ? `Streamlabs · ${a.op} (${a.params.sceneName})` : `Streamlabs · ${a.op}`;
     case 'twitch':           return a.text ? `Twitch · "${ellipsis(a.text, 20)}"` : 'Twitch chat';
@@ -487,6 +490,20 @@ function SliderEditor({
       }, 4000);
       return () => { alive = false; clearInterval(t); };
     }
+    if (provider === 'app-audio') {
+      // Live-poll the running audio sessions so users can pick from a
+      // dropdown when the target app is already playing. Free-text input
+      // still works when it isn't.
+      let alive = true;
+      function load() {
+        api.getAppAudioSessions()
+          .then((sessions) => { if (alive) { setInputs(sessions.map((s) => s.name)); setConnected(true); } })
+          .catch(() => { if (alive) { setInputs([]); setConnected(false); } });
+      }
+      load();
+      const t = setInterval(load, 4000);
+      return () => { alive = false; clearInterval(t); };
+    }
     if (provider === 'spotify') {
       // Spotify has one player volume — no input list to fetch.
       let alive = true;
@@ -524,6 +541,7 @@ function SliderEditor({
     provider === 'streamlabs' ? 'Streamlabs Desktop' :
     provider === 'discord'    ? 'Discord' :
     provider === 'spotify'    ? 'Spotify' :
+    provider === 'app-audio'  ? 'Per-app audio' :
                                 'OBS Studio';
 
   // Build the provider option list: include configured integrations, plus the
@@ -539,13 +557,17 @@ function SliderEditor({
   if ((integrationStatus.spotify && integrationStatus.spotifyPremium) || provider === 'spotify') {
     providerOpts.push({ value: 'spotify', label: 'Spotify' });
   }
+  // Per-app audio doesn't need an integration to be enabled — it's system-level.
+  // Always available on Windows.
+  providerOpts.push({ value: 'app-audio', label: 'Per-app audio' });
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#9ca3af' }}>
         <Sliders size={12} /> {providerLabel} {
-          provider === 'discord' ? 'voice volume slider — drag-to-set + tap to mute/deafen' :
-          provider === 'spotify' ? 'player volume slider — drag-to-set + tap to play/pause' :
+          provider === 'discord'   ? 'voice volume slider — drag-to-set + tap to mute/deafen' :
+          provider === 'spotify'   ? 'player volume slider — drag-to-set + tap to play/pause' :
+          provider === 'app-audio' ? 'per-app volume slider — drag-to-set + tap to mute the app' :
           'audio mixer slider — drag-to-set-volume + tap-to-mute'
         }
       </div>
@@ -555,7 +577,8 @@ function SliderEditor({
           onChange={(e) => {
             const next = e.target.value as SliderProvider;
             // Discord sliders default to the mic ('input'); other providers reset to empty
-            // so the user picks a named audio input.
+            // so the user picks a named audio input. app-audio also starts empty —
+            // the picker fills in from the live session list.
             onChange({ provider: next, inputName: next === 'discord' ? 'input' : '' });
           }}
           title="audio source provider"

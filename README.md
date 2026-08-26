@@ -244,6 +244,11 @@ Each button is `{ id, label, icon?, action }`. Action shapes:
 { "type": "mic", "op": "mute" }
 { "type": "mic", "op": "unmute" }
 
+// Per-app audio (mute Discord specifically, set Spotify to 40%, etc.).
+// Matches on the process name — case-insensitive, "Discord" == "discord".
+{ "type": "app-audio", "op": "toggle-mute", "params": { "appName": "Discord" } }
+{ "type": "app-audio", "op": "set-volume", "params": { "appName": "Spotify", "volumePercent": 40 } }
+
 // OBS — see the OBS section below for all `op` values.
 { "type": "obs", "op": "toggle-record" }
 { "type": "obs", "op": "set-scene", "params": { "sceneName": "Gameplay" } }
@@ -366,6 +371,30 @@ Action types you can bind: toggle/start/stop recording, toggle/start/stop stream
 Live state on the phone: recording / streaming / virtual cam / replay buffer / scene-active / muted buttons light up with a blue dot, source-visible buttons show a green dot, and any Streamlabs button is dimmed with an "offline" pip if Streamlabs isn't connected. The integration auto-reconnects every 5 seconds for up to 5 minutes, then surfaces a manual *retry* button in the card.
 
 Audio mixer slider tiles work for Streamlabs too — the slider editor exposes a provider toggle (OBS / Streamlabs) that's filtered by which integration is enabled. See *Audio mixer slider tiles* under the OBS section above; everything carries over.
+
+---
+
+## Per-app audio (Discord ducking, Spotify volume, …)
+
+Windows exposes a per-app volume + mute for every program that opens an audio session — the same list you see in *Sound settings → Volume mixer*. Digi Deck exposes it as an `app-audio` action so you can drop a *"mute Discord"* tile on your deck without touching the rest of your audio, or a slider that drives Spotify down to 15 % while you record without opening any Spotify UI.
+
+Action shape:
+
+```json
+// Case-insensitive process name match. "Discord" == "discord" == "DISCORD".
+{ "type": "app-audio", "op": "toggle-mute", "params": { "appName": "Discord" } }
+{ "type": "app-audio", "op": "mute",        "params": { "appName": "Spotify" } }
+{ "type": "app-audio", "op": "unmute",      "params": { "appName": "Spotify" } }
+{ "type": "app-audio", "op": "set-volume",  "params": { "appName": "Spotify", "volumePercent": 40 } }
+```
+
+The tile editor auto-populates the app-name dropdown from the currently-playing sessions (polls every 4 s), and falls back to a free-text field when nothing is playing so you can still author a tile for an app that isn't open right now. If the target app has *no active audio session* at press time — e.g. Discord is closed — the button surfaces a friendly error.
+
+Multiple sessions for the same app (three Chrome tabs, two VLC windows) all get muted/adjusted together. That matches the intent of *"mute Chrome"* and dodges the ambiguity of picking one session at random.
+
+**Slider tiles.** Any slider tile can be set to *Per-app audio* provider — pick the app in the input dropdown and the fader drives that app's session volume; tap the icon to toggle the app's mute state. Live volume changes from the Windows mixer (or the app itself) push back to the fader within ~4 s.
+
+The whole thing sits on Windows Core Audio's `IAudioSessionManager2` via a PowerShell / inline-C# shim — same tech as the mic-mute action. No extra install needed.
 
 ---
 

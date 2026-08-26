@@ -98,6 +98,9 @@ export type MicOp = 'toggle-mute' | 'mute' | 'unmute';
 
 export type SpotifyOp = 'toggle-play' | 'play' | 'pause' | 'next' | 'previous';
 
+export type AppAudioOp = 'toggle-mute' | 'mute' | 'unmute' | 'set-volume';
+export type AppAudioActionParams = { appName?: string; volumePercent?: number };
+
 export type StreamlabsOp =
   | 'toggle-record' | 'start-record' | 'stop-record'
   | 'toggle-stream' | 'start-stream' | 'stop-stream'
@@ -117,6 +120,7 @@ export type Action =
   | { type: 'script'; script: string }
   | { type: 'volume'; delta?: number; mute?: boolean }
   | { type: 'mic'; op: MicOp }
+  | { type: 'app-audio'; op: AppAudioOp; params?: AppAudioActionParams }
   | { type: 'obs'; op: ObsOp; params?: ObsActionParams }
   | { type: 'streamlabs'; op: StreamlabsOp; params?: StreamlabsActionParams }
   | { type: 'twitch'; op: TwitchOp; text?: string; params?: TwitchActionParams; prompts?: TwitchPrompt[] }
@@ -151,7 +155,7 @@ export type Button = {
   longPressAction?: ButtonAction;
 };
 
-export type SliderProvider = 'obs' | 'streamlabs' | 'discord' | 'spotify';
+export type SliderProvider = 'obs' | 'streamlabs' | 'discord' | 'spotify' | 'app-audio';
 
 export type SliderTile = {
   kind: 'slider';
@@ -240,6 +244,7 @@ export function defaultAction(type: ActionType): Action {
     case 'script': return { type: 'script', script: '' };
     case 'volume': return { type: 'volume', delta: 2 };
     case 'mic':    return { type: 'mic', op: 'toggle-mute' };
+    case 'app-audio': return { type: 'app-audio', op: 'toggle-mute' };
     case 'obs':    return { type: 'obs', op: 'toggle-record' };
     case 'streamlabs': return { type: 'streamlabs', op: 'toggle-record' };
     case 'twitch': return { type: 'twitch', op: 'chat', text: '' };

@@ -2,7 +2,7 @@ import { createServer as createHttpServer } from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
 import { WebSocketServer, WebSocket } from 'ws';
 import { loadOrGenerateCert } from './https-cert.js';
-import { loadOrInitLayout, reloadLayout, toPublic, watchLayout, findTile, collectStreamerLogins, collectKickStreamerSlugs, collectObsSceneNames, LAYOUT_FILE } from './layout.js';
+import { loadOrInitLayout, reloadLayout, toPublic, watchLayout, findTile, collectStreamerLogins, collectKickStreamerSlugs, collectObsSceneNames, layoutUsesAppAudioSlider, LAYOUT_FILE } from './layout.js';
 import { executeAction, setShellActionsGate, withPromptValues } from './actions/types.js';
 import { handleRequest } from './http.js';
 import { loadOrInitConfig, saveConfig, CONFIG_FILE } from './config.js';
@@ -17,6 +17,7 @@ import { getKick } from './integrations/kick.js';
 import { getKickStreamers } from './integrations/kick-streamers.js';
 import { getDiscord } from './integrations/discord.js';
 import { getSpotify } from './integrations/spotify.js';
+import { getAppAudio } from './actions/appAudio.js';
 // scaffold-integration: additional integration imports inserted above this line
 import { getIntegrations } from './integrations/base.js';
 import { getMic } from './actions/mic.js';
@@ -138,6 +139,24 @@ obs.setTrackedScenes(collectObsSceneNames(layout));
 
 const mic = getMic();
 mic.start();
+
+// Per-app audio (Discord ducking, Spotify volume, etc.) only polls the Core
+// Audio session list while there's a slider tile that needs the live values.
+// Actions fire ad-hoc without a subscription. Refcount-based: subscribe when
+// the layout brings a slider in, release when it goes away.
+const appAudio = getAppAudio();
+let appAudioSliderUnsub: (() => void) | null = null;
+function reconcileAppAudioSliderPoll(l: Layout): void {
+  const needed = layoutUsesAppAudioSlider(l);
+  if (needed && !appAudioSliderUnsub) {
+    appAudioSliderUnsub = appAudio.subscribe();
+  } else if (!needed && appAudioSliderUnsub) {
+    appAudioSliderUnsub();
+    appAudioSliderUnsub = null;
+  }
+}
+reconcileAppAudioSliderPoll(layout);
+appAudio.onChange(() => scheduleStateBroadcast());
 
 function activeLayout(): Layout { return getPreview()?.layout ?? layout; }
 
@@ -298,6 +317,7 @@ watchLayout(async () => {
     streamers.setLogins(collectStreamerLogins(layout));
     kickStreamers.setSlugs(collectKickStreamerSlugs(layout));
     obs.setTrackedScenes(collectObsSceneNames(layout));
+    reconcileAppAudioSliderPoll(layout);
     broadcastLayout();
     scheduleStateBroadcast();
   } catch (err) {
@@ -375,6 +395,8 @@ wss.on('connection', (ws: WebSocket) => {
         } else if (provider === 'spotify') {
           // Slider protocol is 0..1; Spotify wants 0..100.
           await spotify.setPlayerVolume(msg.value * 100);
+        } else if (provider === 'app-audio') {
+          await getAppAudio().setVolume(tile.inputName, msg.value);
         } else {
           await obs.setInputVolume(tile.inputName, msg.value);
         }
@@ -400,6 +422,8 @@ wss.on('connection', (ws: WebSocket) => {
           // Spotify volume slider "mute" == toggle play/pause: the natural
           // "silence" action for a music tile.
           await spotify.execute('toggle-play');
+        } else if (provider === 'app-audio') {
+          await getAppAudio().toggleMute(tile.inputName);
         } else {
           await obs.execute('toggle-mute', { inputName: tile.inputName });
         }
@@ -475,6 +499,7 @@ startTray({
     streamers.setLogins(collectStreamerLogins(layout));
     kickStreamers.setSlugs(collectKickStreamerSlugs(layout));
     obs.setTrackedScenes(collectObsSceneNames(layout));
+    reconcileAppAudioSliderPoll(layout);
     broadcastLayout();
     scheduleStateBroadcast();
   },

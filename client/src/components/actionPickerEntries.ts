@@ -62,6 +62,14 @@ const audio: ActionPickerEntry[] = [
     create: () => ({ type: 'mic', op: 'mute' }) },
   { key: 'mic:unmute',   category: 'Audio', label: 'Unmute microphone',     iconName: 'mic',      keywords: 'mic microphone unmute on',
     create: () => ({ type: 'mic', op: 'unmute' }) },
+  { key: 'app-audio:toggle-mute', category: 'Audio', label: 'Toggle app mute',       hint: 'Mute a specific running app (Discord, Spotify, …)', iconName: 'volume-x', keywords: 'app audio mute toggle discord spotify chrome duck per app session',
+    create: () => ({ type: 'app-audio', op: 'toggle-mute', params: { appName: '' } }) },
+  { key: 'app-audio:mute',        category: 'Audio', label: 'Mute app',              hint: 'Force-mute a specific running app',                  iconName: 'volume-x', keywords: 'app audio mute discord spotify chrome per app session',
+    create: () => ({ type: 'app-audio', op: 'mute', params: { appName: '' } }) },
+  { key: 'app-audio:unmute',      category: 'Audio', label: 'Unmute app',            hint: 'Force-unmute a specific running app',                iconName: 'volume-2', keywords: 'app audio unmute discord spotify chrome per app session',
+    create: () => ({ type: 'app-audio', op: 'unmute', params: { appName: '' } }) },
+  { key: 'app-audio:set-volume',  category: 'Audio', label: 'Set app volume',        hint: 'Preset volume for a specific running app',           iconName: 'volume-1', keywords: 'app audio volume set discord spotify chrome duck per app session preset',
+    create: () => ({ type: 'app-audio', op: 'set-volume', params: { appName: '', volumePercent: 50 } }) },
 ];
 
 const obsEntries = ((): ActionPickerEntry[] => {
@@ -263,6 +271,7 @@ export function entryFor(action: Action): ActionPickerEntry | null {
         ? ACTION_PICKER_ENTRIES.find((e) => e.key === 'volume:up') ?? null
         : ACTION_PICKER_ENTRIES.find((e) => e.key === 'volume:down') ?? null;
     case 'mic':             return byOp('mic', action.op);
+    case 'app-audio':       return byOp('app-audio', action.op);
     case 'obs':             return byOp('obs', action.op);
     case 'streamlabs':      return byOp('streamlabs', action.op);
     case 'twitch':          return byOp('twitch', action.op);

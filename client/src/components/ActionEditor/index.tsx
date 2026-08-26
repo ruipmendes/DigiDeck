@@ -26,6 +26,7 @@ import { ObsBody } from './ObsBody';
 import { StreamlabsBody } from './StreamlabsBody';
 import { TwitchBody } from './TwitchBody';
 import { DiscordBody } from './DiscordBody';
+import { AppAudioBody } from './AppAudioBody';
 
 export type { IntegrationStatus };
 
@@ -329,6 +330,7 @@ function Body({ action, onChange, pages }: StepEditorProps) {
           {MIC_OPS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
       );
+    case 'app-audio':  return <AppAudioBody action={action} onChange={onChange} />;
     case 'obs':        return <ObsBody action={action} onChange={onChange} />;
     case 'streamlabs': return <StreamlabsBody action={action} onChange={onChange} />;
     case 'twitch':     return <TwitchBody action={action} onChange={onChange} />;

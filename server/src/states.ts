@@ -7,6 +7,7 @@ import type { KickStatus } from './integrations/kick.js';
 import type { DiscordStatus, DiscordChannelMember } from './integrations/discord.js';
 import type { SpotifyStatus } from './integrations/spotify.js';
 import { getSpotify } from './integrations/spotify.js';
+import { getAppAudio } from './actions/appAudio.js';
 import { getStreamers } from './integrations/twitch-streamers.js';
 import { getKickStreamers } from './integrations/kick-streamers.js';
 import { getMic } from './actions/mic.js';
@@ -94,6 +95,13 @@ function computeOne(t: Tile, obs: ObsStatus, twitch: TwitchStatus, streamlabs: S
       const value = Math.max(0, Math.min(1, spotify.volumePercent / 100));
       const muted = !spotify.isPlaying;
       return { id: t.id, sliderValue: value, sliderMuted: muted };
+    }
+    if (provider === 'app-audio') {
+      const session = getAppAudio().getSessions().find(
+        (s) => s.name.toLowerCase() === t.inputName.toLowerCase(),
+      );
+      if (!session) return { id: t.id, unavailable: true };
+      return { id: t.id, sliderValue: session.volume, sliderMuted: session.muted };
     }
     const src = provider === 'streamlabs' ? streamlabs : obs;
     if (src.state !== 'connected') return { id: t.id, unavailable: true };

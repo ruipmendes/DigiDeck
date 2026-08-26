@@ -7,6 +7,7 @@ import { saveConfig, type ServerConfig } from './config.js';
 import { findIntegration } from './integrations/base.js';
 import { getDiscord } from './integrations/discord.js';
 import { getSpotify } from './integrations/spotify.js';
+import { getAppAudio } from './actions/appAudio.js';
 import {
   saveImage, imagePath, imageExists, deleteImage, imageMime, MAX_IMAGE_BYTES,
 } from './images.js';
@@ -318,6 +319,22 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse, c
     try {
       const guilds = await getDiscord().getGuilds();
       json(res, 200, { guilds });
+    } catch (err) {
+      json(res, 400, { error: (err as Error).message });
+    }
+    return;
+  }
+
+  // ─── App-audio: list live audio sessions ────────────────────
+  // Poll subscription is refcount-managed — the config UI subscribes for the
+  // duration of its own poll interval to keep the list fresh while it's open,
+  // then releases. Sessions are also returned inline via GET so the picker
+  // works without a subscription.
+  if (pathname === '/api/app-audio/sessions' && req.method === 'GET') {
+    if (!authorize(req, token())) return unauthorized(res);
+    try {
+      const sessions = await getAppAudio().listNow();
+      json(res, 200, { sessions });
     } catch (err) {
       json(res, 400, { error: (err as Error).message });
     }

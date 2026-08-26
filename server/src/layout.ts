@@ -25,7 +25,7 @@ export type Button = {
  *  discord tiles is a fixed literal — 'input' or 'output' — instead of a
  *  user-facing device name. Kept in one field so the slider protocol shape
  *  doesn't fork per provider. */
-export type SliderProvider = 'obs' | 'streamlabs' | 'discord' | 'spotify';
+export type SliderProvider = 'obs' | 'streamlabs' | 'discord' | 'spotify' | 'app-audio';
 
 export type SliderTile = {
   kind: 'slider';
@@ -334,6 +334,17 @@ export function collectObsSceneNames(layout: Layout): string[] {
   return [...set];
 }
 
+/** True when at least one slider tile uses the `app-audio` provider — used
+ *  to gate the app-audio session poll (the PowerShell shim isn't free). */
+export function layoutUsesAppAudioSlider(layout: Layout): boolean {
+  for (const page of layout.pages) {
+    for (const t of page.buttons) {
+      if (t.kind === 'slider' && t.provider === 'app-audio') return true;
+    }
+  }
+  return false;
+}
+
 /** Collect every kick-streamer slug referenced in the layout (deduped, lowercased). */
 export function collectKickStreamerSlugs(layout: Layout): string[] {
   const set = new Set<string>();
@@ -487,8 +498,8 @@ function validateButtons(input: unknown[], seenIds: Set<number>): Tile[] {
       if (typeof tile.inputName !== 'string' || !tile.inputName) {
         throw new Error(`tile ${tile.id}: slider requires inputName`);
       }
-      if (tile.provider !== undefined && tile.provider !== 'obs' && tile.provider !== 'streamlabs' && tile.provider !== 'discord' && tile.provider !== 'spotify') {
-        throw new Error(`tile ${tile.id}: slider provider must be 'obs', 'streamlabs', 'discord', or 'spotify'`);
+      if (tile.provider !== undefined && tile.provider !== 'obs' && tile.provider !== 'streamlabs' && tile.provider !== 'discord' && tile.provider !== 'spotify' && tile.provider !== 'app-audio') {
+        throw new Error(`tile ${tile.id}: slider provider must be 'obs', 'streamlabs', 'discord', 'spotify', or 'app-audio'`);
       }
       if (tile.provider === 'discord' && tile.inputName !== 'input' && tile.inputName !== 'output' && tile.inputName !== 'sensitivity') {
         throw new Error(`tile ${tile.id}: discord slider inputName must be 'input', 'output', or 'sensitivity'`);

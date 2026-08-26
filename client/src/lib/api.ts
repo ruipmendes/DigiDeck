@@ -507,6 +507,22 @@ export async function recheckSpotifySubscription(): Promise<SpotifyState_API> {
   return res.json();
 }
 
+// ─── App-audio ──────────────────────────────────────────────────
+
+export type AppAudioSession = {
+  name: string;
+  pids: number[];
+  volume: number;
+  muted: boolean;
+};
+
+export async function getAppAudioSessions(): Promise<AppAudioSession[]> {
+  const res = await apiFetch('/api/app-audio/sessions');
+  if (!res.ok) throw new Error(`GET app-audio sessions failed: ${res.status}`);
+  const body = await res.json() as { sessions?: AppAudioSession[] };
+  return body.sessions ?? [];
+}
+
 // ─── Discord ────────────────────────────────────────────────────
 
 export type DiscordState =

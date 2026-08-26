@@ -48,6 +48,12 @@ export const TILE_PRESETS: TilePreset[] = [
   { key: 'mic-toggle',  category: 'System', label: 'Toggle mic mute', iconName: 'mic-off',
     keywords: 'mic microphone mute toggle',
     create: (id) => ({ kind: 'button', id, label: 'Mic', icon: 'mic-off', action: { type: 'mic', op: 'toggle-mute' } }) },
+  { key: 'app-mute-discord',   category: 'System', label: 'Duck Discord (mute app)', hint: 'Mute Discord specifically — leaves other audio alone', iconName: 'volume-x',
+    keywords: 'discord duck mute app per app audio session',
+    create: (id) => ({ kind: 'button', id, label: 'Mute Discord', icon: 'volume-x', action: { type: 'app-audio', op: 'toggle-mute', params: { appName: 'Discord' } } }) },
+  { key: 'app-audio-slider',   category: 'System', label: 'Per-app volume slider', hint: 'Drives one specific app; pick it in the editor', iconName: 'sliders',
+    keywords: 'per app audio volume slider mixer duck discord spotify',
+    create: (id) => ({ kind: 'slider', id, label: 'App', provider: 'app-audio', inputName: '' }) },
 
   // ─── OBS ────────────────────────────────────────────
   { key: 'obs-record', category: 'OBS Studio', label: 'Toggle recording', iconName: 'obs',

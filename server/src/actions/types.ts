@@ -18,6 +18,8 @@ import { getSpotify } from '../integrations/spotify.js';
 import type { SpotifyOp } from '../integrations/spotify.js';
 import { getMic } from './mic.js';
 import type { MicOp } from './mic.js';
+import { getAppAudio } from './appAudio.js';
+import type { AppAudioOp, AppAudioActionParams } from './appAudio.js';
 
 export type Action =
   | { type: 'hotkey'; keys: string[] }
@@ -27,6 +29,7 @@ export type Action =
   | { type: 'script'; script: string }
   | { type: 'volume'; delta?: number; mute?: boolean }
   | { type: 'mic'; op: MicOp }
+  | { type: 'app-audio'; op: AppAudioOp; params?: AppAudioActionParams }
   | { type: 'obs'; op: ObsOp; params?: ObsActionParams }
   | { type: 'streamlabs'; op: StreamlabsOp; params?: StreamlabsActionParams }
   | { type: 'twitch'; op: TwitchOp; text?: string; params?: TwitchActionParams; prompts?: TwitchPrompt[] }
@@ -64,6 +67,7 @@ async function executeStep(step: Action): Promise<void> {
       return execScript(step.script);
     case 'volume': return execVolume({ delta: step.delta, mute: step.mute });
     case 'mic':    return getMic().execute(step.op);
+    case 'app-audio': return getAppAudio().execute(step.op, step.params);
     case 'obs':    return getObs().execute(step.op, step.params);
     case 'streamlabs': return getStreamlabs().execute(step.op, step.params);
     case 'twitch': return getTwitch().execute(step.op, { ...step.params, text: step.text ?? step.params?.text });
