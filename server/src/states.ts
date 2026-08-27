@@ -9,6 +9,7 @@ import type { SpotifyStatus } from './integrations/spotify.js';
 import { getSpotify } from './integrations/spotify.js';
 import { getAppAudio } from './actions/appAudio.js';
 import { getHue } from './integrations/hue.js';
+import { getHomeAssistant } from './integrations/homeassistant.js';
 import { getStreamers } from './integrations/twitch-streamers.js';
 import { getKickStreamers } from './integrations/kick-streamers.js';
 import { getMic } from './actions/mic.js';
@@ -116,6 +117,16 @@ function computeOne(t: Tile, obs: ObsStatus, twitch: TwitchStatus, streamlabs: S
       // "Muted" pip lights when the light is off — visually consistent with
       // OBS-mixer / Spotify sliders where the pip means "output silenced".
       return { id: t.id, sliderValue: value, sliderMuted: !target.on };
+    }
+    if (provider === 'homeassistant') {
+      const ha = getHomeAssistant().status();
+      if (ha.state !== 'connected') return { id: t.id, unavailable: true };
+      const idx = t.inputName.indexOf(':');
+      const entityId = idx > 0 ? t.inputName.slice(idx + 1) : t.inputName;
+      const entity = ha.entities?.find((e) => e.id === entityId);
+      if (!entity) return { id: t.id, unavailable: true };
+      const value = entity.level !== undefined ? Math.max(0, Math.min(1, entity.level / 100)) : (entity.on ? 1 : 0);
+      return { id: t.id, sliderValue: value, sliderMuted: !entity.on };
     }
     const src = provider === 'streamlabs' ? streamlabs : obs;
     if (src.state !== 'connected') return { id: t.id, unavailable: true };
@@ -326,6 +337,33 @@ function computeStepState(a: Action, obs: ObsStatus, twitch: TwitchStatus, strea
         break;
     }
     return { active, unavailable, iconUrl };
+  }
+
+  if (a.type === 'homeassistant') {
+    const ha = getHomeAssistant().status();
+    const unavailable = ha.state !== 'connected';
+    let active: boolean | undefined;
+    // For any toggle-shaped op the tile lights up when the target entity is
+    // "on" in HA's sense. Scenes / scripts / automations don't have a
+    // meaningful sticky-on state, so leave those neutral.
+    switch (a.op) {
+      case 'light-toggle': case 'light-on': case 'light-off':
+      case 'switch-toggle': case 'switch-on': case 'switch-off':
+      case 'cover-toggle': case 'cover-open': case 'cover-close':
+      case 'media-play': case 'media-pause': case 'media-play-pause':
+      case 'media-next': case 'media-previous': {
+        const entity = ha.entities?.find((e) => e.id === a.params?.entityId);
+        if (entity) active = entity.on;
+        break;
+      }
+      case 'scene-activate':
+      case 'script-run':
+      case 'automation-trigger':
+      case 'service-call':
+        // Fire-and-forget — no sticky state to reflect.
+        break;
+    }
+    return { active, unavailable };
   }
 
   if (a.type === 'hue') {

@@ -29,6 +29,7 @@ import { DiscordBody } from './DiscordBody';
 import { AppAudioBody } from './AppAudioBody';
 import { KickBody } from './KickBody';
 import { HueBody } from './HueBody';
+import { HomeAssistantBody } from './HomeAssistantBody';
 
 export type { IntegrationStatus };
 
@@ -365,6 +366,7 @@ function Body({ action, onChange, pages }: StepEditorProps) {
       );
     case 'kick':       return <KickBody action={action} onChange={onChange} />;
     case 'hue':        return <HueBody action={action} onChange={onChange} />;
+    case 'homeassistant': return <HomeAssistantBody action={action} onChange={onChange} />;
     case 'kick-streamer':
       return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>

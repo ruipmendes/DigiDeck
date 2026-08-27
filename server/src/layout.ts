@@ -25,7 +25,7 @@ export type Button = {
  *  discord tiles is a fixed literal — 'input' or 'output' — instead of a
  *  user-facing device name. Kept in one field so the slider protocol shape
  *  doesn't fork per provider. */
-export type SliderProvider = 'obs' | 'streamlabs' | 'discord' | 'spotify' | 'app-audio' | 'hue';
+export type SliderProvider = 'obs' | 'streamlabs' | 'discord' | 'spotify' | 'app-audio' | 'hue' | 'homeassistant';
 
 export type SliderTile = {
   kind: 'slider';
@@ -448,7 +448,7 @@ export function watchLayout(onChange: () => void): () => void {
   return () => w.close();
 }
 
-const VALID_ACTION_TYPES = new Set(['hotkey', 'text', 'launch', 'url', 'script', 'volume', 'mic', 'app-audio', 'obs', 'streamlabs', 'twitch', 'twitch-streamer', 'kick', 'kick-streamer', 'discord', 'spotify', 'hue', 'goto-page', 'wait']);
+const VALID_ACTION_TYPES = new Set(['hotkey', 'text', 'launch', 'url', 'script', 'volume', 'mic', 'app-audio', 'obs', 'streamlabs', 'twitch', 'twitch-streamer', 'kick', 'kick-streamer', 'discord', 'spotify', 'hue', 'homeassistant', 'goto-page', 'wait']);
 
 /** Numeric LiveMeta paths that can feed a chart tile. Kept in sync with the
  *  ChartSource union above and with resolveChartValue() on the client. */
@@ -576,8 +576,8 @@ function validateButtons(input: unknown[], seenIds: Set<number>): Tile[] {
       if (typeof tile.inputName !== 'string' || !tile.inputName) {
         throw new Error(`tile ${tile.id}: slider requires inputName`);
       }
-      if (tile.provider !== undefined && tile.provider !== 'obs' && tile.provider !== 'streamlabs' && tile.provider !== 'discord' && tile.provider !== 'spotify' && tile.provider !== 'app-audio' && tile.provider !== 'hue') {
-        throw new Error(`tile ${tile.id}: slider provider must be 'obs', 'streamlabs', 'discord', 'spotify', 'app-audio', or 'hue'`);
+      if (tile.provider !== undefined && tile.provider !== 'obs' && tile.provider !== 'streamlabs' && tile.provider !== 'discord' && tile.provider !== 'spotify' && tile.provider !== 'app-audio' && tile.provider !== 'hue' && tile.provider !== 'homeassistant') {
+        throw new Error(`tile ${tile.id}: slider provider must be 'obs', 'streamlabs', 'discord', 'spotify', 'app-audio', 'hue', or 'homeassistant'`);
       }
       if (tile.provider === 'discord' && tile.inputName !== 'input' && tile.inputName !== 'output' && tile.inputName !== 'sensitivity') {
         throw new Error(`tile ${tile.id}: discord slider inputName must be 'input', 'output', or 'sensitivity'`);

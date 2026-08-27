@@ -172,6 +172,23 @@ export const TILE_PRESETS: TilePreset[] = [
     keywords: 'hue philips light bulb brightness dim slider individual',
     create: (id) => ({ kind: 'slider', id, label: 'Light', provider: 'hue', inputName: 'light:' }) },
 
+  // ─── Home Assistant ─────────────────────────────────
+  { key: 'ha-scene',       category: 'Home Assistant', label: 'HA: Activate scene',       hint: 'Pick a scene entity in the editor', iconName: 'sun',
+    keywords: 'home assistant ha scene activate mood',
+    create: (id) => ({ kind: 'button', id, label: 'Scene', icon: 'sun', action: { type: 'homeassistant', op: 'scene-activate', params: {} } }) },
+  { key: 'ha-light-toggle', category: 'Home Assistant', label: 'HA: Toggle light',        hint: 'Pick a light in the editor; lights up when on', iconName: 'zap',
+    keywords: 'home assistant ha light toggle on off',
+    create: (id) => ({ kind: 'button', id, label: 'Light', icon: 'zap', action: { type: 'homeassistant', op: 'light-toggle', params: {} } }) },
+  { key: 'ha-script',      category: 'Home Assistant', label: 'HA: Run script',           iconName: 'code',
+    keywords: 'home assistant ha script run automation',
+    create: (id) => ({ kind: 'button', id, label: 'Script', icon: 'code', action: { type: 'homeassistant', op: 'script-run', params: {} } }) },
+  { key: 'ha-light-slider', category: 'Home Assistant', label: 'HA: Light brightness slider', hint: 'Drag to dim; tap to toggle', iconName: 'zap',
+    keywords: 'home assistant ha light brightness slider dim',
+    create: (id) => ({ kind: 'slider', id, label: 'Light', provider: 'homeassistant', inputName: 'light:' }) },
+  { key: 'ha-media-slider', category: 'Home Assistant', label: 'HA: Media player volume slider', hint: 'Drag to set volume; tap to play/pause', iconName: 'music',
+    keywords: 'home assistant ha media player volume slider sonos',
+    create: (id) => ({ kind: 'slider', id, label: 'Media', provider: 'homeassistant', inputName: 'media:' }) },
+
   // ─── System metrics (chart tiles) ───────────────────
   { key: 'system-cpu-chart', category: 'System', label: 'CPU % sparkline', hint: 'Live chart of the PC\'s CPU utilisation', iconName: 'zap',
     keywords: 'system cpu chart sparkline graph load monitor performance',

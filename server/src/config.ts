@@ -8,6 +8,7 @@ import { DEFAULT_KICK_CONFIG, type KickConfig } from './integrations/kick.js';
 import { DEFAULT_DISCORD_CONFIG, type DiscordConfig } from './integrations/discord.js';
 import { DEFAULT_SPOTIFY_CONFIG, type SpotifyConfig } from './integrations/spotify.js';
 import { DEFAULT_HUE_CONFIG, type HueConfig } from './integrations/hue.js';
+import { DEFAULT_HOMEASSISTANT_CONFIG, type HomeAssistantConfig } from './integrations/homeassistant.js';
 // scaffold-integration: additional imports inserted above this line
 
 const APP_DIR = join(
@@ -24,6 +25,7 @@ export type IntegrationsConfig = {
   discord: DiscordConfig;
   spotify: SpotifyConfig;
   hue: HueConfig;
+  homeassistant: HomeAssistantConfig;
   // scaffold-integration: additional fields inserted above this line
 };
 
@@ -67,6 +69,7 @@ function withDefaults(parsed: Partial<ServerConfig> | null | undefined): ServerC
       discord:    { ...DEFAULT_DISCORD_CONFIG,    ...parsed?.integrations?.discord },
       spotify:    { ...DEFAULT_SPOTIFY_CONFIG,    ...parsed?.integrations?.spotify },
       hue:        { ...DEFAULT_HUE_CONFIG,        ...parsed?.integrations?.hue },
+      homeassistant: { ...DEFAULT_HOMEASSISTANT_CONFIG, ...parsed?.integrations?.homeassistant },
       // scaffold-integration: additional defaults inserted above this line
     },
     security: {

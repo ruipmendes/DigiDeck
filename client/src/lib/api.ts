@@ -623,6 +623,68 @@ export async function discoverHueBridges(): Promise<Array<{ id: string; ip: stri
   return body.bridges ?? [];
 }
 
+// ─── Home Assistant ─────────────────────────────────────────────
+
+export type HomeAssistantState =
+  | 'disabled' | 'not-configured' | 'needs-auth'
+  | 'connecting' | 'connected' | 'error';
+
+export type HomeAssistantEntity = {
+  id: string;
+  name: string;
+  domain: string;
+  state: string;
+  on: boolean;
+  level?: number;
+};
+
+export type HomeAssistantStatus = {
+  state: HomeAssistantState;
+  error?: string;
+  baseUrl?: string;
+  version?: string;
+  entities?: HomeAssistantEntity[];
+};
+
+export type HomeAssistantPublicConfig = {
+  enabled: boolean;
+  baseUrl: string;
+  hasToken: boolean;
+};
+
+export type HomeAssistantState_API = { config: HomeAssistantPublicConfig; status: HomeAssistantStatus };
+
+export async function getHomeAssistantState(): Promise<HomeAssistantState_API> {
+  const res = await apiFetch('/api/integrations/homeassistant');
+  if (!res.ok) throw new Error(`GET homeassistant failed: ${res.status}`);
+  return res.json();
+}
+
+export async function putHomeAssistantConfig(c: { enabled: boolean; baseUrl: string; token?: string | null }): Promise<HomeAssistantState_API> {
+  const res = await apiFetch('/api/integrations/homeassistant/config', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(c),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(body || `PUT homeassistant config failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function disconnectHomeAssistant(): Promise<HomeAssistantState_API> {
+  const res = await apiFetch('/api/integrations/homeassistant/disconnect', { method: 'POST' });
+  if (!res.ok) throw new Error(`disconnect failed: ${res.status}`);
+  return res.json();
+}
+
+export async function reconnectHomeAssistant(): Promise<HomeAssistantState_API> {
+  const res = await apiFetch('/api/integrations/homeassistant/reconnect', { method: 'POST' });
+  if (!res.ok) throw new Error(`reconnect failed: ${res.status}`);
+  return res.json();
+}
+
 // ─── Discord ────────────────────────────────────────────────────
 
 export type DiscordState =

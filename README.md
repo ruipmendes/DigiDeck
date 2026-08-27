@@ -52,6 +52,7 @@ If you see no label, assume **PowerShell or cmd** is fine.
 | Discord Developer app | Discord voice actions (mute / deafen / join / leave / voice panel / per-member volume). Optional bot token unlocks pull / move / kick. | Free; register at [discord.com/developers/applications](https://discord.com/developers/applications). Discord must be running locally — the integration uses the local IPC pipe. |
 | Spotify Developer app | Spotify play / pause / skip actions + now-playing labels | Free; register at [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard). PKCE only — no client secret. **Requires Premium on both the linked account AND the Developer app owner** — see the Spotify section for the full story. |
 | Philips Hue bridge | Hue scene / room / light tiles + brightness sliders | Any Hue bridge on your LAN. No developer app or account. Press the link button once to grant access. |
+| Home Assistant instance | Everything HA can reach — lights / switches / scenes / scripts / automations / media players / covers / climate. Bridges to Zigbee, Z-Wave, Matter, Tapo, LIFX, Sonos, cameras, custom automations, ... | Any HA install. Paste URL + create a Long-Lived Access Token in your HA profile. |
 | Firefox | Pretty desktop-shortcut behaviour | `start.ps1` opens config in Firefox if installed; otherwise uses your default browser. |
 
 ### Not required
@@ -528,6 +529,29 @@ Action ops: **Activate scene** (pick from your scenes, grouped by room), **Toggl
 **Live tile state.** Room-toggle / light-toggle tiles light up when the target is currently on (polled every 5 s). Scene tiles don't have a "currently active" concept in the API and stay neutral.
 
 **Self-signed cert.** The bridge ships with a self-signed HTTPS cert. Digi Deck uses a scoped `HttpsAgent` with `rejectUnauthorized: false` for Hue calls only — never bleeds into other integrations. All traffic stays on your LAN.
+
+---
+
+## Home Assistant integration
+
+One integration to rule the smart home. If you run [Home Assistant](https://www.home-assistant.io/), Digi Deck can drive anything HA talks to — lights, switches, scenes, scripts, automations, media players, blinds, HVAC — no matter which underlying protocol (Zigbee, Z-Wave, Matter, Wi-Fi, cloud). This includes brands with no first-party Digi Deck integration (Tapo, LIFX, Sonos, IKEA Tradfri, Aqara, generic Zigbee2MQTT devices, and so on) as long as HA can talk to them.
+
+One-time setup:
+
+1. In the config UI → **Home Assistant** card → expand.
+2. **URL**: your HA base URL, usually `http://homeassistant.local:8123` or the LAN IP + port `8123`.
+3. **Long-Lived Access Token**: in HA, click your profile avatar (bottom-left) → *Security* tab → scroll to *Long-Lived Access Tokens* → *Create Token*. Copy the whole string — you can only see it once.
+4. Paste both in Digi Deck → *Save & connect*.
+
+Digi Deck verifies via `GET /api/`, then pulls `/api/states` and enumerates entities in the domains it exposes (light, switch, scene, script, automation, media_player, cover, climate, input_boolean, fan, lock, vacuum). Everything else is still reachable via *Call any service*.
+
+**Action ops:** *Toggle / on / off* for lights, switches, and covers; *Activate scene*; *Run script*; *Trigger automation*; *Play / pause / next / previous* for media players; and a generic *Call any service* with a JSON payload field for anything that needs custom data (e.g. `climate.set_temperature` with `{"temperature": 22}`).
+
+**Slider tiles.** Provider *Home Assistant* — inputName encodes `light:<entity_id>` (drives brightness 0–100 %) or `media:<entity_id>` (drives media_player volume). Tap toggles the light on/off or the media player play/pause. Live state pushes back from `/api/states` polling so external changes (Alexa command, HA automation, physical switch) reach the fader within ~5 s.
+
+**Live tile state.** Toggle-shaped tiles light up when their target is "on" in HA's sense (state=`on` for lights/switches, `playing` for media_player, `open` for cover, etc.). Scene / script / automation tiles are fire-and-forget and stay neutral.
+
+**No cloud round-trip.** All traffic is direct to your HA instance — Digi Deck never talks to Nabu Casa or any HA cloud endpoint. If your HA is on a different network from your PC, you'll need Nabu Casa Remote or a reverse proxy, and the URL you paste is whichever hostname reaches HA from your PC.
 
 ---
 

@@ -18,6 +18,8 @@ import { getSpotify } from '../integrations/spotify.js';
 import type { SpotifyOp } from '../integrations/spotify.js';
 import { getHue } from '../integrations/hue.js';
 import type { HueOp, HueActionParams } from '../integrations/hue.js';
+import { getHomeAssistant } from '../integrations/homeassistant.js';
+import type { HomeAssistantOp, HomeAssistantActionParams } from '../integrations/homeassistant.js';
 import { getMic } from './mic.js';
 import type { MicOp } from './mic.js';
 import { getAppAudio } from './appAudio.js';
@@ -41,6 +43,7 @@ export type Action =
   | { type: 'discord'; op: DiscordOp; params?: DiscordActionParams; prompts?: DiscordPrompt[] }
   | { type: 'spotify'; op: SpotifyOp }
   | { type: 'hue'; op: HueOp; params?: HueActionParams }
+  | { type: 'homeassistant'; op: HomeAssistantOp; params?: HomeAssistantActionParams }
   | { type: 'goto-page'; pageId: number }
   | { type: 'wait'; ms: number };
 
@@ -84,6 +87,7 @@ async function executeStep(step: Action): Promise<void> {
     case 'discord': return getDiscord().execute(step.op, step.params);
     case 'spotify': return getSpotify().execute(step.op);
     case 'hue':     return getHue().execute(step.op, step.params);
+    case 'homeassistant': return getHomeAssistant().execute(step.op, step.params);
     case 'goto-page':
       // Navigation is handled entirely on the phone — server has nothing to do.
       return;

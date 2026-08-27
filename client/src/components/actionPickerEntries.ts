@@ -220,6 +220,30 @@ const discordEntries = ((): ActionPickerEntry[] => {
   }));
 })();
 
+const homeAssistantEntries: ActionPickerEntry[] = ((): ActionPickerEntry[] => {
+  const rows: Array<{ op: string; label: string; hint?: string; kw: string; icon: string }> = [
+    { op: 'light-toggle',       label: 'HA: Toggle light',       hint: 'Pick the light in the editor',      icon: 'zap',   kw: 'home assistant light toggle' },
+    { op: 'light-on',           label: 'HA: Turn light on',      icon: 'sun',   kw: 'home assistant light on' },
+    { op: 'light-off',          label: 'HA: Turn light off',     icon: 'moon',  kw: 'home assistant light off' },
+    { op: 'switch-toggle',      label: 'HA: Toggle switch',      hint: 'Also drives input_boolean',         icon: 'zap',   kw: 'home assistant switch toggle boolean' },
+    { op: 'switch-on',          label: 'HA: Switch on',          icon: 'zap',   kw: 'home assistant switch on' },
+    { op: 'switch-off',         label: 'HA: Switch off',         icon: 'zap',   kw: 'home assistant switch off' },
+    { op: 'scene-activate',     label: 'HA: Activate scene',     icon: 'sun',   kw: 'home assistant scene activate' },
+    { op: 'script-run',         label: 'HA: Run script',         icon: 'code',  kw: 'home assistant script run' },
+    { op: 'automation-trigger', label: 'HA: Trigger automation', icon: 'zap',   kw: 'home assistant automation trigger' },
+    { op: 'media-play-pause',   label: 'HA: Media play / pause', icon: 'play',        kw: 'home assistant media player play pause' },
+    { op: 'media-next',         label: 'HA: Media next',         icon: 'skip-forward', kw: 'home assistant media next track' },
+    { op: 'media-previous',     label: 'HA: Media previous',     icon: 'skip-back',   kw: 'home assistant media previous track' },
+    { op: 'cover-toggle',       label: 'HA: Toggle cover',       hint: 'Blinds / garage / shutter',         icon: 'menu',  kw: 'home assistant cover toggle blind shutter garage' },
+    { op: 'service-call',       label: 'HA: Call any service',   hint: 'Advanced — pick a domain.service',   icon: 'terminal', kw: 'home assistant service call advanced climate temperature' },
+  ];
+  return rows.map((r) => ({
+    key: `homeassistant:${r.op}`, category: 'Home Assistant', label: r.label, hint: r.hint, iconName: r.icon,
+    keywords: `home assistant ha ${r.kw}`, requires: 'homeassistant' as const,
+    create: () => ({ type: 'homeassistant', op: r.op as never, params: {} }) as Action,
+  }));
+})();
+
 const hueEntries: ActionPickerEntry[] = [
   { key: 'hue:scene-on', category: 'Philips Hue', label: 'Activate scene', hint: 'Pick a Hue scene in the editor', iconName: 'sun',
     keywords: 'hue philips scene light mood ambient activate', requires: 'hue',
@@ -280,6 +304,7 @@ export const ACTION_PICKER_ENTRIES: ActionPickerEntry[] = [
   ...discordEntries,
   ...spotifyEntries,
   ...hueEntries,
+  ...homeAssistantEntries,
   ...flow,
 ];
 
@@ -324,6 +349,7 @@ export function entryFor(action: Action): ActionPickerEntry | null {
     case 'discord':         return byOp('discord', action.op);
     case 'spotify':         return byOp('spotify', action.op);
     case 'hue':             return byOp('hue', action.op);
+    case 'homeassistant':   return byOp('homeassistant', action.op);
     case 'goto-page':       return ACTION_PICKER_ENTRIES.find((e) => e.key === 'goto-page') ?? null;
     case 'wait':            return ACTION_PICKER_ENTRIES.find((e) => e.key === 'wait') ?? null;
     default:                return null;

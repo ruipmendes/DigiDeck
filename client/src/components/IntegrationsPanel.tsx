@@ -8,6 +8,7 @@ import { KickPanel } from './KickPanel';
 import { DiscordPanel } from './DiscordPanel';
 import { SpotifyPanel } from './SpotifyPanel';
 import { HuePanel } from './HuePanel';
+import { HomeAssistantPanel } from './HomeAssistantPanel';
 
 type StatusKind = 'connected' | 'connecting' | 'disconnected' | 'error' | 'disabled' | 'needs-auth' | 'not-configured';
 
@@ -19,6 +20,7 @@ type Summary = {
   discord:    { enabled: boolean; state: StatusKind };
   spotify:    { enabled: boolean; state: StatusKind };
   hue:        { enabled: boolean; state: StatusKind };
+  homeassistant: { enabled: boolean; state: StatusKind };
 };
 
 const DEFAULT_SUMMARY: Summary = {
@@ -29,6 +31,7 @@ const DEFAULT_SUMMARY: Summary = {
   discord:    { enabled: false, state: 'disabled' },
   spotify:    { enabled: false, state: 'disabled' },
   hue:        { enabled: false, state: 'disabled' },
+  homeassistant: { enabled: false, state: 'disabled' },
 };
 
 /**
@@ -48,7 +51,7 @@ export function IntegrationsPanel() {
     let alive = true;
     async function load() {
       try {
-        const [obs, sl, tw, kk, dc, sp, hu] = await Promise.all([
+        const [obs, sl, tw, kk, dc, sp, hu, ha] = await Promise.all([
           api.getObsState().catch(() => null),
           api.getStreamlabsState().catch(() => null),
           api.getTwitchState().catch(() => null),
@@ -56,6 +59,7 @@ export function IntegrationsPanel() {
           api.getDiscordState().catch(() => null),
           api.getSpotifyState().catch(() => null),
           api.getHueState().catch(() => null),
+          api.getHomeAssistantState().catch(() => null),
         ]);
         if (!alive) return;
         setSummary({
@@ -66,6 +70,7 @@ export function IntegrationsPanel() {
           discord:    { enabled: !!dc?.config.enabled,  state: (dc?.status.state  as StatusKind) ?? 'disabled' },
           spotify:    { enabled: !!sp?.config.enabled,  state: (sp?.status.state  as StatusKind) ?? 'disabled' },
           hue:        { enabled: !!hu?.config.enabled,  state: (hu?.status.state  as StatusKind) ?? 'disabled' },
+          homeassistant: { enabled: !!ha?.config.enabled, state: (ha?.status.state as StatusKind) ?? 'disabled' },
         });
       } catch { /* harmless */ }
     }
@@ -104,6 +109,7 @@ export function IntegrationsPanel() {
           <Pill name="Discord"    s={summary.discord} />
           <Pill name="Spotify"    s={summary.spotify} />
           <Pill name="Hue"        s={summary.hue} />
+          <Pill name="Home Asst"  s={summary.homeassistant} />
         </span>
       </button>
 
@@ -116,6 +122,7 @@ export function IntegrationsPanel() {
           <DiscordPanel />
           <SpotifyPanel />
           <HuePanel />
+          <HomeAssistantPanel />
         </div>
       )}
     </div>

@@ -417,6 +417,9 @@ function summarizeAction(a: Action): string {
     case 'discord':          return `Discord · ${a.op}`;
     case 'spotify':          return `Spotify · ${a.op}`;
     case 'hue':              return `Hue · ${a.op}`;
+    case 'homeassistant':    return a.op === 'service-call'
+      ? `HA · ${a.params?.service || 'service-call'}`
+      : `HA · ${a.op}${a.params?.entityId ? ` (${a.params.entityId})` : ''}`;
     case 'goto-page':        return `Go to page ${a.pageId}`;
     case 'wait':             return `Wait ${a.ms}ms`;
   }
@@ -611,6 +614,28 @@ function SliderEditor({
       const t = setInterval(load, 4000);
       return () => { alive = false; clearInterval(t); };
     }
+    if (provider === 'homeassistant') {
+      // HA slider — inputName encodes `light:<entity_id>` or
+      // `media:<entity_id>`. We list light + media_player entities.
+      let alive = true;
+      function load() {
+        api.getHomeAssistantState()
+          .then((d) => {
+            if (!alive) return;
+            const opts: string[] = [];
+            for (const e of d.status.entities ?? []) {
+              if (e.domain === 'light') opts.push(`light:${e.id}`);
+              else if (e.domain === 'media_player') opts.push(`media:${e.id}`);
+            }
+            setInputs(opts);
+            setConnected(d.status.state === 'connected');
+          })
+          .catch(() => { if (alive) { setInputs([]); setConnected(false); } });
+      }
+      load();
+      const t = setInterval(load, 4000);
+      return () => { alive = false; clearInterval(t); };
+    }
     if (provider === 'spotify') {
       // Spotify has one player volume — no input list to fetch.
       let alive = true;
@@ -650,6 +675,7 @@ function SliderEditor({
     provider === 'spotify'    ? 'Spotify' :
     provider === 'app-audio'  ? 'Per-app audio' :
     provider === 'hue'        ? 'Philips Hue' :
+    provider === 'homeassistant' ? 'Home Assistant' :
                                 'OBS Studio';
 
   // Build the provider option list: include configured integrations, plus the
@@ -669,6 +695,7 @@ function SliderEditor({
   // Always available on Windows.
   providerOpts.push({ value: 'app-audio', label: 'Per-app audio' });
   if (integrationStatus.hue        || provider === 'hue')        providerOpts.push({ value: 'hue',        label: 'Philips Hue' });
+  if (integrationStatus.homeassistant || provider === 'homeassistant') providerOpts.push({ value: 'homeassistant', label: 'Home Assistant' });
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -678,6 +705,7 @@ function SliderEditor({
           provider === 'spotify'   ? 'player volume slider — drag-to-set + tap to play/pause' :
           provider === 'app-audio' ? 'per-app volume slider — drag-to-set + tap to mute the app' :
           provider === 'hue'       ? 'brightness slider — drag-to-set + tap toggles the light on/off' :
+          provider === 'homeassistant' ? 'HA slider — light brightness or media_player volume; tap toggles / play-pauses' :
           'audio mixer slider — drag-to-set-volume + tap-to-mute'
         }
       </div>
