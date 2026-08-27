@@ -685,6 +685,54 @@ export async function reconnectHomeAssistant(): Promise<HomeAssistantState_API> 
   return res.json();
 }
 
+// ─── OpenRGB ────────────────────────────────────────────────────
+
+export type OpenRgbState =
+  | 'disabled' | 'not-configured'
+  | 'connecting' | 'connected' | 'disconnected' | 'error';
+
+export type OpenRgbStatus = {
+  state: OpenRgbState;
+  error?: string;
+  host?: string;
+  port?: number;
+  deviceCount?: number;
+  profiles?: string[];
+};
+
+export type OpenRgbPublicConfig = {
+  enabled: boolean;
+  host: string;
+  port: number;
+};
+
+export type OpenRgbState_API = { config: OpenRgbPublicConfig; status: OpenRgbStatus };
+
+export async function getOpenRgbState(): Promise<OpenRgbState_API> {
+  const res = await apiFetch('/api/integrations/openrgb');
+  if (!res.ok) throw new Error(`GET openrgb failed: ${res.status}`);
+  return res.json();
+}
+
+export async function putOpenRgbConfig(c: { enabled: boolean; host: string; port: number }): Promise<OpenRgbState_API> {
+  const res = await apiFetch('/api/integrations/openrgb/config', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(c),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(body || `PUT openrgb config failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function reconnectOpenRgb(): Promise<OpenRgbState_API> {
+  const res = await apiFetch('/api/integrations/openrgb/reconnect', { method: 'POST' });
+  if (!res.ok) throw new Error(`reconnect failed: ${res.status}`);
+  return res.json();
+}
+
 // ─── Discord ────────────────────────────────────────────────────
 
 export type DiscordState =

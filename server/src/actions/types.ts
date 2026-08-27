@@ -20,6 +20,8 @@ import { getHue } from '../integrations/hue.js';
 import type { HueOp, HueActionParams } from '../integrations/hue.js';
 import { getHomeAssistant } from '../integrations/homeassistant.js';
 import type { HomeAssistantOp, HomeAssistantActionParams } from '../integrations/homeassistant.js';
+import { getOpenRgb } from '../integrations/openrgb.js';
+import type { OpenRgbOp, OpenRgbActionParams } from '../integrations/openrgb.js';
 import { getMic } from './mic.js';
 import type { MicOp } from './mic.js';
 import { getAppAudio } from './appAudio.js';
@@ -44,6 +46,7 @@ export type Action =
   | { type: 'spotify'; op: SpotifyOp }
   | { type: 'hue'; op: HueOp; params?: HueActionParams }
   | { type: 'homeassistant'; op: HomeAssistantOp; params?: HomeAssistantActionParams }
+  | { type: 'openrgb'; op: OpenRgbOp; params?: OpenRgbActionParams }
   | { type: 'goto-page'; pageId: number }
   | { type: 'wait'; ms: number };
 
@@ -88,6 +91,7 @@ async function executeStep(step: Action): Promise<void> {
     case 'spotify': return getSpotify().execute(step.op);
     case 'hue':     return getHue().execute(step.op, step.params);
     case 'homeassistant': return getHomeAssistant().execute(step.op, step.params);
+    case 'openrgb': return getOpenRgb().execute(step.op, step.params);
     case 'goto-page':
       // Navigation is handled entirely on the phone — server has nothing to do.
       return;

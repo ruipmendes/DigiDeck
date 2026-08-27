@@ -53,6 +53,7 @@ If you see no label, assume **PowerShell or cmd** is fine.
 | Spotify Developer app | Spotify play / pause / skip actions + now-playing labels | Free; register at [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard). PKCE only — no client secret. **Requires Premium on both the linked account AND the Developer app owner** — see the Spotify section for the full story. |
 | Philips Hue bridge | Hue scene / room / light tiles + brightness sliders | Any Hue bridge on your LAN. No developer app or account. Press the link button once to grant access. |
 | Home Assistant instance | Everything HA can reach — lights / switches / scenes / scripts / automations / media players / covers / climate. Bridges to Zigbee, Z-Wave, Matter, Tapo, LIFX, Sonos, cameras, custom automations, ... | Any HA install. Paste URL + create a Long-Lived Access Token in your HA profile. |
+| OpenRGB | Asus Aura + MSI Mystic Light + Gigabyte RGB Fusion + Corsair iCUE + Razer Chroma + HyperX + everything else OpenRGB drives (~500 devices) | Free portable app — [openrgb.org](https://openrgb.org). Enable SDK Server in its settings. |
 | Firefox | Pretty desktop-shortcut behaviour | `start.ps1` opens config in Firefox if installed; otherwise uses your default browser. |
 
 ### Not required
@@ -552,6 +553,26 @@ Digi Deck verifies via `GET /api/`, then pulls `/api/states` and enumerates enti
 **Live tile state.** Toggle-shaped tiles light up when their target is "on" in HA's sense (state=`on` for lights/switches, `playing` for media_player, `open` for cover, etc.). Scene / script / automation tiles are fire-and-forget and stay neutral.
 
 **No cloud round-trip.** All traffic is direct to your HA instance — Digi Deck never talks to Nabu Casa or any HA cloud endpoint. If your HA is on a different network from your PC, you'll need Nabu Casa Remote or a reverse proxy, and the URL you paste is whichever hostname reaches HA from your PC.
+
+---
+
+## OpenRGB integration
+
+One tile to switch the entire PC's RGB lighting between saved profiles — motherboard, GPU, RAM, coolers, fans, keyboard, mouse, headset, DRAM, whatever OpenRGB can drive. OpenRGB is a community project that reverse-engineered ~500 RGB devices, including *Asus Aura*, *MSI Mystic Light*, *Gigabyte RGB Fusion*, *Corsair iCUE*, *Razer Chroma*, *HyperX NGenuity*, *Cooler Master*, *Thermaltake*. One integration unlocks every RGB device in your rig.
+
+One-time setup:
+
+1. Download OpenRGB from [openrgb.org/releases.html](https://openrgb.org/releases.html) (portable — no install required).
+2. Launch it. It scans your hardware and lists every RGB device it can find.
+3. Compose the color / effect combos you want in OpenRGB's UI and save each one as a **Profile** in the *Profiles* tab (e.g. "Gaming", "Streaming", "Chill", "Off").
+4. Enable the SDK server: *Settings → General Settings → Enable Server*, then *SDK Server* tab → *Start*. Default port is `6742`.
+5. In Digi Deck's OpenRGB card: keep host as `127.0.0.1` and port `6742` unless OpenRGB is on a different PC → *Save & connect*.
+
+Action ops today: **Load RGB profile** — pick from the live list of profiles you've saved in OpenRGB. That's the primary Stream-Deck use case; composing colors on the fly is what OpenRGB's own UI is for.
+
+**Protocol:** local TCP binary on port 6742. Digi Deck implements the SDK packet framing directly (no external dep). Traffic never leaves your PC — the SDK server is loopback-only by default.
+
+**Reconnects.** Digi Deck retries every 5 s if OpenRGB isn't running yet, so you can start Digi Deck first and OpenRGB later; the panel picks it up automatically.
 
 ---
 

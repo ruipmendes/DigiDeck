@@ -417,6 +417,7 @@ function summarizeAction(a: Action): string {
     case 'discord':          return `Discord · ${a.op}`;
     case 'spotify':          return `Spotify · ${a.op}`;
     case 'hue':              return `Hue · ${a.op}`;
+    case 'openrgb':          return a.params?.profileName ? `OpenRGB · "${ellipsis(a.params.profileName, 18)}"` : 'OpenRGB · load profile';
     case 'homeassistant':    return a.op === 'service-call'
       ? `HA · ${a.params?.service || 'service-call'}`
       : `HA · ${a.op}${a.params?.entityId ? ` (${a.params.entityId})` : ''}`;

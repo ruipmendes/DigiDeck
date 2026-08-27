@@ -172,6 +172,11 @@ export const TILE_PRESETS: TilePreset[] = [
     keywords: 'hue philips light bulb brightness dim slider individual',
     create: (id) => ({ kind: 'slider', id, label: 'Light', provider: 'hue', inputName: 'light:' }) },
 
+  // ─── OpenRGB ────────────────────────────────────────
+  { key: 'openrgb-profile', category: 'OpenRGB', label: 'Load RGB profile', hint: 'Activate a saved OpenRGB profile (Aura / MSI / Corsair / …)', iconName: 'zap',
+    keywords: 'openrgb rgb aura mystic light chroma icue profile scene mood',
+    create: (id) => ({ kind: 'button', id, label: 'RGB', icon: 'zap', action: { type: 'openrgb', op: 'load-profile', params: {} } }) },
+
   // ─── Home Assistant ─────────────────────────────────
   { key: 'ha-scene',       category: 'Home Assistant', label: 'HA: Activate scene',       hint: 'Pick a scene entity in the editor', iconName: 'sun',
     keywords: 'home assistant ha scene activate mood',

@@ -13,7 +13,7 @@ export type ObsActionParams = { sceneName?: string; inputName?: string; sourceNa
 /** Which integrations are enabled at the current moment — used to gate action
  *  picker entries and slider providers on integration availability. */
 export type IntegrationStatus = {
-  obs: boolean; twitch: boolean; streamlabs: boolean; kick: boolean; discord: boolean; spotify: boolean; hue: boolean; homeassistant: boolean;
+  obs: boolean; twitch: boolean; streamlabs: boolean; kick: boolean; discord: boolean; spotify: boolean; hue: boolean; homeassistant: boolean; openrgb: boolean;
   /** True when the connected Spotify account has Premium. Used to gate playback
    *  control tiles — free-tier accounts get a lock icon instead of being able
    *  to pick play/pause/next/previous/volume. */
@@ -146,6 +146,9 @@ export type HomeAssistantActionParams = {
   serviceData?: Record<string, unknown>;
 };
 
+export type OpenRgbOp = 'load-profile';
+export type OpenRgbActionParams = { profileName?: string };
+
 export type AppAudioOp = 'toggle-mute' | 'mute' | 'unmute' | 'set-volume';
 export type AppAudioActionParams = { appName?: string; volumePercent?: number };
 
@@ -179,6 +182,7 @@ export type Action =
   | { type: 'spotify'; op: SpotifyOp }
   | { type: 'hue'; op: HueOp; params?: HueActionParams }
   | { type: 'homeassistant'; op: HomeAssistantOp; params?: HomeAssistantActionParams }
+  | { type: 'openrgb'; op: OpenRgbOp; params?: OpenRgbActionParams }
   | { type: 'goto-page'; pageId: number }
   | { type: 'wait'; ms: number };
 
@@ -328,6 +332,7 @@ export function defaultAction(type: ActionType): Action {
     case 'spotify': return { type: 'spotify', op: 'toggle-play' };
     case 'hue':     return { type: 'hue', op: 'room-toggle', params: {} };
     case 'homeassistant': return { type: 'homeassistant', op: 'light-toggle', params: {} };
+    case 'openrgb': return { type: 'openrgb', op: 'load-profile', params: {} };
     case 'goto-page': return { type: 'goto-page', pageId: 0 };
     case 'wait': return { type: 'wait', ms: 200 };
   }

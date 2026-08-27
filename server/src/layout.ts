@@ -448,7 +448,7 @@ export function watchLayout(onChange: () => void): () => void {
   return () => w.close();
 }
 
-const VALID_ACTION_TYPES = new Set(['hotkey', 'text', 'launch', 'url', 'script', 'volume', 'mic', 'app-audio', 'obs', 'streamlabs', 'twitch', 'twitch-streamer', 'kick', 'kick-streamer', 'discord', 'spotify', 'hue', 'homeassistant', 'goto-page', 'wait']);
+const VALID_ACTION_TYPES = new Set(['hotkey', 'text', 'launch', 'url', 'script', 'volume', 'mic', 'app-audio', 'obs', 'streamlabs', 'twitch', 'twitch-streamer', 'kick', 'kick-streamer', 'discord', 'spotify', 'hue', 'homeassistant', 'openrgb', 'goto-page', 'wait']);
 
 /** Numeric LiveMeta paths that can feed a chart tile. Kept in sync with the
  *  ChartSource union above and with resolveChartValue() on the client. */

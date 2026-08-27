@@ -9,6 +9,7 @@ import { DiscordPanel } from './DiscordPanel';
 import { SpotifyPanel } from './SpotifyPanel';
 import { HuePanel } from './HuePanel';
 import { HomeAssistantPanel } from './HomeAssistantPanel';
+import { OpenRgbPanel } from './OpenRgbPanel';
 
 type StatusKind = 'connected' | 'connecting' | 'disconnected' | 'error' | 'disabled' | 'needs-auth' | 'not-configured';
 
@@ -21,6 +22,7 @@ type Summary = {
   spotify:    { enabled: boolean; state: StatusKind };
   hue:        { enabled: boolean; state: StatusKind };
   homeassistant: { enabled: boolean; state: StatusKind };
+  openrgb:    { enabled: boolean; state: StatusKind };
 };
 
 const DEFAULT_SUMMARY: Summary = {
@@ -32,6 +34,7 @@ const DEFAULT_SUMMARY: Summary = {
   spotify:    { enabled: false, state: 'disabled' },
   hue:        { enabled: false, state: 'disabled' },
   homeassistant: { enabled: false, state: 'disabled' },
+  openrgb:    { enabled: false, state: 'disabled' },
 };
 
 /**
@@ -51,7 +54,7 @@ export function IntegrationsPanel() {
     let alive = true;
     async function load() {
       try {
-        const [obs, sl, tw, kk, dc, sp, hu, ha] = await Promise.all([
+        const [obs, sl, tw, kk, dc, sp, hu, ha, org] = await Promise.all([
           api.getObsState().catch(() => null),
           api.getStreamlabsState().catch(() => null),
           api.getTwitchState().catch(() => null),
@@ -60,6 +63,7 @@ export function IntegrationsPanel() {
           api.getSpotifyState().catch(() => null),
           api.getHueState().catch(() => null),
           api.getHomeAssistantState().catch(() => null),
+          api.getOpenRgbState().catch(() => null),
         ]);
         if (!alive) return;
         setSummary({
@@ -71,6 +75,7 @@ export function IntegrationsPanel() {
           spotify:    { enabled: !!sp?.config.enabled,  state: (sp?.status.state  as StatusKind) ?? 'disabled' },
           hue:        { enabled: !!hu?.config.enabled,  state: (hu?.status.state  as StatusKind) ?? 'disabled' },
           homeassistant: { enabled: !!ha?.config.enabled, state: (ha?.status.state as StatusKind) ?? 'disabled' },
+          openrgb:    { enabled: !!org?.config.enabled, state: (org?.status.state as StatusKind) ?? 'disabled' },
         });
       } catch { /* harmless */ }
     }
@@ -110,6 +115,7 @@ export function IntegrationsPanel() {
           <Pill name="Spotify"    s={summary.spotify} />
           <Pill name="Hue"        s={summary.hue} />
           <Pill name="Home Asst"  s={summary.homeassistant} />
+          <Pill name="OpenRGB"    s={summary.openrgb} />
         </span>
       </button>
 
@@ -123,6 +129,7 @@ export function IntegrationsPanel() {
           <SpotifyPanel />
           <HuePanel />
           <HomeAssistantPanel />
+          <OpenRgbPanel />
         </div>
       )}
     </div>

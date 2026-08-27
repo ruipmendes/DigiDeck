@@ -220,6 +220,12 @@ const discordEntries = ((): ActionPickerEntry[] => {
   }));
 })();
 
+const openRgbEntries: ActionPickerEntry[] = [
+  { key: 'openrgb:load-profile', category: 'OpenRGB', label: 'Load RGB profile', hint: 'Pick a saved OpenRGB profile in the editor', iconName: 'zap',
+    keywords: 'openrgb rgb aura mystic light chroma icue profile scene mood gaming streaming', requires: 'openrgb',
+    create: () => ({ type: 'openrgb', op: 'load-profile', params: {} }) },
+];
+
 const homeAssistantEntries: ActionPickerEntry[] = ((): ActionPickerEntry[] => {
   const rows: Array<{ op: string; label: string; hint?: string; kw: string; icon: string }> = [
     { op: 'light-toggle',       label: 'HA: Toggle light',       hint: 'Pick the light in the editor',      icon: 'zap',   kw: 'home assistant light toggle' },
@@ -305,6 +311,7 @@ export const ACTION_PICKER_ENTRIES: ActionPickerEntry[] = [
   ...spotifyEntries,
   ...hueEntries,
   ...homeAssistantEntries,
+  ...openRgbEntries,
   ...flow,
 ];
 
@@ -350,6 +357,7 @@ export function entryFor(action: Action): ActionPickerEntry | null {
     case 'spotify':         return byOp('spotify', action.op);
     case 'hue':             return byOp('hue', action.op);
     case 'homeassistant':   return byOp('homeassistant', action.op);
+    case 'openrgb':         return byOp('openrgb', action.op);
     case 'goto-page':       return ACTION_PICKER_ENTRIES.find((e) => e.key === 'goto-page') ?? null;
     case 'wait':            return ACTION_PICKER_ENTRIES.find((e) => e.key === 'wait') ?? null;
     default:                return null;

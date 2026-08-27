@@ -9,6 +9,7 @@ import { DEFAULT_DISCORD_CONFIG, type DiscordConfig } from './integrations/disco
 import { DEFAULT_SPOTIFY_CONFIG, type SpotifyConfig } from './integrations/spotify.js';
 import { DEFAULT_HUE_CONFIG, type HueConfig } from './integrations/hue.js';
 import { DEFAULT_HOMEASSISTANT_CONFIG, type HomeAssistantConfig } from './integrations/homeassistant.js';
+import { DEFAULT_OPENRGB_CONFIG, type OpenRgbConfig } from './integrations/openrgb.js';
 // scaffold-integration: additional imports inserted above this line
 
 const APP_DIR = join(
@@ -26,6 +27,7 @@ export type IntegrationsConfig = {
   spotify: SpotifyConfig;
   hue: HueConfig;
   homeassistant: HomeAssistantConfig;
+  openrgb: OpenRgbConfig;
   // scaffold-integration: additional fields inserted above this line
 };
 
@@ -70,6 +72,7 @@ function withDefaults(parsed: Partial<ServerConfig> | null | undefined): ServerC
       spotify:    { ...DEFAULT_SPOTIFY_CONFIG,    ...parsed?.integrations?.spotify },
       hue:        { ...DEFAULT_HUE_CONFIG,        ...parsed?.integrations?.hue },
       homeassistant: { ...DEFAULT_HOMEASSISTANT_CONFIG, ...parsed?.integrations?.homeassistant },
+      openrgb:    { ...DEFAULT_OPENRGB_CONFIG,    ...parsed?.integrations?.openrgb },
       // scaffold-integration: additional defaults inserted above this line
     },
     security: {
