@@ -158,6 +158,20 @@ export const TILE_PRESETS: TilePreset[] = [
     keywords: 'spotify volume chart sparkline graph trend music', requiresPremium: true,
     create: (id) => ({ kind: 'chart', id, label: 'Vol %', source: 'spotify.volumePercent', mode: 'value', min: 0, max: 100 }) },
 
+  // ─── Philips Hue ────────────────────────────────────
+  { key: 'hue-scene', category: 'Philips Hue', label: 'Activate scene', hint: 'Pick a Hue scene in the editor', iconName: 'sun',
+    keywords: 'hue philips scene light mood ambient activate',
+    create: (id) => ({ kind: 'button', id, label: 'Scene', icon: 'sun', action: { type: 'hue', op: 'scene-on', params: {} } }) },
+  { key: 'hue-room-toggle', category: 'Philips Hue', label: 'Toggle room lights', hint: 'Pick a room in the editor; lights up when the room is on', iconName: 'home',
+    keywords: 'hue philips room lights toggle group zone on off',
+    create: (id) => ({ kind: 'button', id, label: 'Lights', icon: 'home', action: { type: 'hue', op: 'room-toggle', params: {} } }) },
+  { key: 'hue-room-slider', category: 'Philips Hue', label: 'Room brightness slider', hint: 'Drag to dim; tap to toggle on/off', iconName: 'sun',
+    keywords: 'hue philips room brightness dim slider group light',
+    create: (id) => ({ kind: 'slider', id, label: 'Room', provider: 'hue', inputName: 'room:' }) },
+  { key: 'hue-light-slider', category: 'Philips Hue', label: 'Light brightness slider', hint: 'Drag to dim a single bulb', iconName: 'zap',
+    keywords: 'hue philips light bulb brightness dim slider individual',
+    create: (id) => ({ kind: 'slider', id, label: 'Light', provider: 'hue', inputName: 'light:' }) },
+
   // ─── System metrics (chart tiles) ───────────────────
   { key: 'system-cpu-chart', category: 'System', label: 'CPU % sparkline', hint: 'Live chart of the PC\'s CPU utilisation', iconName: 'zap',
     keywords: 'system cpu chart sparkline graph load monitor performance',

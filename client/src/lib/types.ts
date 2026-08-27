@@ -13,7 +13,7 @@ export type ObsActionParams = { sceneName?: string; inputName?: string; sourceNa
 /** Which integrations are enabled at the current moment — used to gate action
  *  picker entries and slider providers on integration availability. */
 export type IntegrationStatus = {
-  obs: boolean; twitch: boolean; streamlabs: boolean; kick: boolean; discord: boolean; spotify: boolean;
+  obs: boolean; twitch: boolean; streamlabs: boolean; kick: boolean; discord: boolean; spotify: boolean; hue: boolean;
   /** True when the connected Spotify account has Premium. Used to gate playback
    *  control tiles — free-tier accounts get a lock icon instead of being able
    *  to pick play/pause/next/previous/volume. */
@@ -119,6 +119,17 @@ export type MicOp = 'toggle-mute' | 'mute' | 'unmute';
 
 export type SpotifyOp = 'toggle-play' | 'play' | 'pause' | 'next' | 'previous';
 
+export type HueOp =
+  | 'scene-on'
+  | 'light-on' | 'light-off' | 'light-toggle'
+  | 'room-on' | 'room-off' | 'room-toggle';
+
+export type HueActionParams = {
+  lightId?: string;
+  roomId?: string;
+  sceneId?: string;
+};
+
 export type AppAudioOp = 'toggle-mute' | 'mute' | 'unmute' | 'set-volume';
 export type AppAudioActionParams = { appName?: string; volumePercent?: number };
 
@@ -150,6 +161,7 @@ export type Action =
   | { type: 'kick-streamer'; slug: string; avatarUrl?: string }
   | { type: 'discord'; op: DiscordOp; params?: DiscordActionParams; prompts?: DiscordPrompt[] }
   | { type: 'spotify'; op: SpotifyOp }
+  | { type: 'hue'; op: HueOp; params?: HueActionParams }
   | { type: 'goto-page'; pageId: number }
   | { type: 'wait'; ms: number };
 
@@ -176,7 +188,7 @@ export type Button = {
   longPressAction?: ButtonAction;
 };
 
-export type SliderProvider = 'obs' | 'streamlabs' | 'discord' | 'spotify' | 'app-audio';
+export type SliderProvider = 'obs' | 'streamlabs' | 'discord' | 'spotify' | 'app-audio' | 'hue';
 
 export type SliderTile = {
   kind: 'slider';
@@ -297,6 +309,7 @@ export function defaultAction(type: ActionType): Action {
     case 'kick-streamer': return { type: 'kick-streamer', slug: '' };
     case 'discord': return { type: 'discord', op: 'toggle-mute' };
     case 'spotify': return { type: 'spotify', op: 'toggle-play' };
+    case 'hue':     return { type: 'hue', op: 'room-toggle', params: {} };
     case 'goto-page': return { type: 'goto-page', pageId: 0 };
     case 'wait': return { type: 'wait', ms: 200 };
   }

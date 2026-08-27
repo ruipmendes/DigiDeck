@@ -51,6 +51,7 @@ If you see no label, assume **PowerShell or cmd** is fine.
 | Kick Developer app | Kick chat + streamer tiles | Free; register at [kick.com/settings/developer](https://kick.com/settings/developer). |
 | Discord Developer app | Discord voice actions (mute / deafen / join / leave / voice panel / per-member volume). Optional bot token unlocks pull / move / kick. | Free; register at [discord.com/developers/applications](https://discord.com/developers/applications). Discord must be running locally — the integration uses the local IPC pipe. |
 | Spotify Developer app | Spotify play / pause / skip actions + now-playing labels | Free; register at [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard). PKCE only — no client secret. **Requires Premium on both the linked account AND the Developer app owner** — see the Spotify section for the full story. |
+| Philips Hue bridge | Hue scene / room / light tiles + brightness sliders | Any Hue bridge on your LAN. No developer app or account. Press the link button once to grant access. |
 | Firefox | Pretty desktop-shortcut behaviour | `start.ps1` opens config in Firefox if installed; otherwise uses your default browser. |
 
 ### Not required
@@ -505,6 +506,28 @@ Slider: pick *Spotify* as the provider on any slider tile — the fader drives t
 **"No active device" errors.** Spotify's Web API needs an active playback session on some device — desktop app, phone, or web player. If you press *Play* and see *"no active device"*, start playback in any Spotify client once; from then on the API can transfer commands to it. Spotify also idles playback after ~15 minutes of pause — same fix, just play something once.
 
 Polling: currently-playing state polls every 5 seconds. Spotify's Web API doesn't push updates, so between polls, `{spotify.track}` reflects the last snapshot.
+
+---
+
+## Philips Hue integration
+
+Smart-lighting tiles — activate scenes, toggle rooms, dim individual lights — driven by the Hue bridge's local CLIP v2 API. No cloud round-trip, no developer app, no account. Works on any Hue bridge you already have on your network.
+
+One-time setup:
+
+1. In the config UI → **Philips Hue** card → expand.
+2. **Auto-discover**: click *Auto-discover* — Digi Deck asks [discovery.meethue.com](https://discovery.meethue.com/) which bridges are on your public IP's LAN. If it finds one, the IP prefills. If not (or you're offline), type the bridge's IP manually — check the Hue app → *Settings → My Hue system → your bridge* for the IP.
+3. Click *Save IP*.
+4. **Press the round button on top of the bridge**, then click *Link bridge* within 30 seconds. The bridge issues an application-key that Digi Deck stores locally.
+5. Done — the panel lists your rooms / lights / scenes and populates dropdowns in the tile editor.
+
+Action ops: **Activate scene** (pick from your scenes, grouped by room), **Toggle / Turn on / Turn off** for a **room** (grouped_light) or an **individual light**. Curated tile presets: scene tile, room-toggle tile, room brightness slider, individual-light brightness slider.
+
+**Slider tiles.** Slider provider *Philips Hue* — pick a room or light, drag to dim 0–100 %, tap the icon to toggle the light's power. The slider position live-updates from the bridge so a physical switch flip or a change made in the Hue app pushes back to the fader within ~5 s.
+
+**Live tile state.** Room-toggle / light-toggle tiles light up when the target is currently on (polled every 5 s). Scene tiles don't have a "currently active" concept in the API and stay neutral.
+
+**Self-signed cert.** The bridge ships with a self-signed HTTPS cert. Digi Deck uses a scoped `HttpsAgent` with `rejectUnauthorized: false` for Hue calls only — never bleeds into other integrations. All traffic stays on your LAN.
 
 ---
 

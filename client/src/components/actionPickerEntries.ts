@@ -220,6 +220,30 @@ const discordEntries = ((): ActionPickerEntry[] => {
   }));
 })();
 
+const hueEntries: ActionPickerEntry[] = [
+  { key: 'hue:scene-on', category: 'Philips Hue', label: 'Activate scene', hint: 'Pick a Hue scene in the editor', iconName: 'sun',
+    keywords: 'hue philips scene light mood ambient activate', requires: 'hue',
+    create: () => ({ type: 'hue', op: 'scene-on', params: {} }) },
+  { key: 'hue:room-toggle', category: 'Philips Hue', label: 'Toggle room lights', hint: 'Pick a room in the editor', iconName: 'home',
+    keywords: 'hue philips room lights toggle group zone on off', requires: 'hue',
+    create: () => ({ type: 'hue', op: 'room-toggle', params: {} }) },
+  { key: 'hue:room-on', category: 'Philips Hue', label: 'Turn room on', iconName: 'sun',
+    keywords: 'hue philips room lights on turn group zone', requires: 'hue',
+    create: () => ({ type: 'hue', op: 'room-on', params: {} }) },
+  { key: 'hue:room-off', category: 'Philips Hue', label: 'Turn room off', iconName: 'moon',
+    keywords: 'hue philips room lights off turn group zone', requires: 'hue',
+    create: () => ({ type: 'hue', op: 'room-off', params: {} }) },
+  { key: 'hue:light-toggle', category: 'Philips Hue', label: 'Toggle a specific light', iconName: 'zap',
+    keywords: 'hue philips light bulb toggle on off individual', requires: 'hue',
+    create: () => ({ type: 'hue', op: 'light-toggle', params: {} }) },
+  { key: 'hue:light-on', category: 'Philips Hue', label: 'Turn light on', iconName: 'sun',
+    keywords: 'hue philips light bulb on turn individual', requires: 'hue',
+    create: () => ({ type: 'hue', op: 'light-on', params: {} }) },
+  { key: 'hue:light-off', category: 'Philips Hue', label: 'Turn light off', iconName: 'moon',
+    keywords: 'hue philips light bulb off turn individual', requires: 'hue',
+    create: () => ({ type: 'hue', op: 'light-off', params: {} }) },
+];
+
 const spotifyEntries = ((): ActionPickerEntry[] => {
   const rows: Array<{ op: string; label: string; hint?: string; kw: string }> = [
     { op: 'toggle-play', label: 'Play / Pause',            hint: 'Auto-toggles based on current state',        kw: 'play pause toggle music' },
@@ -255,6 +279,7 @@ export const ACTION_PICKER_ENTRIES: ActionPickerEntry[] = [
   ...kickEntries,
   ...discordEntries,
   ...spotifyEntries,
+  ...hueEntries,
   ...flow,
 ];
 
@@ -298,6 +323,7 @@ export function entryFor(action: Action): ActionPickerEntry | null {
     case 'kick-streamer':   return ACTION_PICKER_ENTRIES.find((e) => e.key === 'kick-streamer') ?? null;
     case 'discord':         return byOp('discord', action.op);
     case 'spotify':         return byOp('spotify', action.op);
+    case 'hue':             return byOp('hue', action.op);
     case 'goto-page':       return ACTION_PICKER_ENTRIES.find((e) => e.key === 'goto-page') ?? null;
     case 'wait':            return ACTION_PICKER_ENTRIES.find((e) => e.key === 'wait') ?? null;
     default:                return null;

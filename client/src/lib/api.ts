@@ -547,6 +547,82 @@ export async function getAppAudioSessions(): Promise<AppAudioSession[]> {
   return body.sessions ?? [];
 }
 
+// ─── Philips Hue ────────────────────────────────────────────────
+
+export type HueState =
+  | 'disabled' | 'not-configured' | 'needs-auth'
+  | 'connecting' | 'connected' | 'error';
+
+export type HueLight  = { id: string; name: string; on: boolean; brightness?: number };
+export type HueRoom   = { id: string; name: string; groupedLightId: string; on: boolean; brightness?: number };
+export type HueScene  = { id: string; name: string; groupName?: string };
+
+export type HueStatus = {
+  state: HueState;
+  error?: string;
+  bridgeIp?: string;
+  bridgeName?: string;
+  lights?: HueLight[];
+  rooms?: HueRoom[];
+  scenes?: HueScene[];
+};
+
+export type HuePublicConfig = {
+  enabled: boolean;
+  bridgeIp: string;
+  bridgeId: string;
+  hasApplicationKey: boolean;
+};
+
+export type HueState_API = { config: HuePublicConfig; status: HueStatus };
+
+export async function getHueState(): Promise<HueState_API> {
+  const res = await apiFetch('/api/integrations/hue');
+  if (!res.ok) throw new Error(`GET hue failed: ${res.status}`);
+  return res.json();
+}
+
+export async function putHueConfig(c: { enabled: boolean; bridgeIp: string }): Promise<HueState_API> {
+  const res = await apiFetch('/api/integrations/hue/config', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(c),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(body || `PUT hue config failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function connectHue(): Promise<HueState_API> {
+  const res = await apiFetch('/api/integrations/hue/connect', { method: 'POST' });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(body || `Hue connect failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function disconnectHue(): Promise<HueState_API> {
+  const res = await apiFetch('/api/integrations/hue/disconnect', { method: 'POST' });
+  if (!res.ok) throw new Error(`Hue disconnect failed: ${res.status}`);
+  return res.json();
+}
+
+export async function reconnectHue(): Promise<HueState_API> {
+  const res = await apiFetch('/api/integrations/hue/reconnect', { method: 'POST' });
+  if (!res.ok) throw new Error(`Hue reconnect failed: ${res.status}`);
+  return res.json();
+}
+
+export async function discoverHueBridges(): Promise<Array<{ id: string; ip: string; port?: number }>> {
+  const res = await apiFetch('/api/integrations/hue/discover');
+  if (!res.ok) throw new Error(`Hue discover failed: ${res.status}`);
+  const body = await res.json() as { bridges?: Array<{ id: string; ip: string; port?: number }> };
+  return body.bridges ?? [];
+}
+
 // ─── Discord ────────────────────────────────────────────────────
 
 export type DiscordState =

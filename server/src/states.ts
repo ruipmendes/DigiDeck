@@ -8,6 +8,7 @@ import type { DiscordStatus, DiscordChannelMember } from './integrations/discord
 import type { SpotifyStatus } from './integrations/spotify.js';
 import { getSpotify } from './integrations/spotify.js';
 import { getAppAudio } from './actions/appAudio.js';
+import { getHue } from './integrations/hue.js';
 import { getStreamers } from './integrations/twitch-streamers.js';
 import { getKickStreamers } from './integrations/kick-streamers.js';
 import { getMic } from './actions/mic.js';
@@ -102,6 +103,19 @@ function computeOne(t: Tile, obs: ObsStatus, twitch: TwitchStatus, streamlabs: S
       );
       if (!session) return { id: t.id, unavailable: true };
       return { id: t.id, sliderValue: session.volume, sliderMuted: session.muted };
+    }
+    if (provider === 'hue') {
+      const hue = getHue().status();
+      if (hue.state !== 'connected') return { id: t.id, unavailable: true };
+      const [kind, id] = t.inputName.split(':');
+      let target: { on: boolean; brightness?: number } | undefined;
+      if (kind === 'light') target = hue.lights?.find((l) => l.id === id);
+      else if (kind === 'room') target = hue.rooms?.find((r) => r.id === id);
+      if (!target) return { id: t.id, unavailable: true };
+      const value = target.brightness !== undefined ? Math.max(0, Math.min(1, target.brightness / 100)) : (target.on ? 1 : 0);
+      // "Muted" pip lights when the light is off — visually consistent with
+      // OBS-mixer / Spotify sliders where the pip means "output silenced".
+      return { id: t.id, sliderValue: value, sliderMuted: !target.on };
     }
     const src = provider === 'streamlabs' ? streamlabs : obs;
     if (src.state !== 'connected') return { id: t.id, unavailable: true };
@@ -312,6 +326,29 @@ function computeStepState(a: Action, obs: ObsStatus, twitch: TwitchStatus, strea
         break;
     }
     return { active, unavailable, iconUrl };
+  }
+
+  if (a.type === 'hue') {
+    const hue = getHue().status();
+    const unavailable = hue.state !== 'connected';
+    let active: boolean | undefined;
+    switch (a.op) {
+      case 'light-toggle': case 'light-on': case 'light-off': {
+        const light = hue.lights?.find((l) => l.id === a.params?.lightId);
+        if (light) active = light.on;
+        break;
+      }
+      case 'room-toggle': case 'room-on': case 'room-off': {
+        const room = hue.rooms?.find((r) => r.id === a.params?.roomId);
+        if (room) active = room.on;
+        break;
+      }
+      case 'scene-on':
+        // Scenes fire-and-forget; no persistent "this scene is active" state
+        // in the API. Leave active undefined so the tile stays neutral.
+        break;
+    }
+    return { active, unavailable };
   }
 
   if (a.type === 'spotify') {

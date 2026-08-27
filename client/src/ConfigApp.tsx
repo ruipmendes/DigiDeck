@@ -55,7 +55,7 @@ export function ConfigApp() {
       return next;
     });
   }
-  const [integrationStatus, setIntegrationStatus] = useState<{ obs: boolean; twitch: boolean; streamlabs: boolean; kick: boolean; discord: boolean; spotify: boolean; spotifyPremium: boolean }>({
+  const [integrationStatus, setIntegrationStatus] = useState<{ obs: boolean; twitch: boolean; streamlabs: boolean; kick: boolean; discord: boolean; spotify: boolean; spotifyPremium: boolean; hue: boolean }>({
     obs: false,
     twitch: false,
     streamlabs: false,
@@ -63,6 +63,7 @@ export function ConfigApp() {
     discord: false,
     spotify: false,
     spotifyPremium: false,
+    hue: false,
   });
   const importInputRef = useRef<HTMLInputElement>(null);
 
@@ -72,13 +73,14 @@ export function ConfigApp() {
     let alive = true;
     async function load() {
       try {
-        const [obs, twitch, streamlabs, kick, discord, spotify] = await Promise.all([
+        const [obs, twitch, streamlabs, kick, discord, spotify, hue] = await Promise.all([
           api.getObsState().catch(() => null),
           api.getTwitchState().catch(() => null),
           api.getStreamlabsState().catch(() => null),
           api.getKickState().catch(() => null),
           api.getDiscordState().catch(() => null),
           api.getSpotifyState().catch(() => null),
+          api.getHueState().catch(() => null),
         ]);
         if (!alive) return;
         setIntegrationStatus({
@@ -89,6 +91,7 @@ export function ConfigApp() {
           discord: !!discord?.config.enabled,
           spotify: !!spotify?.config.enabled,
           spotifyPremium: !!spotify?.config.isPremium,
+          hue: !!hue?.config.enabled,
         });
       } catch { /* harmless */ }
     }

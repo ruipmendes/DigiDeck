@@ -7,6 +7,7 @@ import { saveConfig, type ServerConfig } from './config.js';
 import { findIntegration } from './integrations/base.js';
 import { getDiscord } from './integrations/discord.js';
 import { getSpotify } from './integrations/spotify.js';
+import { getHue } from './integrations/hue.js';
 import { getAppAudio } from './actions/appAudio.js';
 import { listIconPacks, readIcon, ICON_PACKS_DIR, invalidateIconPacksCache } from './icon-packs.js';
 import {
@@ -390,6 +391,21 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse, c
     try {
       const sessions = await getAppAudio().listNow();
       json(res, 200, { sessions });
+    } catch (err) {
+      json(res, 400, { error: (err as Error).message });
+    }
+    return;
+  }
+
+  // ─── Hue-specific: bridge discovery ─────────────────────────
+  // Hits Philips's public discovery endpoint that returns bridges on the
+  // caller's public IP's LAN. Localhost-gated because the response leaks
+  // internal IPs.
+  if (pathname === '/api/integrations/hue/discover' && req.method === 'GET') {
+    if (!authorizeLocalhost(req, token())) return unauthorized(res);
+    try {
+      const bridges = await getHue().discoverBridges();
+      json(res, 200, { bridges });
     } catch (err) {
       json(res, 400, { error: (err as Error).message });
     }

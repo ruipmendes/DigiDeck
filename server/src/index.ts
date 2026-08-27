@@ -20,6 +20,7 @@ import { getKick } from './integrations/kick.js';
 import { getKickStreamers } from './integrations/kick-streamers.js';
 import { getDiscord } from './integrations/discord.js';
 import { getSpotify } from './integrations/spotify.js';
+import { getHue } from './integrations/hue.js';
 import { getAppAudio } from './actions/appAudio.js';
 import { ensureIconPacksDir } from './icon-packs.js';
 import { getSystemMetrics } from './system-metrics.js';
@@ -126,6 +127,7 @@ const twitch = getTwitch();
 const kick = getKick();
 const discord = getDiscord();
 const spotify = getSpotify();
+const hue = getHue();
 // scaffold-integration: additional singleton calls inserted above this line
 
 // Uniform lifecycle wiring — applyConfig / attachSave / start — so adding a
@@ -434,6 +436,8 @@ wss.on('connection', (ws: WebSocket) => {
           await spotify.setPlayerVolume(msg.value * 100);
         } else if (provider === 'app-audio') {
           await getAppAudio().setVolume(tile.inputName, msg.value);
+        } else if (provider === 'hue') {
+          await hue.setBrightness(tile.inputName, msg.value);
         } else {
           await obs.setInputVolume(tile.inputName, msg.value);
         }
@@ -461,6 +465,11 @@ wss.on('connection', (ws: WebSocket) => {
           await spotify.execute('toggle-play');
         } else if (provider === 'app-audio') {
           await getAppAudio().toggleMute(tile.inputName);
+        } else if (provider === 'hue') {
+          // Tap on a Hue slider toggles the light's power. Uses the same
+          // "light:<id>" / "room:<id>" inputName encoding as setBrightness.
+          const [kind, id] = tile.inputName.split(':');
+          await hue.execute(kind === 'room' ? 'room-toggle' : 'light-toggle', kind === 'room' ? { roomId: id } : { lightId: id });
         } else {
           await obs.execute('toggle-mute', { inputName: tile.inputName });
         }

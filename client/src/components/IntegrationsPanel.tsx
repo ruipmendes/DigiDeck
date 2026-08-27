@@ -7,6 +7,7 @@ import { TwitchPanel } from './TwitchPanel';
 import { KickPanel } from './KickPanel';
 import { DiscordPanel } from './DiscordPanel';
 import { SpotifyPanel } from './SpotifyPanel';
+import { HuePanel } from './HuePanel';
 
 type StatusKind = 'connected' | 'connecting' | 'disconnected' | 'error' | 'disabled' | 'needs-auth' | 'not-configured';
 
@@ -17,6 +18,7 @@ type Summary = {
   kick:       { enabled: boolean; state: StatusKind };
   discord:    { enabled: boolean; state: StatusKind };
   spotify:    { enabled: boolean; state: StatusKind };
+  hue:        { enabled: boolean; state: StatusKind };
 };
 
 const DEFAULT_SUMMARY: Summary = {
@@ -26,6 +28,7 @@ const DEFAULT_SUMMARY: Summary = {
   kick:       { enabled: false, state: 'disabled' },
   discord:    { enabled: false, state: 'disabled' },
   spotify:    { enabled: false, state: 'disabled' },
+  hue:        { enabled: false, state: 'disabled' },
 };
 
 /**
@@ -45,13 +48,14 @@ export function IntegrationsPanel() {
     let alive = true;
     async function load() {
       try {
-        const [obs, sl, tw, kk, dc, sp] = await Promise.all([
+        const [obs, sl, tw, kk, dc, sp, hu] = await Promise.all([
           api.getObsState().catch(() => null),
           api.getStreamlabsState().catch(() => null),
           api.getTwitchState().catch(() => null),
           api.getKickState().catch(() => null),
           api.getDiscordState().catch(() => null),
           api.getSpotifyState().catch(() => null),
+          api.getHueState().catch(() => null),
         ]);
         if (!alive) return;
         setSummary({
@@ -61,6 +65,7 @@ export function IntegrationsPanel() {
           kick:       { enabled: !!kk?.config.enabled,  state: (kk?.status.state  as StatusKind) ?? 'disabled' },
           discord:    { enabled: !!dc?.config.enabled,  state: (dc?.status.state  as StatusKind) ?? 'disabled' },
           spotify:    { enabled: !!sp?.config.enabled,  state: (sp?.status.state  as StatusKind) ?? 'disabled' },
+          hue:        { enabled: !!hu?.config.enabled,  state: (hu?.status.state  as StatusKind) ?? 'disabled' },
         });
       } catch { /* harmless */ }
     }
@@ -98,6 +103,7 @@ export function IntegrationsPanel() {
           <Pill name="Kick"       s={summary.kick} />
           <Pill name="Discord"    s={summary.discord} />
           <Pill name="Spotify"    s={summary.spotify} />
+          <Pill name="Hue"        s={summary.hue} />
         </span>
       </button>
 
@@ -109,6 +115,7 @@ export function IntegrationsPanel() {
           <KickPanel />
           <DiscordPanel />
           <SpotifyPanel />
+          <HuePanel />
         </div>
       )}
     </div>

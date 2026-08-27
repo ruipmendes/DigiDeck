@@ -28,6 +28,7 @@ import { TwitchBody } from './TwitchBody';
 import { DiscordBody } from './DiscordBody';
 import { AppAudioBody } from './AppAudioBody';
 import { KickBody } from './KickBody';
+import { HueBody } from './HueBody';
 
 export type { IntegrationStatus };
 
@@ -363,6 +364,7 @@ function Body({ action, onChange, pages }: StepEditorProps) {
         </div>
       );
     case 'kick':       return <KickBody action={action} onChange={onChange} />;
+    case 'hue':        return <HueBody action={action} onChange={onChange} />;
     case 'kick-streamer':
       return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>

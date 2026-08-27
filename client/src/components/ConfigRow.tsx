@@ -416,6 +416,7 @@ function summarizeAction(a: Action): string {
     case 'kick-streamer':    return a.slug ? `Kick · ${a.slug}` : 'Kick streamer';
     case 'discord':          return `Discord · ${a.op}`;
     case 'spotify':          return `Spotify · ${a.op}`;
+    case 'hue':              return `Hue · ${a.op}`;
     case 'goto-page':        return `Go to page ${a.pageId}`;
     case 'wait':             return `Wait ${a.ms}ms`;
   }
@@ -590,6 +591,26 @@ function SliderEditor({
       const t = setInterval(load, 4000);
       return () => { alive = false; clearInterval(t); };
     }
+    if (provider === 'hue') {
+      // Hue slider — inputName encodes both "room:<id>" and "light:<id>". Pick
+      // list combines both so users see everything a bridge exposes.
+      let alive = true;
+      function load() {
+        api.getHueState()
+          .then((d) => {
+            if (!alive) return;
+            const opts: string[] = [];
+            for (const r of d.status.rooms ?? []) opts.push(`room:${r.id}`);
+            for (const l of d.status.lights ?? []) opts.push(`light:${l.id}`);
+            setInputs(opts);
+            setConnected(d.status.state === 'connected');
+          })
+          .catch(() => { if (alive) { setInputs([]); setConnected(false); } });
+      }
+      load();
+      const t = setInterval(load, 4000);
+      return () => { alive = false; clearInterval(t); };
+    }
     if (provider === 'spotify') {
       // Spotify has one player volume — no input list to fetch.
       let alive = true;
@@ -628,6 +649,7 @@ function SliderEditor({
     provider === 'discord'    ? 'Discord' :
     provider === 'spotify'    ? 'Spotify' :
     provider === 'app-audio'  ? 'Per-app audio' :
+    provider === 'hue'        ? 'Philips Hue' :
                                 'OBS Studio';
 
   // Build the provider option list: include configured integrations, plus the
@@ -646,6 +668,7 @@ function SliderEditor({
   // Per-app audio doesn't need an integration to be enabled — it's system-level.
   // Always available on Windows.
   providerOpts.push({ value: 'app-audio', label: 'Per-app audio' });
+  if (integrationStatus.hue        || provider === 'hue')        providerOpts.push({ value: 'hue',        label: 'Philips Hue' });
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -654,6 +677,7 @@ function SliderEditor({
           provider === 'discord'   ? 'voice volume slider — drag-to-set + tap to mute/deafen' :
           provider === 'spotify'   ? 'player volume slider — drag-to-set + tap to play/pause' :
           provider === 'app-audio' ? 'per-app volume slider — drag-to-set + tap to mute the app' :
+          provider === 'hue'       ? 'brightness slider — drag-to-set + tap toggles the light on/off' :
           'audio mixer slider — drag-to-set-volume + tap-to-mute'
         }
       </div>
