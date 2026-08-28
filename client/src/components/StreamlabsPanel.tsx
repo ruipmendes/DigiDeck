@@ -66,6 +66,27 @@ export function StreamlabsPanel() {
     }
   }
 
+  async function toggleEnabled() {
+    if (!config) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const data = await api.putStreamlabsConfig({
+        enabled: !config.enabled,
+        host: config.host,
+        port: config.port,
+      });
+      setConfig(data.config);
+      setStatus(data.status);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const state = status?.state;
+
   const showInlineRetry =
     status?.state === 'error' ||
     status?.state === 'disconnected' ||
@@ -133,53 +154,61 @@ export function StreamlabsPanel() {
 
       {expanded && config && (
         <div style={{ marginTop: 14, marginLeft: 26, display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <label style={row}>
-            <input
-              type="checkbox"
-              checked={config.enabled}
-              onChange={(e) => setConfig({ ...config, enabled: e.target.checked })}
-            />
-            <span>Enable Streamlabs integration</span>
-          </label>
+          {state === 'disabled' ? (
+            <button onClick={toggleEnabled} disabled={busy} style={primaryBtn}>Enable Streamlabs integration</button>
+          ) : (
+            <>
+              <div style={grid}>
+                <label style={lbl}>Host</label>
+                <input
+                  value={config.host}
+                  onChange={(e) => setConfig({ ...config, host: e.target.value })}
+                  style={inp}
+                  placeholder="127.0.0.1"
+                />
+                <label style={lbl}>Port</label>
+                <input
+                  type="number"
+                  value={config.port}
+                  onChange={(e) => setConfig({ ...config, port: Number(e.target.value) || 59650 })}
+                  style={inp}
+                />
+                <label style={lbl}>Token</label>
+                <input
+                  type="password"
+                  value={tokenDraft}
+                  onChange={(e) => setTokenDraft(e.target.value)}
+                  style={inp}
+                  placeholder={config.hasToken ? '(token saved — leave blank to keep)' : 'paste API token from Streamlabs'}
+                  autoComplete="off"
+                />
+              </div>
 
-          <div style={grid}>
-            <label style={lbl}>Host</label>
-            <input
-              value={config.host}
-              onChange={(e) => setConfig({ ...config, host: e.target.value })}
-              style={inp}
-              placeholder="127.0.0.1"
-            />
-            <label style={lbl}>Port</label>
-            <input
-              type="number"
-              value={config.port}
-              onChange={(e) => setConfig({ ...config, port: Number(e.target.value) || 59650 })}
-              style={inp}
-            />
-            <label style={lbl}>Token</label>
-            <input
-              type="password"
-              value={tokenDraft}
-              onChange={(e) => setTokenDraft(e.target.value)}
-              style={inp}
-              placeholder={config.hasToken ? '(token saved — leave blank to keep)' : 'paste API token from Streamlabs'}
-              autoComplete="off"
-            />
-          </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={save} disabled={busy} style={primaryBtn}>
+                  {busy ? 'Saving…' : 'Save & reconnect'}
+                </button>
+                <button onClick={reconnect} disabled={busy} style={secondaryBtn}>
+                  <RefreshCw size={14} /> reconnect
+                </button>
+              </div>
 
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={save} disabled={busy} style={primaryBtn}>
-              {busy ? 'Saving…' : 'Save & reconnect'}
-            </button>
-            <button onClick={reconnect} disabled={busy} style={secondaryBtn}>
-              <RefreshCw size={14} /> reconnect
-            </button>
-          </div>
+              <div style={{ fontSize: 12, color: '#6b7280', lineHeight: 1.5 }}>
+                In Streamlabs Desktop: <strong>Settings → Remote Control → show details</strong>. Copy the token and paste it above. Default port is <code>59650</code>.
+              </div>
 
-          <div style={{ fontSize: 12, color: '#6b7280', lineHeight: 1.5 }}>
-            In Streamlabs Desktop: <strong>Settings → Remote Control → show details</strong>. Copy the token and paste it above. Default port is <code>59650</code>.
-          </div>
+              <button
+                onClick={toggleEnabled}
+                disabled={busy}
+                style={{
+                  background: 'transparent', border: 0, color: '#6b7280', cursor: 'pointer',
+                  padding: 0, fontSize: 11, textDecoration: 'underline', alignSelf: 'flex-start',
+                }}
+              >
+                disable integration
+              </button>
+            </>
+          )}
 
           {error && <div style={{ fontSize: 12, color: '#f87171' }}>{error}</div>}
         </div>
@@ -200,7 +229,6 @@ function StatusBadge({ state }: { state?: string }) {
   return <span style={{ fontSize: 12, color: m.color }}>{m.label}</span>;
 }
 
-const row: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#e5e7eb' };
 const grid: React.CSSProperties = { display: 'grid', gridTemplateColumns: '90px 1fr', gap: 8, alignItems: 'center' };
 const lbl: React.CSSProperties = { fontSize: 13, color: '#9ca3af' };
 const inp: React.CSSProperties = {
