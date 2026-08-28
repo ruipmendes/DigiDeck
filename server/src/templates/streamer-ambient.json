@@ -1,0 +1,97 @@
+{
+  "version": 1,
+  "exportedAt": "2026-08-28T00:00:00.000Z",
+  "title": "Streamer + Ambient",
+  "description": "Full streaming rig with ambient lighting. OBS controls, scene switcher (with live thumbnails), Twitch mod actions, Hue room / scene tiles, OpenRGB profile switching, and per-app audio ducking. Edit each Hue / HA / OpenRGB tile to point at your specific scenes and profiles after loading.",
+  "layout": {
+    "navigation": "tabs",
+    "pages": [
+      {
+        "id": 0,
+        "name": "Stream",
+        "icon": "video",
+        "cols": 3,
+        "buttons": [
+          { "kind": "button", "id": 0,  "label": "REC\n{obs.recordingTime}",     "icon": "obs",         "action": { "type": "obs", "op": "toggle-record" } },
+          { "kind": "button", "id": 1,  "label": "STREAM\n{obs.streamingTime}",  "icon": "video",       "action": { "type": "obs", "op": "toggle-stream" } },
+          { "kind": "button", "id": 2,  "label": "Drops\n{obs.droppedFrames}",   "icon": "zap",         "action": { "type": "obs", "op": "toggle-record" } },
+          { "kind": "button", "id": 3,  "label": "Save\nReplay",                 "icon": "save",        "action": { "type": "obs", "op": "save-replay-buffer" } },
+          { "kind": "button", "id": 4,  "label": "Clip",                         "icon": "scissors",    "action": { "type": "twitch", "op": "create-clip" } },
+          { "kind": "button", "id": 5,  "label": "Marker",                       "icon": "bell",        "action": { "type": "twitch", "op": "stream-marker" } },
+          { "kind": "button", "id": 6,  "label": "Mic\nMute",                    "icon": "mic-off",     "action": { "type": "mic", "op": "toggle-mute" } },
+          { "kind": "button", "id": 7,  "label": "Vol\nDown",                    "icon": "volume-1",    "action": { "type": "volume", "delta": -2 } },
+          { "kind": "button", "id": 8,  "label": "Vol\nUp",                      "icon": "volume-2",    "action": { "type": "volume", "delta": 2 } }
+        ]
+      },
+      {
+        "id": 1,
+        "name": "Scenes",
+        "icon": "grid",
+        "cols": 2,
+        "buttons": [
+          { "kind": "button", "id": 10, "label": "Main",           "icon": "monitor",         "action": { "type": "obs", "op": "set-scene", "params": { "sceneName": "Main" } } },
+          { "kind": "button", "id": 11, "label": "Just\nChatting", "icon": "message-circle",  "action": { "type": "obs", "op": "set-scene", "params": { "sceneName": "Just Chatting" } } },
+          { "kind": "button", "id": 12, "label": "Game",           "icon": "zap",             "action": { "type": "obs", "op": "set-scene", "params": { "sceneName": "Game" } } },
+          { "kind": "button", "id": 13, "label": "BRB",            "icon": "moon",            "action": { "type": "obs", "op": "set-scene", "params": { "sceneName": "BRB" } } },
+          { "kind": "button", "id": 14, "label": "Starting\nSoon", "icon": "clock",           "action": { "type": "obs", "op": "set-scene", "params": { "sceneName": "Starting Soon" } } },
+          { "kind": "button", "id": 15, "label": "Outro",          "icon": "check",           "action": { "type": "obs", "op": "set-scene", "params": { "sceneName": "Outro" } } }
+        ]
+      },
+      {
+        "id": 2,
+        "name": "Lights",
+        "icon": "sun",
+        "cols": 2,
+        "buttons": [
+          { "kind": "button", "id": 20, "label": "Streaming\nScene",   "icon": "sun",     "action": { "type": "hue", "op": "scene-on", "params": {} } },
+          { "kind": "button", "id": 21, "label": "Break\nScene",       "icon": "moon",    "action": { "type": "hue", "op": "scene-on", "params": {} } },
+          { "kind": "button", "id": 22, "label": "Studio\nLights",     "icon": "sun",     "action": { "type": "hue", "op": "room-toggle", "params": {} } },
+          { "kind": "button", "id": 23, "label": "Desk\nLamp",         "icon": "zap",     "action": { "type": "hue", "op": "light-toggle", "params": {} } },
+          { "kind": "button", "id": 24, "label": "HA\nScene",          "icon": "home",    "action": { "type": "homeassistant", "op": "scene-activate", "params": {} } },
+          { "kind": "button", "id": 25, "label": "HA\nRoom",           "icon": "home",    "action": { "type": "homeassistant", "op": "light-toggle", "params": {} } }
+        ]
+      },
+      {
+        "id": 3,
+        "name": "RGB",
+        "icon": "zap",
+        "cols": 2,
+        "buttons": [
+          { "kind": "button", "id": 30, "label": "Streaming\nRGB",     "icon": "zap",     "action": { "type": "openrgb", "op": "load-profile", "params": {} } },
+          { "kind": "button", "id": 31, "label": "Gaming\nRGB",        "icon": "zap",     "action": { "type": "openrgb", "op": "load-profile", "params": {} } },
+          { "kind": "button", "id": 32, "label": "Chill\nRGB",         "icon": "moon",    "action": { "type": "openrgb", "op": "load-profile", "params": {} } },
+          { "kind": "button", "id": 33, "label": "Static\nColor",      "icon": "square",  "action": { "type": "openrgb", "op": "load-profile", "params": {} } },
+          { "kind": "button", "id": 34, "label": "Rainbow",            "icon": "star",    "action": { "type": "openrgb", "op": "load-profile", "params": {} } },
+          { "kind": "button", "id": 35, "label": "Off",                "icon": "power",   "action": { "type": "openrgb", "op": "load-profile", "params": {} } }
+        ]
+      },
+      {
+        "id": 4,
+        "name": "Audio",
+        "icon": "sliders",
+        "cols": 1,
+        "buttons": [
+          { "kind": "slider", "id": 40, "label": "Mic",     "icon": "mic",       "provider": "obs",       "inputName": "Mic/Aux" },
+          { "kind": "slider", "id": 41, "label": "Discord", "icon": "discord",   "provider": "app-audio", "inputName": "Discord" },
+          { "kind": "slider", "id": 42, "label": "Music",   "icon": "music",     "provider": "app-audio", "inputName": "Spotify" },
+          { "kind": "slider", "id": 43, "label": "Browser", "icon": "globe",     "provider": "app-audio", "inputName": "chrome" }
+        ]
+      },
+      {
+        "id": 5,
+        "name": "Chat",
+        "icon": "message-circle",
+        "cols": 2,
+        "buttons": [
+          { "kind": "button", "id": 50, "label": "!website",  "icon": "globe",         "action": { "type": "twitch", "op": "chat", "text": "!website" } },
+          { "kind": "button", "id": 51, "label": "!discord",  "icon": "discord",       "action": { "type": "twitch", "op": "chat", "text": "!discord" } },
+          { "kind": "button", "id": 52, "label": "!lurk",     "icon": "eye-off",       "action": { "type": "twitch", "op": "chat", "text": "!lurk" } },
+          { "kind": "button", "id": 53, "label": "!socials",  "icon": "send",          "action": { "type": "twitch", "op": "chat", "text": "!socials" } },
+          { "kind": "button", "id": 54, "label": "Announce",  "icon": "bell",          "action": { "type": "twitch", "op": "chat-announcement", "prompts": [{ "field": "text", "label": "Announcement", "placeholder": "raid in 5!" }] } },
+          { "kind": "button", "id": 55, "label": "Clear",     "icon": "x",             "action": { "type": "twitch", "op": "clear-chat" } }
+        ]
+      }
+    ]
+  },
+  "images": {}
+}

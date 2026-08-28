@@ -1,0 +1,85 @@
+{
+  "version": 1,
+  "exportedAt": "2026-08-28T00:00:00.000Z",
+  "title": "Focus / Work-from-Home",
+  "description": "Productivity layout — quick mic mute + camera + meeting controls, media keys, ambient lighting (Hue / Home Assistant), Spotify with a live now-playing label, and a page of common work apps. Great for deep-work + remote-meeting days.",
+  "layout": {
+    "navigation": "tabs",
+    "pages": [
+      {
+        "id": 0,
+        "name": "Focus",
+        "icon": "moon",
+        "cols": 3,
+        "buttons": [
+          { "kind": "button", "id": 0, "label": "Mic\nMute",       "icon": "mic-off",     "action": { "type": "mic", "op": "toggle-mute" } },
+          { "kind": "button", "id": 1, "label": "System\nMute",    "icon": "volume-x",    "action": { "type": "volume", "mute": true } },
+          { "kind": "button", "id": 2, "label": "Lock",            "icon": "lock",        "action": { "type": "hotkey", "keys": ["LeftSuper", "L"] } },
+          { "kind": "button", "id": 3, "label": "Prev",            "icon": "skip-back",   "action": { "type": "hotkey", "keys": ["AudioPrev"] } },
+          { "kind": "button", "id": 4, "label": "Play/\nPause",    "icon": "play",        "action": { "type": "hotkey", "keys": ["AudioPlay"] } },
+          { "kind": "button", "id": 5, "label": "Next",            "icon": "skip-forward","action": { "type": "hotkey", "keys": ["AudioNext"] } },
+          { "kind": "button", "id": 6, "label": "Screenshot",      "icon": "camera",      "action": { "type": "hotkey", "keys": ["LeftSuper", "PrintScreen"] } },
+          { "kind": "button", "id": 7, "label": "Vol\nDown",       "icon": "volume-1",    "action": { "type": "volume", "delta": -2 } },
+          { "kind": "button", "id": 8, "label": "Vol\nUp",         "icon": "volume-2",    "action": { "type": "volume", "delta": 2 } }
+        ]
+      },
+      {
+        "id": 1,
+        "name": "Meeting",
+        "icon": "video",
+        "cols": 2,
+        "buttons": [
+          { "kind": "button", "id": 10, "label": "Mic\nMute",      "icon": "mic-off",     "action": { "type": "mic", "op": "toggle-mute" } },
+          { "kind": "button", "id": 11, "label": "Deafen",         "icon": "headphones",  "action": { "type": "discord", "op": "toggle-deafen" } },
+          { "kind": "button", "id": 12, "label": "Camera\nToggle", "icon": "video",       "action": { "type": "hotkey", "keys": ["LeftControl", "E"] } },
+          { "kind": "button", "id": 13, "label": "Share\nScreen",  "icon": "monitor",     "action": { "type": "hotkey", "keys": ["LeftControl", "LeftShift", "E"] } },
+          { "kind": "button", "id": 14, "label": "Meet\nLink",     "icon": "globe",       "action": { "type": "url", "url": "https://meet.google.com/" } },
+          { "kind": "button", "id": 15, "label": "Zoom",           "icon": "video",       "action": { "type": "url", "url": "https://zoom.us/" } }
+        ]
+      },
+      {
+        "id": 2,
+        "name": "Music",
+        "icon": "music",
+        "cols": 2,
+        "buttons": [
+          { "kind": "button", "id": 20, "label": "{spotify.track}", "icon": "spotify",       "action": { "type": "spotify", "op": "toggle-play" } },
+          { "kind": "button", "id": 21, "label": "{spotify.artist}", "icon": "music",         "action": { "type": "spotify", "op": "toggle-play" } },
+          { "kind": "button", "id": 22, "label": "Prev",             "icon": "skip-back",     "action": { "type": "spotify", "op": "previous" } },
+          { "kind": "button", "id": 23, "label": "Play/\nPause",     "icon": "play",          "action": { "type": "spotify", "op": "toggle-play" } },
+          { "kind": "button", "id": 24, "label": "Next",             "icon": "skip-forward",  "action": { "type": "spotify", "op": "next" } },
+          { "kind": "slider", "id": 25, "label": "Volume",           "icon": "sliders",       "provider": "app-audio", "inputName": "Spotify" }
+        ]
+      },
+      {
+        "id": 3,
+        "name": "Lights",
+        "icon": "sun",
+        "cols": 2,
+        "buttons": [
+          { "kind": "button", "id": 30, "label": "Focus\nScene",  "icon": "sun",     "action": { "type": "hue", "op": "scene-on", "params": {} } },
+          { "kind": "button", "id": 31, "label": "Break\nScene",  "icon": "moon",    "action": { "type": "hue", "op": "scene-on", "params": {} } },
+          { "kind": "button", "id": 32, "label": "Meeting\nScene","icon": "video",   "action": { "type": "hue", "op": "scene-on", "params": {} } },
+          { "kind": "button", "id": 33, "label": "Desk\nLamp",    "icon": "zap",     "action": { "type": "hue", "op": "light-toggle", "params": {} } },
+          { "kind": "button", "id": 34, "label": "HA\nBright",    "icon": "home",    "action": { "type": "homeassistant", "op": "scene-activate", "params": {} } },
+          { "kind": "button", "id": 35, "label": "HA\nWarm",      "icon": "home",    "action": { "type": "homeassistant", "op": "scene-activate", "params": {} } }
+        ]
+      },
+      {
+        "id": 4,
+        "name": "Apps",
+        "icon": "folder",
+        "cols": 2,
+        "buttons": [
+          { "kind": "button", "id": 40, "label": "Gmail",         "icon": "mail",       "action": { "type": "url", "url": "https://mail.google.com/" } },
+          { "kind": "button", "id": 41, "label": "Calendar",      "icon": "calendar",   "action": { "type": "url", "url": "https://calendar.google.com/" } },
+          { "kind": "button", "id": 42, "label": "Docs",          "icon": "file-text",  "action": { "type": "url", "url": "https://docs.google.com/" } },
+          { "kind": "button", "id": 43, "label": "Slack",         "icon": "message-circle", "action": { "type": "url", "url": "https://slack.com/signin/" } },
+          { "kind": "button", "id": 44, "label": "Notion",        "icon": "clipboard",  "action": { "type": "url", "url": "https://www.notion.so/" } },
+          { "kind": "button", "id": 45, "label": "GitHub",        "icon": "github",     "action": { "type": "url", "url": "https://github.com/" } }
+        ]
+      }
+    ]
+  },
+  "images": {}
+}

@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "exportedAt": "2026-08-28T00:00:00.000Z",
+  "title": "Gamer",
+  "description": "Gaming-focused layout — Discord voice controls with speaking indicators, OpenRGB profile switching, per-app audio ducking (Discord / Music / Browser), game launcher tiles, and quick system controls. Edit the launcher paths and OpenRGB profiles to match your setup.",
+  "layout": {
+    "navigation": "tabs",
+    "pages": [
+      {
+        "id": 0,
+        "name": "Play",
+        "icon": "zap",
+        "cols": 3,
+        "buttons": [
+          { "kind": "button", "id": 0, "label": "Mic\nMute",       "icon": "mic-off",     "action": { "type": "discord", "op": "toggle-mute" } },
+          { "kind": "button", "id": 1, "label": "Deafen",          "icon": "headphones",  "action": { "type": "discord", "op": "toggle-deafen" } },
+          { "kind": "button", "id": 2, "label": "PTT",             "icon": "zap",         "action": { "type": "discord", "op": "toggle-ptt" } },
+          { "kind": "button", "id": 3, "label": "Screenshot",      "icon": "camera",      "action": { "type": "hotkey", "keys": ["LeftSuper", "PrintScreen"] } },
+          { "kind": "button", "id": 4, "label": "Vol\nDown",       "icon": "volume-1",    "action": { "type": "volume", "delta": -2 } },
+          { "kind": "button", "id": 5, "label": "Vol\nUp",         "icon": "volume-2",    "action": { "type": "volume", "delta": 2 } },
+          { "kind": "button", "id": 6, "label": "Steam",           "icon": "external-link", "action": { "type": "url", "url": "steam://open/games" } },
+          { "kind": "button", "id": 7, "label": "Discord",         "icon": "discord",     "action": { "type": "url", "url": "https://discord.com/channels/@me" } },
+          { "kind": "button", "id": 8, "label": "Browser",         "icon": "globe",       "action": { "type": "url", "url": "https://twitch.tv" } }
+        ]
+      },
+      {
+        "id": 1,
+        "name": "Discord",
+        "icon": "discord",
+        "cols": 2,
+        "buttons": [
+          { "kind": "button", "id": 10, "label": "Mute",           "icon": "mic-off",     "action": { "type": "discord", "op": "toggle-mute" } },
+          { "kind": "button", "id": 11, "label": "Deafen",         "icon": "headphones",  "action": { "type": "discord", "op": "toggle-deafen" } },
+          { "kind": "button", "id": 12, "label": "Join\nChannel",  "icon": "arrow-right", "action": { "type": "discord", "op": "join-channel", "prompts": [{ "field": "channelId", "label": "Voice channel", "placeholder": "channel id", "choicesSource": "discord-voice-channels" }] } },
+          { "kind": "button", "id": 13, "label": "Leave",          "icon": "x",           "action": { "type": "discord", "op": "leave-channel" } },
+          { "kind": "button", "id": 14, "label": "Noise\nSup.",    "icon": "sliders",     "action": { "type": "discord", "op": "toggle-noise-suppression" } },
+          { "kind": "button", "id": 15, "label": "Auto\nGain",     "icon": "settings",    "action": { "type": "discord", "op": "toggle-auto-gain" } }
+        ]
+      },
+      {
+        "id": 2,
+        "name": "Panel",
+        "icon": "headphones",
+        "cols": 1,
+        "buttons": [
+          { "kind": "discord-voice-panel", "id": 20, "label": "Chan: {discord.channel}", "icon": "discord" }
+        ]
+      },
+      {
+        "id": 3,
+        "name": "RGB",
+        "icon": "zap",
+        "cols": 2,
+        "buttons": [
+          { "kind": "button", "id": 30, "label": "Gaming\nRGB",  "icon": "zap",   "action": { "type": "openrgb", "op": "load-profile", "params": {} } },
+          { "kind": "button", "id": 31, "label": "Chill\nRGB",   "icon": "moon",  "action": { "type": "openrgb", "op": "load-profile", "params": {} } },
+          { "kind": "button", "id": 32, "label": "Rainbow",      "icon": "star",  "action": { "type": "openrgb", "op": "load-profile", "params": {} } },
+          { "kind": "button", "id": 33, "label": "Static",       "icon": "square","action": { "type": "openrgb", "op": "load-profile", "params": {} } },
+          { "kind": "button", "id": 34, "label": "Neon",         "icon": "heart", "action": { "type": "openrgb", "op": "load-profile", "params": {} } },
+          { "kind": "button", "id": 35, "label": "Off",          "icon": "power", "action": { "type": "openrgb", "op": "load-profile", "params": {} } }
+        ]
+      },
+      {
+        "id": 4,
+        "name": "Ducking",
+        "icon": "sliders",
+        "cols": 1,
+        "buttons": [
+          { "kind": "slider", "id": 40, "label": "Discord",   "icon": "discord",    "provider": "discord",   "inputName": "input" },
+          { "kind": "slider", "id": 41, "label": "Music",     "icon": "music",      "provider": "app-audio", "inputName": "Spotify" },
+          { "kind": "slider", "id": 42, "label": "Browser",   "icon": "globe",      "provider": "app-audio", "inputName": "chrome" }
+        ]
+      }
+    ]
+  },
+  "images": {}
+}
