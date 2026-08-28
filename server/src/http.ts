@@ -762,9 +762,24 @@ function forbidden(res: ServerResponse, message: string): void {
   json(res, 403, { error: message });
 }
 
+/** Hard cap on JSON POST/PUT bodies. Legitimate uses today: layout imports
+ *  (with base64-embedded images) can be a few megabytes; ordinary config PUTs
+ *  are a couple hundred bytes. 50 MB is generous with no realistic ceiling in
+ *  sight. Without a cap, an authenticated request could push the server into
+ *  a heap OOM by streaming an arbitrary-size body. */
+const MAX_JSON_BODY_BYTES = 50 * 1024 * 1024;
+
 async function readJsonBody(req: IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = [];
-  for await (const chunk of req) chunks.push(chunk as Buffer);
+  let total = 0;
+  for await (const chunk of req) {
+    const b = chunk as Buffer;
+    total += b.length;
+    if (total > MAX_JSON_BODY_BYTES) {
+      throw new Error(`request body too large (max ${MAX_JSON_BODY_BYTES} bytes)`);
+    }
+    chunks.push(b);
+  }
   return JSON.parse(Buffer.concat(chunks).toString('utf8'));
 }
 
