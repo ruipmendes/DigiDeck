@@ -22,6 +22,8 @@ import { getHomeAssistant } from '../integrations/homeassistant.js';
 import type { HomeAssistantOp, HomeAssistantActionParams } from '../integrations/homeassistant.js';
 import { getOpenRgb } from '../integrations/openrgb.js';
 import type { OpenRgbOp, OpenRgbActionParams } from '../integrations/openrgb.js';
+import { getNanoleaf } from '../integrations/nanoleaf.js';
+import type { NanoleafOp, NanoleafActionParams } from '../integrations/nanoleaf.js';
 import { getMic } from './mic.js';
 import type { MicOp } from './mic.js';
 import { getAppAudio } from './appAudio.js';
@@ -47,6 +49,7 @@ export type Action =
   | { type: 'hue'; op: HueOp; params?: HueActionParams }
   | { type: 'homeassistant'; op: HomeAssistantOp; params?: HomeAssistantActionParams }
   | { type: 'openrgb'; op: OpenRgbOp; params?: OpenRgbActionParams }
+  | { type: 'nanoleaf'; op: NanoleafOp; params?: NanoleafActionParams }
   | { type: 'goto-page'; pageId: number }
   | { type: 'wait'; ms: number };
 
@@ -92,6 +95,7 @@ async function executeStep(step: Action): Promise<void> {
     case 'hue':     return getHue().execute(step.op, step.params);
     case 'homeassistant': return getHomeAssistant().execute(step.op, step.params);
     case 'openrgb': return getOpenRgb().execute(step.op, step.params);
+    case 'nanoleaf': return getNanoleaf().execute(step.op, step.params);
     case 'goto-page':
       // Navigation is handled entirely on the phone — server has nothing to do.
       return;

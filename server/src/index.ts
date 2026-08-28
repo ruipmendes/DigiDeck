@@ -23,6 +23,7 @@ import { getSpotify } from './integrations/spotify.js';
 import { getHue } from './integrations/hue.js';
 import { getHomeAssistant } from './integrations/homeassistant.js';
 import { getOpenRgb } from './integrations/openrgb.js';
+import { getNanoleaf } from './integrations/nanoleaf.js';
 import { getAppAudio } from './actions/appAudio.js';
 import { ensureIconPacksDir } from './icon-packs.js';
 import { getSystemMetrics } from './system-metrics.js';
@@ -132,6 +133,7 @@ const spotify = getSpotify();
 const hue = getHue();
 const homeassistant = getHomeAssistant();
 getOpenRgb(); // registered via getter; no local ref needed (no state broadcasts consume it)
+const nanoleaf = getNanoleaf();
 // scaffold-integration: additional singleton calls inserted above this line
 
 // Uniform lifecycle wiring — applyConfig / attachSave / start — so adding a
@@ -444,6 +446,8 @@ wss.on('connection', (ws: WebSocket) => {
           await hue.setBrightness(tile.inputName, msg.value);
         } else if (provider === 'homeassistant') {
           await homeassistant.setSliderValue(tile.inputName, msg.value);
+        } else if (provider === 'nanoleaf') {
+          await nanoleaf.setBrightness(msg.value);
         } else {
           await obs.setInputVolume(tile.inputName, msg.value);
         }
@@ -478,6 +482,8 @@ wss.on('connection', (ws: WebSocket) => {
           await hue.execute(kind === 'room' ? 'room-toggle' : 'light-toggle', kind === 'room' ? { roomId: id } : { lightId: id });
         } else if (provider === 'homeassistant') {
           await homeassistant.toggleSlider(tile.inputName);
+        } else if (provider === 'nanoleaf') {
+          await nanoleaf.togglePower();
         } else {
           await obs.execute('toggle-mute', { inputName: tile.inputName });
         }

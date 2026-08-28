@@ -13,7 +13,7 @@ export type ObsActionParams = { sceneName?: string; inputName?: string; sourceNa
 /** Which integrations are enabled at the current moment — used to gate action
  *  picker entries and slider providers on integration availability. */
 export type IntegrationStatus = {
-  obs: boolean; twitch: boolean; streamlabs: boolean; kick: boolean; discord: boolean; spotify: boolean; hue: boolean; homeassistant: boolean; openrgb: boolean;
+  obs: boolean; twitch: boolean; streamlabs: boolean; kick: boolean; discord: boolean; spotify: boolean; hue: boolean; homeassistant: boolean; openrgb: boolean; nanoleaf: boolean;
   /** True when the connected Spotify account has Premium. Used to gate playback
    *  control tiles — free-tier accounts get a lock icon instead of being able
    *  to pick play/pause/next/previous/volume. */
@@ -149,6 +149,9 @@ export type HomeAssistantActionParams = {
 export type OpenRgbOp = 'load-profile';
 export type OpenRgbActionParams = { profileName?: string };
 
+export type NanoleafOp = 'power-on' | 'power-off' | 'power-toggle' | 'effect-select' | 'identify';
+export type NanoleafActionParams = { effectName?: string };
+
 export type AppAudioOp = 'toggle-mute' | 'mute' | 'unmute' | 'set-volume';
 export type AppAudioActionParams = { appName?: string; volumePercent?: number };
 
@@ -183,6 +186,7 @@ export type Action =
   | { type: 'hue'; op: HueOp; params?: HueActionParams }
   | { type: 'homeassistant'; op: HomeAssistantOp; params?: HomeAssistantActionParams }
   | { type: 'openrgb'; op: OpenRgbOp; params?: OpenRgbActionParams }
+  | { type: 'nanoleaf'; op: NanoleafOp; params?: NanoleafActionParams }
   | { type: 'goto-page'; pageId: number }
   | { type: 'wait'; ms: number };
 
@@ -209,7 +213,7 @@ export type Button = {
   longPressAction?: ButtonAction;
 };
 
-export type SliderProvider = 'obs' | 'streamlabs' | 'discord' | 'spotify' | 'app-audio' | 'hue' | 'homeassistant';
+export type SliderProvider = 'obs' | 'streamlabs' | 'discord' | 'spotify' | 'app-audio' | 'hue' | 'homeassistant' | 'nanoleaf';
 
 export type SliderTile = {
   kind: 'slider';
@@ -333,6 +337,7 @@ export function defaultAction(type: ActionType): Action {
     case 'hue':     return { type: 'hue', op: 'room-toggle', params: {} };
     case 'homeassistant': return { type: 'homeassistant', op: 'light-toggle', params: {} };
     case 'openrgb': return { type: 'openrgb', op: 'load-profile', params: {} };
+    case 'nanoleaf': return { type: 'nanoleaf', op: 'power-toggle' };
     case 'goto-page': return { type: 'goto-page', pageId: 0 };
     case 'wait': return { type: 'wait', ms: 200 };
   }

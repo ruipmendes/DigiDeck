@@ -220,6 +220,24 @@ const discordEntries = ((): ActionPickerEntry[] => {
   }));
 })();
 
+const nanoleafEntries: ActionPickerEntry[] = [
+  { key: 'nanoleaf:power-toggle', category: 'Nanoleaf', label: 'Toggle Nanoleaf panels', hint: 'Lights up when panels are currently on', iconName: 'zap',
+    keywords: 'nanoleaf panels toggle power on off lights', requires: 'nanoleaf',
+    create: () => ({ type: 'nanoleaf', op: 'power-toggle' }) },
+  { key: 'nanoleaf:power-on', category: 'Nanoleaf', label: 'Turn panels on', iconName: 'sun',
+    keywords: 'nanoleaf panels on turn lights', requires: 'nanoleaf',
+    create: () => ({ type: 'nanoleaf', op: 'power-on' }) },
+  { key: 'nanoleaf:power-off', category: 'Nanoleaf', label: 'Turn panels off', iconName: 'moon',
+    keywords: 'nanoleaf panels off turn lights', requires: 'nanoleaf',
+    create: () => ({ type: 'nanoleaf', op: 'power-off' }) },
+  { key: 'nanoleaf:effect-select', category: 'Nanoleaf', label: 'Activate effect', hint: 'Pick a saved Nanoleaf effect in the editor', iconName: 'star',
+    keywords: 'nanoleaf effect scene color panels select activate', requires: 'nanoleaf',
+    create: () => ({ type: 'nanoleaf', op: 'effect-select', params: {} }) },
+  { key: 'nanoleaf:identify', category: 'Nanoleaf', label: 'Identify (pulse)', hint: 'Brief pulse — useful for verifying the right controller', iconName: 'search',
+    keywords: 'nanoleaf identify pulse locate panels', requires: 'nanoleaf',
+    create: () => ({ type: 'nanoleaf', op: 'identify' }) },
+];
+
 const openRgbEntries: ActionPickerEntry[] = [
   { key: 'openrgb:load-profile', category: 'OpenRGB', label: 'Load RGB profile', hint: 'Pick a saved OpenRGB profile in the editor', iconName: 'zap',
     keywords: 'openrgb rgb aura mystic light chroma icue profile scene mood gaming streaming', requires: 'openrgb',
@@ -312,6 +330,7 @@ export const ACTION_PICKER_ENTRIES: ActionPickerEntry[] = [
   ...hueEntries,
   ...homeAssistantEntries,
   ...openRgbEntries,
+  ...nanoleafEntries,
   ...flow,
 ];
 
@@ -358,6 +377,7 @@ export function entryFor(action: Action): ActionPickerEntry | null {
     case 'hue':             return byOp('hue', action.op);
     case 'homeassistant':   return byOp('homeassistant', action.op);
     case 'openrgb':         return byOp('openrgb', action.op);
+    case 'nanoleaf':        return byOp('nanoleaf', action.op);
     case 'goto-page':       return ACTION_PICKER_ENTRIES.find((e) => e.key === 'goto-page') ?? null;
     case 'wait':            return ACTION_PICKER_ENTRIES.find((e) => e.key === 'wait') ?? null;
     default:                return null;

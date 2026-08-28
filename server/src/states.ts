@@ -10,6 +10,7 @@ import { getSpotify } from './integrations/spotify.js';
 import { getAppAudio } from './actions/appAudio.js';
 import { getHue } from './integrations/hue.js';
 import { getHomeAssistant } from './integrations/homeassistant.js';
+import { getNanoleaf } from './integrations/nanoleaf.js';
 import { getStreamers } from './integrations/twitch-streamers.js';
 import { getKickStreamers } from './integrations/kick-streamers.js';
 import { getMic } from './actions/mic.js';
@@ -127,6 +128,12 @@ function computeOne(t: Tile, obs: ObsStatus, twitch: TwitchStatus, streamlabs: S
       if (!entity) return { id: t.id, unavailable: true };
       const value = entity.level !== undefined ? Math.max(0, Math.min(1, entity.level / 100)) : (entity.on ? 1 : 0);
       return { id: t.id, sliderValue: value, sliderMuted: !entity.on };
+    }
+    if (provider === 'nanoleaf') {
+      const nano = getNanoleaf().status();
+      if (nano.state !== 'connected') return { id: t.id, unavailable: true };
+      const value = nano.brightness !== undefined ? Math.max(0, Math.min(1, nano.brightness / 100)) : (nano.isOn ? 1 : 0);
+      return { id: t.id, sliderValue: value, sliderMuted: !nano.isOn };
     }
     const src = provider === 'streamlabs' ? streamlabs : obs;
     if (src.state !== 'connected') return { id: t.id, unavailable: true };
@@ -337,6 +344,26 @@ function computeStepState(a: Action, obs: ObsStatus, twitch: TwitchStatus, strea
         break;
     }
     return { active, unavailable, iconUrl };
+  }
+
+  if (a.type === 'nanoleaf') {
+    const nano = getNanoleaf().status();
+    const unavailable = nano.state !== 'connected';
+    let active: boolean | undefined;
+    switch (a.op) {
+      case 'power-toggle': case 'power-on': case 'power-off':
+        active = nano.isOn;
+        break;
+      case 'effect-select':
+        // Light the tile when the selected effect is currently active on the
+        // controller — same "sticky" feel as OBS set-scene tiles.
+        active = !!a.params?.effectName && a.params.effectName === nano.currentEffect;
+        break;
+      case 'identify':
+        // Momentary pulse — no persistent state to reflect.
+        break;
+    }
+    return { active, unavailable };
   }
 
   if (a.type === 'homeassistant') {

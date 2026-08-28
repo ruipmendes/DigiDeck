@@ -418,6 +418,9 @@ function summarizeAction(a: Action): string {
     case 'spotify':          return `Spotify · ${a.op}`;
     case 'hue':              return `Hue · ${a.op}`;
     case 'openrgb':          return a.params?.profileName ? `OpenRGB · "${ellipsis(a.params.profileName, 18)}"` : 'OpenRGB · load profile';
+    case 'nanoleaf':         return a.op === 'effect-select'
+      ? (a.params?.effectName ? `Nanoleaf · "${ellipsis(a.params.effectName, 16)}"` : 'Nanoleaf · effect')
+      : `Nanoleaf · ${a.op}`;
     case 'homeassistant':    return a.op === 'service-call'
       ? `HA · ${a.params?.service || 'service-call'}`
       : `HA · ${a.op}${a.params?.entityId ? ` (${a.params.entityId})` : ''}`;
@@ -615,6 +618,19 @@ function SliderEditor({
       const t = setInterval(load, 4000);
       return () => { alive = false; clearInterval(t); };
     }
+    if (provider === 'nanoleaf') {
+      // Nanoleaf is a single controller — no per-input picking. Just show
+      // whether it's connected.
+      let alive = true;
+      function load() {
+        api.getNanoleafState()
+          .then((d) => { if (alive) { setInputs([]); setConnected(d.status.state === 'connected'); } })
+          .catch(() => { if (alive) { setInputs([]); setConnected(false); } });
+      }
+      load();
+      const t = setInterval(load, 4000);
+      return () => { alive = false; clearInterval(t); };
+    }
     if (provider === 'homeassistant') {
       // HA slider — inputName encodes `light:<entity_id>` or
       // `media:<entity_id>`. We list light + media_player entities.
@@ -677,6 +693,7 @@ function SliderEditor({
     provider === 'app-audio'  ? 'Per-app audio' :
     provider === 'hue'        ? 'Philips Hue' :
     provider === 'homeassistant' ? 'Home Assistant' :
+    provider === 'nanoleaf'   ? 'Nanoleaf' :
                                 'OBS Studio';
 
   // Build the provider option list: include configured integrations, plus the
@@ -697,6 +714,7 @@ function SliderEditor({
   providerOpts.push({ value: 'app-audio', label: 'Per-app audio' });
   if (integrationStatus.hue        || provider === 'hue')        providerOpts.push({ value: 'hue',        label: 'Philips Hue' });
   if (integrationStatus.homeassistant || provider === 'homeassistant') providerOpts.push({ value: 'homeassistant', label: 'Home Assistant' });
+  if (integrationStatus.nanoleaf   || provider === 'nanoleaf')   providerOpts.push({ value: 'nanoleaf',   label: 'Nanoleaf' });
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -707,6 +725,7 @@ function SliderEditor({
           provider === 'app-audio' ? 'per-app volume slider — drag-to-set + tap to mute the app' :
           provider === 'hue'       ? 'brightness slider — drag-to-set + tap toggles the light on/off' :
           provider === 'homeassistant' ? 'HA slider — light brightness or media_player volume; tap toggles / play-pauses' :
+          provider === 'nanoleaf'   ? 'Nanoleaf brightness slider — drag-to-set + tap toggles the panels' :
           'audio mixer slider — drag-to-set-volume + tap-to-mute'
         }
       </div>

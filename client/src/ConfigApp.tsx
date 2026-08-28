@@ -55,7 +55,7 @@ export function ConfigApp() {
       return next;
     });
   }
-  const [integrationStatus, setIntegrationStatus] = useState<{ obs: boolean; twitch: boolean; streamlabs: boolean; kick: boolean; discord: boolean; spotify: boolean; spotifyPremium: boolean; hue: boolean; homeassistant: boolean; openrgb: boolean }>({
+  const [integrationStatus, setIntegrationStatus] = useState<{ obs: boolean; twitch: boolean; streamlabs: boolean; kick: boolean; discord: boolean; spotify: boolean; spotifyPremium: boolean; hue: boolean; homeassistant: boolean; openrgb: boolean; nanoleaf: boolean }>({
     obs: false,
     twitch: false,
     streamlabs: false,
@@ -66,6 +66,7 @@ export function ConfigApp() {
     hue: false,
     homeassistant: false,
     openrgb: false,
+    nanoleaf: false,
   });
   const importInputRef = useRef<HTMLInputElement>(null);
 
@@ -75,7 +76,7 @@ export function ConfigApp() {
     let alive = true;
     async function load() {
       try {
-        const [obs, twitch, streamlabs, kick, discord, spotify, hue, homeassistant, openrgb] = await Promise.all([
+        const [obs, twitch, streamlabs, kick, discord, spotify, hue, homeassistant, openrgb, nanoleaf] = await Promise.all([
           api.getObsState().catch(() => null),
           api.getTwitchState().catch(() => null),
           api.getStreamlabsState().catch(() => null),
@@ -85,6 +86,7 @@ export function ConfigApp() {
           api.getHueState().catch(() => null),
           api.getHomeAssistantState().catch(() => null),
           api.getOpenRgbState().catch(() => null),
+          api.getNanoleafState().catch(() => null),
         ]);
         if (!alive) return;
         setIntegrationStatus({
@@ -98,6 +100,7 @@ export function ConfigApp() {
           hue: !!hue?.config.enabled,
           homeassistant: !!homeassistant?.config.enabled,
           openrgb: !!openrgb?.config.enabled,
+          nanoleaf: !!nanoleaf?.config.enabled,
         });
       } catch { /* harmless */ }
     }

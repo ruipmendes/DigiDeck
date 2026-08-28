@@ -54,6 +54,7 @@ If you see no label, assume **PowerShell or cmd** is fine.
 | Philips Hue bridge | Hue scene / room / light tiles + brightness sliders | Any Hue bridge on your LAN. No developer app or account. Press the link button once to grant access. |
 | Home Assistant instance | Everything HA can reach — lights / switches / scenes / scripts / automations / media players / covers / climate. Bridges to Zigbee, Z-Wave, Matter, Tapo, LIFX, Sonos, cameras, custom automations, ... | Any HA install. Paste URL + create a Long-Lived Access Token in your HA profile. |
 | OpenRGB | Asus Aura + MSI Mystic Light + Gigabyte RGB Fusion + Corsair iCUE + Razer Chroma + HyperX + everything else OpenRGB drives (~500 devices) | Free portable app — [openrgb.org](https://openrgb.org). Enable SDK Server in its settings. |
+| Nanoleaf | Shapes / Elements / Lines / Canvas panels + Essentials bulbs — power, brightness, effect switching | Any Nanoleaf controller on your LAN. Grab its IP from the Nanoleaf app, press the controller button once to link. |
 | Firefox | Pretty desktop-shortcut behaviour | `start.ps1` opens config in Firefox if installed; otherwise uses your default browser. |
 
 ### Not required
@@ -553,6 +554,25 @@ Digi Deck verifies via `GET /api/`, then pulls `/api/states` and enumerates enti
 **Live tile state.** Toggle-shaped tiles light up when their target is "on" in HA's sense (state=`on` for lights/switches, `playing` for media_player, `open` for cover, etc.). Scene / script / automation tiles are fire-and-forget and stay neutral.
 
 **No cloud round-trip.** All traffic is direct to your HA instance — Digi Deck never talks to Nabu Casa or any HA cloud endpoint. If your HA is on a different network from your PC, you'll need Nabu Casa Remote or a reverse proxy, and the URL you paste is whichever hostname reaches HA from your PC.
+
+---
+
+## Nanoleaf integration
+
+Direct control of Nanoleaf panels (Shapes, Elements, Lines, Canvas, Essentials bulbs) over the controller's local HTTP Open API. Plain HTTP on LAN, no cloud round-trip. Same "IP + link button" setup shape as Hue.
+
+One-time setup:
+
+1. In the Nanoleaf mobile app: *Settings → My Nanoleaf → your device → IP address*. Copy it.
+2. In Digi Deck's config UI → **Nanoleaf** card → expand → paste the IP → *Save IP*.
+3. Hold the power button on the controller for 5–7 seconds until the LED starts flashing (pairing mode).
+4. Click *Link controller* in Digi Deck within 30 seconds. The controller issues an application token that Digi Deck stores locally.
+
+Action ops: **Toggle panels** (lights up when panels are currently on), **Turn panels on / off**, **Activate effect** (pick from the list of saved effects — populated live from the controller), **Identify** (brief pulse — useful for verifying the right controller if you have several).
+
+**Slider provider** *Nanoleaf* drives brightness 0–100; tap toggles the panels on/off. Sliding to 0 turns the panels off entirely (Nanoleaf treats brightness 0 as "still on but black", which is rarely what a user wants — Digi Deck flips power off instead).
+
+Live state polls the controller every 5 s so external changes (Nanoleaf app, physical remote, rhythm reacting to music) push back to the tile's active pip.
 
 ---
 

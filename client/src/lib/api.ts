@@ -733,6 +733,73 @@ export async function reconnectOpenRgb(): Promise<OpenRgbState_API> {
   return res.json();
 }
 
+// ─── Nanoleaf ───────────────────────────────────────────────────
+
+export type NanoleafState =
+  | 'disabled' | 'not-configured' | 'needs-auth'
+  | 'connecting' | 'connected' | 'error';
+
+export type NanoleafStatus = {
+  state: NanoleafState;
+  error?: string;
+  host?: string;
+  name?: string;
+  isOn?: boolean;
+  brightness?: number;
+  currentEffect?: string;
+  effects?: string[];
+  panelCount?: number;
+  firmwareVersion?: string;
+};
+
+export type NanoleafPublicConfig = {
+  enabled: boolean;
+  host: string;
+  hasAuthToken: boolean;
+};
+
+export type NanoleafState_API = { config: NanoleafPublicConfig; status: NanoleafStatus };
+
+export async function getNanoleafState(): Promise<NanoleafState_API> {
+  const res = await apiFetch('/api/integrations/nanoleaf');
+  if (!res.ok) throw new Error(`GET nanoleaf failed: ${res.status}`);
+  return res.json();
+}
+
+export async function putNanoleafConfig(c: { enabled: boolean; host: string }): Promise<NanoleafState_API> {
+  const res = await apiFetch('/api/integrations/nanoleaf/config', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(c),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(body || `PUT nanoleaf config failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function connectNanoleaf(): Promise<NanoleafState_API> {
+  const res = await apiFetch('/api/integrations/nanoleaf/connect', { method: 'POST' });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(body || `Nanoleaf connect failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function disconnectNanoleaf(): Promise<NanoleafState_API> {
+  const res = await apiFetch('/api/integrations/nanoleaf/disconnect', { method: 'POST' });
+  if (!res.ok) throw new Error(`Nanoleaf disconnect failed: ${res.status}`);
+  return res.json();
+}
+
+export async function reconnectNanoleaf(): Promise<NanoleafState_API> {
+  const res = await apiFetch('/api/integrations/nanoleaf/reconnect', { method: 'POST' });
+  if (!res.ok) throw new Error(`Nanoleaf reconnect failed: ${res.status}`);
+  return res.json();
+}
+
 // ─── Discord ────────────────────────────────────────────────────
 
 export type DiscordState =

@@ -10,6 +10,7 @@ import { SpotifyPanel } from './SpotifyPanel';
 import { HuePanel } from './HuePanel';
 import { HomeAssistantPanel } from './HomeAssistantPanel';
 import { OpenRgbPanel } from './OpenRgbPanel';
+import { NanoleafPanel } from './NanoleafPanel';
 
 type StatusKind = 'connected' | 'connecting' | 'disconnected' | 'error' | 'disabled' | 'needs-auth' | 'not-configured';
 
@@ -23,6 +24,7 @@ type Summary = {
   hue:        { enabled: boolean; state: StatusKind };
   homeassistant: { enabled: boolean; state: StatusKind };
   openrgb:    { enabled: boolean; state: StatusKind };
+  nanoleaf:   { enabled: boolean; state: StatusKind };
 };
 
 const DEFAULT_SUMMARY: Summary = {
@@ -35,6 +37,7 @@ const DEFAULT_SUMMARY: Summary = {
   hue:        { enabled: false, state: 'disabled' },
   homeassistant: { enabled: false, state: 'disabled' },
   openrgb:    { enabled: false, state: 'disabled' },
+  nanoleaf:   { enabled: false, state: 'disabled' },
 };
 
 /**
@@ -54,7 +57,7 @@ export function IntegrationsPanel() {
     let alive = true;
     async function load() {
       try {
-        const [obs, sl, tw, kk, dc, sp, hu, ha, org] = await Promise.all([
+        const [obs, sl, tw, kk, dc, sp, hu, ha, org, nl] = await Promise.all([
           api.getObsState().catch(() => null),
           api.getStreamlabsState().catch(() => null),
           api.getTwitchState().catch(() => null),
@@ -64,6 +67,7 @@ export function IntegrationsPanel() {
           api.getHueState().catch(() => null),
           api.getHomeAssistantState().catch(() => null),
           api.getOpenRgbState().catch(() => null),
+          api.getNanoleafState().catch(() => null),
         ]);
         if (!alive) return;
         setSummary({
@@ -76,6 +80,7 @@ export function IntegrationsPanel() {
           hue:        { enabled: !!hu?.config.enabled,  state: (hu?.status.state  as StatusKind) ?? 'disabled' },
           homeassistant: { enabled: !!ha?.config.enabled, state: (ha?.status.state as StatusKind) ?? 'disabled' },
           openrgb:    { enabled: !!org?.config.enabled, state: (org?.status.state as StatusKind) ?? 'disabled' },
+          nanoleaf:   { enabled: !!nl?.config.enabled,  state: (nl?.status.state  as StatusKind) ?? 'disabled' },
         });
       } catch { /* harmless */ }
     }
@@ -116,6 +121,7 @@ export function IntegrationsPanel() {
           <Pill name="Hue"        s={summary.hue} />
           <Pill name="Home Asst"  s={summary.homeassistant} />
           <Pill name="OpenRGB"    s={summary.openrgb} />
+          <Pill name="Nanoleaf"   s={summary.nanoleaf} />
         </span>
       </button>
 
@@ -130,6 +136,7 @@ export function IntegrationsPanel() {
           <HuePanel />
           <HomeAssistantPanel />
           <OpenRgbPanel />
+          <NanoleafPanel />
         </div>
       )}
     </div>

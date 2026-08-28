@@ -172,6 +172,17 @@ export const TILE_PRESETS: TilePreset[] = [
     keywords: 'hue philips light bulb brightness dim slider individual',
     create: (id) => ({ kind: 'slider', id, label: 'Light', provider: 'hue', inputName: 'light:' }) },
 
+  // ─── Nanoleaf ───────────────────────────────────────
+  { key: 'nanoleaf-toggle', category: 'Nanoleaf', label: 'Toggle Nanoleaf panels', hint: 'Lights up when panels are currently on', iconName: 'zap',
+    keywords: 'nanoleaf panels toggle power on off',
+    create: (id) => ({ kind: 'button', id, label: 'Panels', icon: 'zap', action: { type: 'nanoleaf', op: 'power-toggle' } }) },
+  { key: 'nanoleaf-effect', category: 'Nanoleaf', label: 'Activate Nanoleaf effect', hint: 'Pick a saved effect in the editor', iconName: 'star',
+    keywords: 'nanoleaf effect scene color activate',
+    create: (id) => ({ kind: 'button', id, label: 'Effect', icon: 'star', action: { type: 'nanoleaf', op: 'effect-select', params: {} } }) },
+  { key: 'nanoleaf-slider', category: 'Nanoleaf', label: 'Nanoleaf brightness slider', hint: 'Drag to dim panels; tap to toggle power', iconName: 'sun',
+    keywords: 'nanoleaf brightness slider dim panels',
+    create: (id) => ({ kind: 'slider', id, label: 'Panels', provider: 'nanoleaf', inputName: 'brightness' }) },
+
   // ─── OpenRGB ────────────────────────────────────────
   { key: 'openrgb-profile', category: 'OpenRGB', label: 'Load RGB profile', hint: 'Activate a saved OpenRGB profile (Aura / MSI / Corsair / …)', iconName: 'zap',
     keywords: 'openrgb rgb aura mystic light chroma icue profile scene mood',
