@@ -216,7 +216,7 @@ export function HuePanel() {
             </div>
           )}
 
-          {state !== 'disabled' && state !== 'not-configured' && (
+          {state !== 'disabled' && (
             <button
               onClick={toggleEnabled}
               disabled={busy}

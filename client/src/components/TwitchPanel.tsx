@@ -216,7 +216,7 @@ export function TwitchPanel() {
             </details>
           )}
 
-          {state !== 'disabled' && state !== 'not-configured' && (
+          {state !== 'disabled' && (
             <button
               onClick={toggleEnabled}
               disabled={busy}
