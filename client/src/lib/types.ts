@@ -13,7 +13,7 @@ export type ObsActionParams = { sceneName?: string; inputName?: string; sourceNa
 /** Which integrations are enabled at the current moment — used to gate action
  *  picker entries and slider providers on integration availability. */
 export type IntegrationStatus = {
-  obs: boolean; twitch: boolean; streamlabs: boolean; kick: boolean; discord: boolean; spotify: boolean; hue: boolean; homeassistant: boolean; openrgb: boolean; nanoleaf: boolean;
+  obs: boolean; twitch: boolean; streamlabs: boolean; kick: boolean; discord: boolean; spotify: boolean; hue: boolean; homeassistant: boolean; openrgb: boolean; nanoleaf: boolean; mixitup: boolean;
   /** True when the connected Spotify account has Premium. Used to gate playback
    *  control tiles — free-tier accounts get a lock icon instead of being able
    *  to pick play/pause/next/previous/volume. */
@@ -152,6 +152,24 @@ export type OpenRgbActionParams = { profileName?: string };
 export type NanoleafOp = 'power-on' | 'power-off' | 'power-toggle' | 'effect-select' | 'identify';
 export type NanoleafActionParams = { effectName?: string };
 
+export type MixItUpOp =
+  | 'run-command'
+  | 'enable-command' | 'disable-command' | 'toggle-command'
+  | 'chat-message' | 'chat-clear'
+  | 'counter-set' | 'counter-update' | 'counter-reset';
+
+export type MixItUpPlatform = 'Twitch' | 'YouTube' | 'Trovo' | 'Kick';
+
+export type MixItUpActionParams = {
+  commandId?: string;
+  arguments?: string;
+  ignoreRequirements?: boolean;
+  text?: string;
+  platform?: MixItUpPlatform;
+  counterName?: string;
+  counterValue?: number;
+};
+
 export type AppAudioOp = 'toggle-mute' | 'mute' | 'unmute' | 'set-volume';
 export type AppAudioActionParams = { appName?: string; volumePercent?: number };
 
@@ -173,6 +191,7 @@ export type Action =
   | { type: 'url'; url: string }
   | { type: 'script'; script: string }
   | { type: 'volume'; delta?: number; mute?: boolean }
+  | { type: 'sound'; path: string; volume?: number }
   | { type: 'mic'; op: MicOp }
   | { type: 'app-audio'; op: AppAudioOp; params?: AppAudioActionParams }
   | { type: 'obs'; op: ObsOp; params?: ObsActionParams }
@@ -187,6 +206,7 @@ export type Action =
   | { type: 'homeassistant'; op: HomeAssistantOp; params?: HomeAssistantActionParams }
   | { type: 'openrgb'; op: OpenRgbOp; params?: OpenRgbActionParams }
   | { type: 'nanoleaf'; op: NanoleafOp; params?: NanoleafActionParams }
+  | { type: 'mixitup'; op: MixItUpOp; text?: string; params?: MixItUpActionParams }
   | { type: 'goto-page'; pageId: number }
   | { type: 'wait'; ms: number };
 
@@ -324,6 +344,7 @@ export function defaultAction(type: ActionType): Action {
     case 'url':    return { type: 'url', url: '' };
     case 'script': return { type: 'script', script: '' };
     case 'volume': return { type: 'volume', delta: 2 };
+    case 'sound':  return { type: 'sound', path: '', volume: 0.8 };
     case 'mic':    return { type: 'mic', op: 'toggle-mute' };
     case 'app-audio': return { type: 'app-audio', op: 'toggle-mute' };
     case 'obs':    return { type: 'obs', op: 'toggle-record' };
@@ -338,6 +359,7 @@ export function defaultAction(type: ActionType): Action {
     case 'homeassistant': return { type: 'homeassistant', op: 'light-toggle', params: {} };
     case 'openrgb': return { type: 'openrgb', op: 'load-profile', params: {} };
     case 'nanoleaf': return { type: 'nanoleaf', op: 'power-toggle' };
+    case 'mixitup': return { type: 'mixitup', op: 'run-command', params: {} };
     case 'goto-page': return { type: 'goto-page', pageId: 0 };
     case 'wait': return { type: 'wait', ms: 200 };
   }

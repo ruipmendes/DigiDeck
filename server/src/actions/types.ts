@@ -4,6 +4,7 @@ import { execLaunch } from './launch.js';
 import { execUrl } from './url.js';
 import { execScript } from './script.js';
 import { execVolume } from './volume.js';
+import { execSound } from './sound.js';
 import { getObs } from '../integrations/obs.js';
 import type { ObsOp, ObsActionParams } from '../integrations/obs.js';
 import { getStreamlabs } from '../integrations/streamlabs.js';
@@ -24,6 +25,8 @@ import { getOpenRgb } from '../integrations/openrgb.js';
 import type { OpenRgbOp, OpenRgbActionParams } from '../integrations/openrgb.js';
 import { getNanoleaf } from '../integrations/nanoleaf.js';
 import type { NanoleafOp, NanoleafActionParams } from '../integrations/nanoleaf.js';
+import { getMixItUp } from '../integrations/mixitup.js';
+import type { MixItUpOp, MixItUpActionParams } from '../integrations/mixitup.js';
 import { getMic } from './mic.js';
 import type { MicOp } from './mic.js';
 import { getAppAudio } from './appAudio.js';
@@ -36,6 +39,7 @@ export type Action =
   | { type: 'url'; url: string }
   | { type: 'script'; script: string }
   | { type: 'volume'; delta?: number; mute?: boolean }
+  | { type: 'sound'; path: string; volume?: number }
   | { type: 'mic'; op: MicOp }
   | { type: 'app-audio'; op: AppAudioOp; params?: AppAudioActionParams }
   | { type: 'obs'; op: ObsOp; params?: ObsActionParams }
@@ -50,6 +54,7 @@ export type Action =
   | { type: 'homeassistant'; op: HomeAssistantOp; params?: HomeAssistantActionParams }
   | { type: 'openrgb'; op: OpenRgbOp; params?: OpenRgbActionParams }
   | { type: 'nanoleaf'; op: NanoleafOp; params?: NanoleafActionParams }
+  | { type: 'mixitup'; op: MixItUpOp; text?: string; params?: MixItUpActionParams }
   | { type: 'goto-page'; pageId: number }
   | { type: 'wait'; ms: number };
 
@@ -78,6 +83,7 @@ async function executeStep(step: Action): Promise<void> {
       }
       return execScript(step.script);
     case 'volume': return execVolume({ delta: step.delta, mute: step.mute });
+    case 'sound':  return execSound({ path: step.path, volume: step.volume });
     case 'mic':    return getMic().execute(step.op);
     case 'app-audio': return getAppAudio().execute(step.op, step.params);
     case 'obs':    return getObs().execute(step.op, step.params);
@@ -96,6 +102,7 @@ async function executeStep(step: Action): Promise<void> {
     case 'homeassistant': return getHomeAssistant().execute(step.op, step.params);
     case 'openrgb': return getOpenRgb().execute(step.op, step.params);
     case 'nanoleaf': return getNanoleaf().execute(step.op, step.params);
+    case 'mixitup': return getMixItUp().execute(step.op, { ...step.params, text: step.text ?? step.params?.text });
     case 'goto-page':
       // Navigation is handled entirely on the phone — server has nothing to do.
       return;

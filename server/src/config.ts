@@ -11,6 +11,7 @@ import { DEFAULT_HUE_CONFIG, type HueConfig } from './integrations/hue.js';
 import { DEFAULT_HOMEASSISTANT_CONFIG, type HomeAssistantConfig } from './integrations/homeassistant.js';
 import { DEFAULT_OPENRGB_CONFIG, type OpenRgbConfig } from './integrations/openrgb.js';
 import { DEFAULT_NANOLEAF_CONFIG, type NanoleafConfig } from './integrations/nanoleaf.js';
+import { DEFAULT_MIXITUP_CONFIG, type MixItUpConfig } from './integrations/mixitup.js';
 // scaffold-integration: additional imports inserted above this line
 
 const APP_DIR = join(
@@ -30,6 +31,7 @@ export type IntegrationsConfig = {
   homeassistant: HomeAssistantConfig;
   openrgb: OpenRgbConfig;
   nanoleaf: NanoleafConfig;
+  mixitup: MixItUpConfig;
   // scaffold-integration: additional fields inserted above this line
 };
 
@@ -76,6 +78,7 @@ function withDefaults(parsed: Partial<ServerConfig> | null | undefined): ServerC
       homeassistant: { ...DEFAULT_HOMEASSISTANT_CONFIG, ...parsed?.integrations?.homeassistant },
       openrgb:    { ...DEFAULT_OPENRGB_CONFIG,    ...parsed?.integrations?.openrgb },
       nanoleaf:   { ...DEFAULT_NANOLEAF_CONFIG,   ...parsed?.integrations?.nanoleaf },
+      mixitup:    { ...DEFAULT_MIXITUP_CONFIG,    ...parsed?.integrations?.mixitup },
       // scaffold-integration: additional defaults inserted above this line
     },
     security: {

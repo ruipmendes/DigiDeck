@@ -55,7 +55,7 @@ export function ConfigApp() {
       return next;
     });
   }
-  const [integrationStatus, setIntegrationStatus] = useState<{ obs: boolean; twitch: boolean; streamlabs: boolean; kick: boolean; discord: boolean; spotify: boolean; spotifyPremium: boolean; hue: boolean; homeassistant: boolean; openrgb: boolean; nanoleaf: boolean }>({
+  const [integrationStatus, setIntegrationStatus] = useState<{ obs: boolean; twitch: boolean; streamlabs: boolean; kick: boolean; discord: boolean; spotify: boolean; spotifyPremium: boolean; hue: boolean; homeassistant: boolean; openrgb: boolean; nanoleaf: boolean; mixitup: boolean }>({
     obs: false,
     twitch: false,
     streamlabs: false,
@@ -67,6 +67,7 @@ export function ConfigApp() {
     homeassistant: false,
     openrgb: false,
     nanoleaf: false,
+    mixitup: false,
   });
   const importInputRef = useRef<HTMLInputElement>(null);
 
@@ -76,7 +77,7 @@ export function ConfigApp() {
     let alive = true;
     async function load() {
       try {
-        const [obs, twitch, streamlabs, kick, discord, spotify, hue, homeassistant, openrgb, nanoleaf] = await Promise.all([
+        const [obs, twitch, streamlabs, kick, discord, spotify, hue, homeassistant, openrgb, nanoleaf, mixitup] = await Promise.all([
           api.getObsState().catch(() => null),
           api.getTwitchState().catch(() => null),
           api.getStreamlabsState().catch(() => null),
@@ -87,6 +88,7 @@ export function ConfigApp() {
           api.getHomeAssistantState().catch(() => null),
           api.getOpenRgbState().catch(() => null),
           api.getNanoleafState().catch(() => null),
+          api.getMixItUpState().catch(() => null),
         ]);
         if (!alive) return;
         setIntegrationStatus({
@@ -101,6 +103,7 @@ export function ConfigApp() {
           homeassistant: !!homeassistant?.config.enabled,
           openrgb: !!openrgb?.config.enabled,
           nanoleaf: !!nanoleaf?.config.enabled,
+          mixitup: !!mixitup?.config.enabled,
         });
       } catch { /* harmless */ }
     }

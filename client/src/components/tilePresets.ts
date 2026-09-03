@@ -183,6 +183,28 @@ export const TILE_PRESETS: TilePreset[] = [
     keywords: 'nanoleaf brightness slider dim panels',
     create: (id) => ({ kind: 'slider', id, label: 'Panels', provider: 'nanoleaf', inputName: 'brightness' }) },
 
+  // ─── Soundboard ─────────────────────────────────────
+  { key: 'sound-clip', category: 'Soundboard', label: 'Play a sound clip', hint: 'Pick an audio file in the editor; sets a memorable 80% default volume', iconName: 'music',
+    keywords: 'sound audio clip soundboard sfx meme stinger alert play',
+    create: (id) => ({ kind: 'button', id, label: 'Sound', icon: 'music', action: { type: 'sound', path: '', volume: 0.8 } }) },
+
+  // ─── Mix It Up ──────────────────────────────────────
+  { key: 'miu-run-command', category: 'Mix It Up', label: 'MIU: Run command', hint: 'Fire any Mix It Up command from a tile', iconName: 'zap',
+    keywords: 'mix it up miu bot command run trigger fire',
+    create: (id) => ({ kind: 'button', id, label: 'Command', icon: 'zap', action: { type: 'mixitup', op: 'run-command', params: {} } }) },
+  { key: 'miu-toggle-command', category: 'Mix It Up', label: 'MIU: Toggle command', hint: 'Enable/disable a command or timer; tile lights when active', iconName: 'zap',
+    keywords: 'mix it up miu bot command timer toggle enable disable',
+    create: (id) => ({ kind: 'button', id, label: 'Toggle', icon: 'zap', action: { type: 'mixitup', op: 'toggle-command', params: {} } }) },
+  { key: 'miu-chat', category: 'Mix It Up', label: 'MIU: Send chat message', hint: 'Multi-platform chat via MIU', iconName: 'message-circle',
+    keywords: 'mix it up miu bot chat message send twitch youtube kick multiplatform',
+    create: (id) => ({ kind: 'button', id, label: 'Chat', icon: 'message-circle', action: { type: 'mixitup', op: 'chat-message', text: '' } }) },
+  { key: 'miu-counter-plus', category: 'Mix It Up', label: 'MIU: Counter +1', hint: 'Increment a MIU counter — great for a death counter', iconName: 'plus',
+    keywords: 'mix it up miu bot counter increment death hype +1',
+    create: (id) => ({ kind: 'button', id, label: 'Deaths', icon: 'plus', action: { type: 'mixitup', op: 'counter-update', params: { counterValue: 1 } } }) },
+  { key: 'miu-counter-reset', category: 'Mix It Up', label: 'MIU: Reset counter', iconName: 'refresh-ccw',
+    keywords: 'mix it up miu bot counter reset zero',
+    create: (id) => ({ kind: 'button', id, label: 'Reset', icon: 'refresh-ccw', action: { type: 'mixitup', op: 'counter-reset', params: {} } }) },
+
   // ─── OpenRGB ────────────────────────────────────────
   { key: 'openrgb-profile', category: 'OpenRGB', label: 'Load RGB profile', hint: 'Activate a saved OpenRGB profile (Aura / MSI / Corsair / …)', iconName: 'zap',
     keywords: 'openrgb rgb aura mystic light chroma icue profile scene mood',

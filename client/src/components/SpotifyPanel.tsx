@@ -3,12 +3,12 @@ import { Music, RefreshCw, ChevronDown, ChevronRight, ExternalLink, Lock } from 
 import * as api from '../lib/api';
 import type { SpotifyPublicConfig, SpotifyStatus } from '../lib/api';
 
-export function SpotifyPanel() {
+export function SpotifyPanel({ alwaysOpen = false }: { alwaysOpen?: boolean } = {}) {
   const [config, setConfig] = useState<SpotifyPublicConfig | null>(null);
   const [status, setStatus] = useState<SpotifyStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(alwaysOpen);
   const [clientIdDraft, setClientIdDraft] = useState('');
 
   async function refresh() {
@@ -117,14 +117,14 @@ export function SpotifyPanel() {
   return (
     <div style={{ background: '#111827', border: '1px solid #1f2937', borderRadius: 10, padding: 14 }}>
       <button
-        onClick={() => setExpanded((e) => !e)}
+        onClick={alwaysOpen ? undefined : () => setExpanded((e) => !e)}
         style={{
           display: 'flex', alignItems: 'center', gap: 10,
           width: '100%', background: 'transparent', border: 0, color: '#fff',
           padding: 0, cursor: 'pointer', textAlign: 'left',
         }}
       >
-        {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+        {!alwaysOpen && (expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />)}
         <Music size={18} style={{ color: '#1db954' }} />
         <strong>Spotify</strong>
         <StatusBadge state={state} />
@@ -162,7 +162,7 @@ export function SpotifyPanel() {
                   )}
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
                     <span style={{ fontSize: 13, color: '#fff' }}>
-                      {status.isPlaying ? '▶︎ ' : '⏸ '}{status.track}
+                      {status.isPlaying ? 'â–¶ï¸Ž ' : 'â¸ '}{status.track}
                     </span>
                     <span style={{ fontSize: 12, color: '#9ca3af' }}>{status.artist}</span>
                     {status.deviceName && (
@@ -268,12 +268,12 @@ export function SpotifyPanel() {
 
 function StatusBadge({ state }: { state?: string }) {
   const map: Record<string, { color: string; label: string }> = {
-    connected:        { color: '#22c55e', label: '● connected' },
-    connecting:       { color: '#eab308', label: '○ connecting' },
-    error:            { color: '#ef4444', label: '× error' },
-    disabled:         { color: '#6b7280', label: '○ disabled' },
-    'not-configured': { color: '#6b7280', label: '○ needs setup' },
-    'needs-auth':     { color: '#eab308', label: '○ needs auth' },
+    connected:        { color: '#22c55e', label: 'â— connected' },
+    connecting:       { color: '#eab308', label: 'â—‹ connecting' },
+    error:            { color: '#ef4444', label: 'Ã— error' },
+    disabled:         { color: '#6b7280', label: 'â—‹ disabled' },
+    'not-configured': { color: '#6b7280', label: 'â—‹ needs setup' },
+    'needs-auth':     { color: '#eab308', label: 'â—‹ needs auth' },
   };
   const m = map[state ?? ''] ?? { color: '#fff', label: state ?? '?' };
   return <span style={{ fontSize: 12, color: m.color }}>{m.label}</span>;

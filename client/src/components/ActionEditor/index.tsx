@@ -32,6 +32,7 @@ import { HueBody } from './HueBody';
 import { HomeAssistantBody } from './HomeAssistantBody';
 import { OpenRgbBody } from './OpenRgbBody';
 import { NanoleafBody } from './NanoleafBody';
+import { MixItUpBody } from './MixItUpBody';
 
 export type { IntegrationStatus };
 
@@ -287,6 +288,40 @@ function Body({ action, onChange, pages }: StepEditorProps) {
           style={{ ...inputStyle, fontFamily: 'monospace', resize: 'vertical' }}
         />
       );
+    case 'sound': {
+      const volumePercent = Math.round((action.volume ?? 1) * 100);
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <input
+              value={action.path}
+              onChange={(e) => onChange({ ...action, path: e.target.value })}
+              placeholder="audio file path (mp3, wav, ogg…)"
+              style={{ ...inputStyle, flex: 1 }}
+              spellCheck={false}
+            />
+            <BrowseFileButton
+              onPicked={(p) => onChange({ ...action, path: p })}
+            />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <label style={{ fontSize: 12, color: '#9ca3af', minWidth: 60 }}>volume</label>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={volumePercent}
+              onChange={(e) => onChange({ ...action, volume: Number(e.target.value) / 100 })}
+              style={{ flex: 1 }}
+            />
+            <span style={{ fontSize: 12, color: '#e5e7eb', minWidth: 36, textAlign: 'right' }}>{volumePercent}%</span>
+          </div>
+          <span style={{ fontSize: 11, color: '#6b7280' }}>
+            Plays through your PC's default audio output — route it to a virtual cable (VoiceMeeter / VB-Cable) to send to OBS. File paths are read at press time; move a file and the tile breaks like any other launch action.
+          </span>
+        </div>
+      );
+    }
     case 'volume': {
       const mode: 'up' | 'down' | 'mute' =
         action.mute ? 'mute' : (action.delta ?? 0) >= 0 ? 'up' : 'down';
@@ -371,6 +406,7 @@ function Body({ action, onChange, pages }: StepEditorProps) {
     case 'homeassistant': return <HomeAssistantBody action={action} onChange={onChange} />;
     case 'openrgb':    return <OpenRgbBody action={action} onChange={onChange} />;
     case 'nanoleaf':   return <NanoleafBody action={action} onChange={onChange} />;
+    case 'mixitup':    return <MixItUpBody action={action} onChange={onChange} />;
     case 'kick-streamer':
       return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>

@@ -4,12 +4,12 @@ import * as api from '../lib/api';
 import type { ObsConfig, ObsStatus } from '../lib/api';
 import { friendlyError } from '../lib/errors';
 
-export function ObsPanel() {
+export function ObsPanel({ alwaysOpen = false }: { alwaysOpen?: boolean } = {}) {
   const [config, setConfig] = useState<ObsConfig | null>(null);
   const [status, setStatus] = useState<ObsStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(alwaysOpen);
 
   async function refresh() {
     try {
@@ -84,7 +84,7 @@ export function ObsPanel() {
       {/* Header: keep the expand toggle as the surrounding click target, but use a div so
           we can nest an interactive "retry" button inside it without invalid <button>-in-<button>. */}
       <div
-        onClick={() => setExpanded((e) => !e)}
+        onClick={alwaysOpen ? undefined : () => setExpanded((e) => !e)}
         role="button"
         tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setExpanded((p) => !p); }}
@@ -94,7 +94,7 @@ export function ObsPanel() {
           cursor: 'pointer', userSelect: 'none',
         }}
       >
-        {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+        {!alwaysOpen && (expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />)}
         <Video size={18} />
         <strong>OBS Studio</strong>
         <StatusBadge state={status?.state} />
@@ -208,11 +208,11 @@ export function ObsPanel() {
 
 function StatusBadge({ state }: { state?: string }) {
   const map: Record<string, { color: string; label: string }> = {
-    connected:    { color: '#22c55e', label: '● connected' },
-    connecting:   { color: '#eab308', label: '○ connecting' },
-    disconnected: { color: '#9ca3af', label: '× disconnected' },
-    error:        { color: '#ef4444', label: '× error' },
-    disabled:     { color: '#6b7280', label: '○ disabled' },
+    connected:    { color: '#22c55e', label: 'â— connected' },
+    connecting:   { color: '#eab308', label: 'â—‹ connecting' },
+    disconnected: { color: '#9ca3af', label: 'Ã— disconnected' },
+    error:        { color: '#ef4444', label: 'Ã— error' },
+    disabled:     { color: '#6b7280', label: 'â—‹ disabled' },
   };
   const m = map[state ?? ''] ?? { color: '#fff', label: state ?? '?' };
   return <span style={{ fontSize: 12, color: m.color }}>{m.label}</span>;

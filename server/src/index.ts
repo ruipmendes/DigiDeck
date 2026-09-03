@@ -24,6 +24,7 @@ import { getHue } from './integrations/hue.js';
 import { getHomeAssistant } from './integrations/homeassistant.js';
 import { getOpenRgb } from './integrations/openrgb.js';
 import { getNanoleaf } from './integrations/nanoleaf.js';
+import { getMixItUp } from './integrations/mixitup.js';
 import { getAppAudio } from './actions/appAudio.js';
 import { ensureIconPacksDir } from './icon-packs.js';
 import { getSystemMetrics } from './system-metrics.js';
@@ -134,6 +135,7 @@ const hue = getHue();
 const homeassistant = getHomeAssistant();
 getOpenRgb(); // registered via getter; no local ref needed (no state broadcasts consume it)
 const nanoleaf = getNanoleaf();
+getMixItUp(); // registered via getter; no local ref needed (no slider dispatch, no live-meta consumer)
 // scaffold-integration: additional singleton calls inserted above this line
 
 // Uniform lifecycle wiring — applyConfig / attachSave / start — so adding a

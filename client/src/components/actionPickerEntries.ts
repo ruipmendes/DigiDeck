@@ -49,6 +49,12 @@ const desktop: ActionPickerEntry[] = [
     create: () => ({ type: 'script', script: '' }) },
 ];
 
+const soundboard: ActionPickerEntry[] = [
+  { key: 'sound',   category: 'Audio', label: 'Play sound file',    hint: 'Soundboard-style — MP3/WAV/OGG at per-clip volume', iconName: 'music',
+    keywords: 'sound audio play soundboard sfx clip mp3 wav ogg meme stinger alert',
+    create: () => ({ type: 'sound', path: '', volume: 0.8 }) },
+];
+
 const audio: ActionPickerEntry[] = [
   { key: 'volume:up',    category: 'Audio', label: 'Volume up',   iconName: 'volume-2', keywords: 'volume up louder raise increase speaker system',
     create: () => ({ type: 'volume', delta: 2 }) },
@@ -238,6 +244,36 @@ const nanoleafEntries: ActionPickerEntry[] = [
     create: () => ({ type: 'nanoleaf', op: 'identify' }) },
 ];
 
+const mixItUpEntries: ActionPickerEntry[] = [
+  { key: 'mixitup:run-command', category: 'Mix It Up', label: 'Run Mix It Up command', hint: 'Pick a MIU command (any type — chat, event, timer)', iconName: 'zap',
+    keywords: 'mix it up miu bot command run trigger fire chat timer event', requires: 'mixitup',
+    create: () => ({ type: 'mixitup', op: 'run-command', params: {} }) },
+  { key: 'mixitup:toggle-command', category: 'Mix It Up', label: 'Toggle command on/off', hint: 'Enable or disable a command; tile lights when it\'s currently enabled', iconName: 'zap',
+    keywords: 'mix it up miu bot command toggle enable disable timer', requires: 'mixitup',
+    create: () => ({ type: 'mixitup', op: 'toggle-command', params: {} }) },
+  { key: 'mixitup:enable-command', category: 'Mix It Up', label: 'Enable command', iconName: 'zap',
+    keywords: 'mix it up miu bot command enable on turn', requires: 'mixitup',
+    create: () => ({ type: 'mixitup', op: 'enable-command', params: {} }) },
+  { key: 'mixitup:disable-command', category: 'Mix It Up', label: 'Disable command', iconName: 'zap',
+    keywords: 'mix it up miu bot command disable off turn', requires: 'mixitup',
+    create: () => ({ type: 'mixitup', op: 'disable-command', params: {} }) },
+  { key: 'mixitup:chat-message', category: 'Mix It Up', label: 'Chat message (all platforms)', hint: 'Send via MIU — reaches Twitch/YouTube/Trovo/Kick together', iconName: 'message-circle',
+    keywords: 'mix it up miu bot chat message send twitch youtube kick trovo multiplatform', requires: 'mixitup',
+    create: () => ({ type: 'mixitup', op: 'chat-message', text: '' }) },
+  { key: 'mixitup:chat-clear', category: 'Mix It Up', label: 'Clear chat', hint: 'Clears every connected platform', iconName: 'x',
+    keywords: 'mix it up miu bot chat clear moderation', requires: 'mixitup',
+    create: () => ({ type: 'mixitup', op: 'chat-clear' }) },
+  { key: 'mixitup:counter-update', category: 'Mix It Up', label: 'Adjust counter (+/-)', hint: 'Add or subtract from a MIU counter (death counter, etc.)', iconName: 'plus',
+    keywords: 'mix it up miu bot counter increment adjust death hype', requires: 'mixitup',
+    create: () => ({ type: 'mixitup', op: 'counter-update', params: { counterValue: 1 } }) },
+  { key: 'mixitup:counter-set', category: 'Mix It Up', label: 'Set counter to value', iconName: 'settings',
+    keywords: 'mix it up miu bot counter set value', requires: 'mixitup',
+    create: () => ({ type: 'mixitup', op: 'counter-set', params: { counterValue: 0 } }) },
+  { key: 'mixitup:counter-reset', category: 'Mix It Up', label: 'Reset counter to zero', iconName: 'refresh-ccw',
+    keywords: 'mix it up miu bot counter reset zero', requires: 'mixitup',
+    create: () => ({ type: 'mixitup', op: 'counter-reset', params: {} }) },
+];
+
 const openRgbEntries: ActionPickerEntry[] = [
   { key: 'openrgb:load-profile', category: 'OpenRGB', label: 'Load RGB profile', hint: 'Pick a saved OpenRGB profile in the editor', iconName: 'zap',
     keywords: 'openrgb rgb aura mystic light chroma icue profile scene mood gaming streaming', requires: 'openrgb',
@@ -320,6 +356,7 @@ const flow: ActionPickerEntry[] = [
 
 export const ACTION_PICKER_ENTRIES: ActionPickerEntry[] = [
   ...desktop,
+  ...soundboard,
   ...audio,
   ...obsEntries,
   ...streamlabsEntries,
@@ -331,6 +368,7 @@ export const ACTION_PICKER_ENTRIES: ActionPickerEntry[] = [
   ...homeAssistantEntries,
   ...openRgbEntries,
   ...nanoleafEntries,
+  ...mixItUpEntries,
   ...flow,
 ];
 

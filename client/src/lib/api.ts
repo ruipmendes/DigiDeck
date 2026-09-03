@@ -800,6 +800,68 @@ export async function reconnectNanoleaf(): Promise<NanoleafState_API> {
   return res.json();
 }
 
+// ─── Mix It Up ──────────────────────────────────────────────────
+
+export type MixItUpState =
+  | 'disabled' | 'not-configured'
+  | 'connecting' | 'connected' | 'disconnected' | 'error';
+
+export type MixItUpCommand = {
+  id: string;
+  name: string;
+  type?: string;
+  group?: string;
+  enabled?: boolean;
+};
+
+export type MixItUpCounter = {
+  name: string;
+  amount: number;
+};
+
+export type MixItUpStatus = {
+  state: MixItUpState;
+  error?: string;
+  host?: string;
+  port?: number;
+  version?: string;
+  commands?: MixItUpCommand[];
+  counters?: MixItUpCounter[];
+};
+
+export type MixItUpPublicConfig = {
+  enabled: boolean;
+  host: string;
+  port: number;
+};
+
+export type MixItUpState_API = { config: MixItUpPublicConfig; status: MixItUpStatus };
+
+export async function getMixItUpState(): Promise<MixItUpState_API> {
+  const res = await apiFetch('/api/integrations/mixitup');
+  if (!res.ok) throw new Error(`GET mixitup failed: ${res.status}`);
+  return res.json();
+}
+
+export async function putMixItUpConfig(c: { enabled: boolean; host: string; port: number }): Promise<MixItUpState_API> {
+  const res = await apiFetch('/api/integrations/mixitup/config', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(c),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(body || `PUT mixitup config failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function reconnectMixItUp(): Promise<MixItUpState_API> {
+  const res = await apiFetch('/api/integrations/mixitup/reconnect', { method: 'POST' });
+  if (!res.ok) throw new Error(`Mix It Up reconnect failed: ${res.status}`);
+  return res.json();
+}
+
 // ─── Discord ────────────────────────────────────────────────────
 
 export type DiscordState =

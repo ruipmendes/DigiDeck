@@ -3,12 +3,12 @@ import { MessageCircle, RefreshCw, ChevronDown, ChevronRight, ExternalLink } fro
 import * as api from '../lib/api';
 import type { TwitchPublicConfig, TwitchStatus } from '../lib/api';
 
-export function TwitchPanel() {
+export function TwitchPanel({ alwaysOpen = false }: { alwaysOpen?: boolean } = {}) {
   const [config, setConfig] = useState<TwitchPublicConfig | null>(null);
   const [status, setStatus] = useState<TwitchStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(alwaysOpen);
   const [clientIdDraft, setClientIdDraft] = useState('');
   const [clientSecretDraft, setClientSecretDraft] = useState('');
 
@@ -112,14 +112,14 @@ export function TwitchPanel() {
   return (
     <div style={{ background: '#111827', border: '1px solid #1f2937', borderRadius: 10, padding: 14 }}>
       <button
-        onClick={() => setExpanded((e) => !e)}
+        onClick={alwaysOpen ? undefined : () => setExpanded((e) => !e)}
         style={{
           display: 'flex', alignItems: 'center', gap: 10,
           width: '100%', background: 'transparent', border: 0, color: '#fff',
           padding: 0, cursor: 'pointer', textAlign: 'left',
         }}
       >
-        {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+        {!alwaysOpen && (expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />)}
         <MessageCircle size={18} style={{ color: '#a78bfa' }} />
         <strong>Twitch chat</strong>
         <StatusBadge state={state} />
@@ -238,13 +238,13 @@ export function TwitchPanel() {
 
 function StatusBadge({ state }: { state?: string }) {
   const map: Record<string, { color: string; label: string }> = {
-    connected:        { color: '#22c55e', label: '● connected' },
-    connecting:       { color: '#eab308', label: '○ connecting' },
-    disconnected:     { color: '#9ca3af', label: '× disconnected' },
-    error:            { color: '#ef4444', label: '× error' },
-    disabled:         { color: '#6b7280', label: '○ disabled' },
-    'not-configured': { color: '#6b7280', label: '○ needs setup' },
-    'needs-auth':     { color: '#eab308', label: '○ needs auth' },
+    connected:        { color: '#22c55e', label: 'â— connected' },
+    connecting:       { color: '#eab308', label: 'â—‹ connecting' },
+    disconnected:     { color: '#9ca3af', label: 'Ã— disconnected' },
+    error:            { color: '#ef4444', label: 'Ã— error' },
+    disabled:         { color: '#6b7280', label: 'â—‹ disabled' },
+    'not-configured': { color: '#6b7280', label: 'â—‹ needs setup' },
+    'needs-auth':     { color: '#eab308', label: 'â—‹ needs auth' },
   };
   const m = map[state ?? ''] ?? { color: '#fff', label: state ?? '?' };
   return <span style={{ fontSize: 12, color: m.color }}>{m.label}</span>;

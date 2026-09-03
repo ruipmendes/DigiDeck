@@ -3,12 +3,12 @@ import { HomeIcon, RefreshCw, ChevronDown, ChevronRight, ExternalLink } from 'lu
 import * as api from '../lib/api';
 import type { HomeAssistantPublicConfig, HomeAssistantStatus } from '../lib/api';
 
-export function HomeAssistantPanel() {
+export function HomeAssistantPanel({ alwaysOpen = false }: { alwaysOpen?: boolean } = {}) {
   const [config, setConfig] = useState<HomeAssistantPublicConfig | null>(null);
   const [status, setStatus] = useState<HomeAssistantStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(alwaysOpen);
   const [urlDraft, setUrlDraft] = useState('');
   const [tokenDraft, setTokenDraft] = useState('');
 
@@ -104,14 +104,14 @@ export function HomeAssistantPanel() {
   return (
     <div style={{ background: '#111827', border: '1px solid #1f2937', borderRadius: 10, padding: 14 }}>
       <button
-        onClick={() => setExpanded((e) => !e)}
+        onClick={alwaysOpen ? undefined : () => setExpanded((e) => !e)}
         style={{
           display: 'flex', alignItems: 'center', gap: 10,
           width: '100%', background: 'transparent', border: 0, color: '#fff',
           padding: 0, cursor: 'pointer', textAlign: 'left',
         }}
       >
-        {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+        {!alwaysOpen && (expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />)}
         <HomeIcon size={18} style={{ color: '#41bdf5' }} />
         <strong>Home Assistant</strong>
         <StatusBadge state={state} />
@@ -211,12 +211,12 @@ export function HomeAssistantPanel() {
 
 function StatusBadge({ state }: { state?: string }) {
   const map: Record<string, { color: string; label: string }> = {
-    connected:        { color: '#22c55e', label: '● connected' },
-    connecting:       { color: '#eab308', label: '○ connecting' },
-    error:            { color: '#ef4444', label: '× error' },
-    disabled:         { color: '#6b7280', label: '○ disabled' },
-    'not-configured': { color: '#6b7280', label: '○ needs URL' },
-    'needs-auth':     { color: '#eab308', label: '○ needs token' },
+    connected:        { color: '#22c55e', label: 'â— connected' },
+    connecting:       { color: '#eab308', label: 'â—‹ connecting' },
+    error:            { color: '#ef4444', label: 'Ã— error' },
+    disabled:         { color: '#6b7280', label: 'â—‹ disabled' },
+    'not-configured': { color: '#6b7280', label: 'â—‹ needs URL' },
+    'needs-auth':     { color: '#eab308', label: 'â—‹ needs token' },
   };
   const m = map[state ?? ''] ?? { color: '#fff', label: state ?? '?' };
   return <span style={{ fontSize: 12, color: m.color }}>{m.label}</span>;

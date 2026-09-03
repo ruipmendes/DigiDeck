@@ -3,12 +3,12 @@ import { Headphones, RefreshCw, ChevronDown, ChevronRight, Plug } from 'lucide-r
 import * as api from '../lib/api';
 import type { DiscordPublicConfig, DiscordStatus } from '../lib/api';
 
-export function DiscordPanel() {
+export function DiscordPanel({ alwaysOpen = false }: { alwaysOpen?: boolean } = {}) {
   const [config, setConfig] = useState<DiscordPublicConfig | null>(null);
   const [status, setStatus] = useState<DiscordStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(alwaysOpen);
   const [clientIdDraft, setClientIdDraft] = useState('');
   const [clientSecretDraft, setClientSecretDraft] = useState('');
   const [botTokenDraft, setBotTokenDraft] = useState('');
@@ -181,14 +181,14 @@ export function DiscordPanel() {
   return (
     <div style={{ background: '#111827', border: '1px solid #1f2937', borderRadius: 10, padding: 14 }}>
       <button
-        onClick={() => setExpanded((e) => !e)}
+        onClick={alwaysOpen ? undefined : () => setExpanded((e) => !e)}
         style={{
           display: 'flex', alignItems: 'center', gap: 10,
           width: '100%', background: 'transparent', border: 0, color: '#fff',
           padding: 0, cursor: 'pointer', textAlign: 'left',
         }}
       >
-        {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+        {!alwaysOpen && (expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />)}
         <Headphones size={18} style={{ color: '#5865f2' }} />
         <strong>Discord</strong>
         <StatusBadge state={state} />
@@ -250,7 +250,7 @@ export function DiscordPanel() {
               <details style={{ marginTop: 12, fontSize: 12, color: '#9ca3af' }}>
                 <summary style={{ cursor: 'pointer', color: '#d1d5db' }}>
                   <strong style={{ fontWeight: 500 }}>Bot token</strong> — optional, powers <em>Pull member</em> / <em>Move member</em>
-                  {config.hasBotToken && <span style={{ marginLeft: 6, color: '#22c55e' }}>✓ set</span>}
+                  {config.hasBotToken && <span style={{ marginLeft: 6, color: '#22c55e' }}>âœ“ set</span>}
                 </summary>
                 <div style={{ marginTop: 8, lineHeight: 1.5 }}>
                   User OAuth can't move other guild members — Discord requires a bot for that. Setup is one-time:
@@ -401,13 +401,13 @@ export function DiscordPanel() {
 
 function StatusBadge({ state }: { state?: string }) {
   const map: Record<string, { color: string; label: string }> = {
-    connected:        { color: '#22c55e', label: '● connected' },
-    connecting:       { color: '#eab308', label: '○ connecting' },
-    disconnected:     { color: '#9ca3af', label: '× disconnected' },
-    error:            { color: '#ef4444', label: '× error' },
-    disabled:         { color: '#6b7280', label: '○ disabled' },
-    'not-configured': { color: '#6b7280', label: '○ needs setup' },
-    'needs-auth':     { color: '#eab308', label: '○ needs auth' },
+    connected:        { color: '#22c55e', label: 'â— connected' },
+    connecting:       { color: '#eab308', label: 'â—‹ connecting' },
+    disconnected:     { color: '#9ca3af', label: 'Ã— disconnected' },
+    error:            { color: '#ef4444', label: 'Ã— error' },
+    disabled:         { color: '#6b7280', label: 'â—‹ disabled' },
+    'not-configured': { color: '#6b7280', label: 'â—‹ needs setup' },
+    'needs-auth':     { color: '#eab308', label: 'â—‹ needs auth' },
   };
   const m = map[state ?? ''] ?? { color: '#fff', label: state ?? '?' };
   return (

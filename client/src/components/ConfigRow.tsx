@@ -402,6 +402,7 @@ function summarizeAction(a: Action): string {
     case 'url':              return a.url ? `Open · ${trail(a.url)}` : 'Open URL';
     case 'script':           return 'PowerShell';
     case 'volume':           return a.mute ? 'Mute toggle' : `Volume ${(a.delta ?? 0) >= 0 ? '+' : ''}${a.delta ?? 2}`;
+    case 'sound':            return a.path ? `Sound · ${trail(a.path)}` : 'Play sound';
     case 'mic':              return `Mic · ${a.op}`;
     case 'app-audio':        return a.op === 'set-volume'
       ? `${a.params?.appName || 'App'} · ${a.params?.volumePercent ?? 50}%`
@@ -421,6 +422,17 @@ function summarizeAction(a: Action): string {
     case 'nanoleaf':         return a.op === 'effect-select'
       ? (a.params?.effectName ? `Nanoleaf · "${ellipsis(a.params.effectName, 16)}"` : 'Nanoleaf · effect')
       : `Nanoleaf · ${a.op}`;
+    case 'mixitup': {
+      if (a.op === 'chat-message') return a.text ? `MIU · "${ellipsis(a.text, 20)}"` : 'MIU · chat';
+      if (a.op === 'chat-clear') return 'MIU · clear chat';
+      if (a.op === 'run-command' || a.op === 'enable-command' || a.op === 'disable-command' || a.op === 'toggle-command') {
+        return a.params?.commandId ? `MIU · ${a.op} (cmd)` : `MIU · ${a.op}`;
+      }
+      if (a.op === 'counter-set' || a.op === 'counter-update' || a.op === 'counter-reset') {
+        return a.params?.counterName ? `MIU · ${a.op} (${a.params.counterName})` : `MIU · ${a.op}`;
+      }
+      return `MIU · ${a.op}`;
+    }
     case 'homeassistant':    return a.op === 'service-call'
       ? `HA · ${a.params?.service || 'service-call'}`
       : `HA · ${a.op}${a.params?.entityId ? ` (${a.params.entityId})` : ''}`;

@@ -11,6 +11,7 @@ import { getAppAudio } from './actions/appAudio.js';
 import { getHue } from './integrations/hue.js';
 import { getHomeAssistant } from './integrations/homeassistant.js';
 import { getNanoleaf } from './integrations/nanoleaf.js';
+import { getMixItUp } from './integrations/mixitup.js';
 import { getStreamers } from './integrations/twitch-streamers.js';
 import { getKickStreamers } from './integrations/kick-streamers.js';
 import { getMic } from './actions/mic.js';
@@ -411,6 +412,34 @@ function computeStepState(a: Action, obs: ObsStatus, twitch: TwitchStatus, strea
       case 'scene-on':
         // Scenes fire-and-forget; no persistent "this scene is active" state
         // in the API. Leave active undefined so the tile stays neutral.
+        break;
+    }
+    return { active, unavailable };
+  }
+
+  if (a.type === 'mixitup') {
+    const mu = getMixItUp().status();
+    const unavailable = mu.state !== 'connected';
+    let active: boolean | undefined;
+    switch (a.op) {
+      case 'enable-command': case 'disable-command': case 'toggle-command': {
+        // Reflect the target command's live enabled state so the tile lights
+        // up when the command it drives is currently enabled — same convention
+        // OBS/HA toggle tiles use.
+        const id = a.params?.commandId;
+        if (id) {
+          const cmd = mu.commands?.find((c) => c.id === id);
+          if (cmd && cmd.enabled !== undefined) active = cmd.enabled;
+        }
+        break;
+      }
+      case 'run-command':
+      case 'chat-message':
+      case 'chat-clear':
+      case 'counter-set':
+      case 'counter-update':
+      case 'counter-reset':
+        // Fire-and-forget — no persistent sticky state to reflect.
         break;
     }
     return { active, unavailable };
