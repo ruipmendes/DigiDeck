@@ -250,7 +250,7 @@ export function DiscordPanel({ alwaysOpen = false }: { alwaysOpen?: boolean } = 
               <details style={{ marginTop: 12, fontSize: 12, color: '#9ca3af' }}>
                 <summary style={{ cursor: 'pointer', color: '#d1d5db' }}>
                   <strong style={{ fontWeight: 500 }}>Bot token</strong> — optional, powers <em>Pull member</em> / <em>Move member</em>
-                  {config.hasBotToken && <span style={{ marginLeft: 6, color: '#22c55e' }}>âœ“ set</span>}
+                  {config.hasBotToken && <span style={{ marginLeft: 6, color: '#22c55e' }}>✓ set</span>}
                 </summary>
                 <div style={{ marginTop: 8, lineHeight: 1.5 }}>
                   User OAuth can't move other guild members — Discord requires a bot for that. Setup is one-time:
