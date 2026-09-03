@@ -219,11 +219,11 @@ export function StreamlabsPanel({ alwaysOpen = false }: { alwaysOpen?: boolean }
 
 function StatusBadge({ state }: { state?: string }) {
   const map: Record<string, { color: string; label: string }> = {
-    connected:    { color: '#22c55e', label: 'â— connected' },
-    connecting:   { color: '#eab308', label: 'â—‹ connecting' },
-    disconnected: { color: '#9ca3af', label: 'Ã— disconnected' },
-    error:        { color: '#ef4444', label: 'Ã— error' },
-    disabled:     { color: '#6b7280', label: 'â—‹ disabled' },
+    connected:    { color: '#22c55e', label: '● connected' },
+    connecting:   { color: '#eab308', label: '○ connecting' },
+    disconnected: { color: '#9ca3af', label: '× disconnected' },
+    error:        { color: '#ef4444', label: '× error' },
+    disabled:     { color: '#6b7280', label: '○ disabled' },
   };
   const m = map[state ?? ''] ?? { color: '#fff', label: state ?? '?' };
   return <span style={{ fontSize: 12, color: m.color }}>{m.label}</span>;

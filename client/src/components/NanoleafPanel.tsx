@@ -220,12 +220,12 @@ export function NanoleafPanel({ alwaysOpen = false }: { alwaysOpen?: boolean } =
 
 function StatusBadge({ state }: { state?: string }) {
   const map: Record<string, { color: string; label: string }> = {
-    connected:        { color: '#22c55e', label: 'â— connected' },
-    connecting:       { color: '#eab308', label: 'â—‹ connecting' },
-    error:            { color: '#ef4444', label: 'Ã— error' },
-    disabled:         { color: '#6b7280', label: 'â—‹ disabled' },
-    'not-configured': { color: '#6b7280', label: 'â—‹ needs IP' },
-    'needs-auth':     { color: '#eab308', label: 'â—‹ press link button' },
+    connected:        { color: '#22c55e', label: '● connected' },
+    connecting:       { color: '#eab308', label: '○ connecting' },
+    error:            { color: '#ef4444', label: '× error' },
+    disabled:         { color: '#6b7280', label: '○ disabled' },
+    'not-configured': { color: '#6b7280', label: '○ needs IP' },
+    'needs-auth':     { color: '#eab308', label: '○ press link button' },
   };
   const m = map[state ?? ''] ?? { color: '#fff', label: state ?? '?' };
   return <span style={{ fontSize: 12, color: m.color }}>{m.label}</span>;
