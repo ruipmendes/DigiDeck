@@ -63,12 +63,32 @@ jobs:
           (cd packaging && zip -qr9 "../digi-deck.zip" "${staging}")
           ls -lh digi-deck.zip
 
+      - name: Verify release notes exist
+        env:
+          TAG: ${{ steps.tag.outputs.value }}
+        run: |
+          set -euo pipefail
+          # We keep release notes as versioned files at docs/releases/<tag>.md
+          # so they land in the same commit as the version bump — reviewable,
+          # diffable, part of the repo's history rather than a one-off GitHub
+          # UI edit that's easy to forget. If someone tags without authoring
+          # the notes, fail loudly so we don't publish a bare "Full Changelog"
+          # release like the workflow used to (v0.3.0-v0.6.0 had to be
+          # backfilled after the fact — this gate is why we don't repeat that).
+          NOTES_FILE="docs/releases/${TAG}.md"
+          if [ ! -f "$NOTES_FILE" ]; then
+            echo "::error::Release notes not found at $NOTES_FILE — author them before tagging."
+            exit 1
+          fi
+          echo "Using notes from $NOTES_FILE ($(wc -l < "$NOTES_FILE") lines)"
+
       - name: Publish release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.tag.outputs.value }}
         run: |
           set -euo pipefail
+          NOTES_FILE="docs/releases/${TAG}.md"
           # If a release already exists for this tag, upload the asset instead
           # of failing — makes re-runs from workflow_dispatch idempotent.
           if gh release view "$TAG" >/dev/null 2>&1; then
@@ -76,5 +96,5 @@ jobs:
           else
             gh release create "$TAG" digi-deck.zip \
               --title "$TAG" \
-              --generate-notes
+              --notes-file "$NOTES_FILE"
           fi
