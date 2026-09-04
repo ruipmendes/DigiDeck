@@ -27,6 +27,7 @@ import { getNanoleaf } from './integrations/nanoleaf.js';
 import { getMixItUp } from './integrations/mixitup.js';
 import { getAppAudio } from './actions/appAudio.js';
 import { ensureIconPacksDir } from './icon-packs.js';
+import { ensureSoundsDir } from './sounds.js';
 import { getSystemMetrics } from './system-metrics.js';
 // scaffold-integration: additional integration imports inserted above this line
 import { getIntegrations } from './integrations/base.js';
@@ -167,6 +168,9 @@ mic.start();
 // Materialize the icon-packs dir on first run so the picker's help text
 // points at a real folder — no "hunt for a hidden AppData path" step.
 void ensureIconPacksDir();
+// Same story for the sound library folder — panel's "drop files here" hint
+// needs to point at an existing path.
+void ensureSoundsDir();
 
 // Per-app audio (Discord ducking, Spotify volume, etc.) only polls the Core
 // Audio session list while there's a slider tile that needs the live values.

@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { resolve as resolvePath } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { extractLibraryId, resolveSoundPath } from '../sounds.js';
 
 /**
  * Sound action — plays a local audio file on the PC running Digi Deck.
@@ -51,8 +52,20 @@ export async function execSound(opts: SoundActionOpts): Promise<void> {
   const rawPath = (opts.path ?? '').trim();
   if (!rawPath) throw new Error('sound action requires a file path');
 
-  const abs = resolvePath(rawPath);
-  if (!existsSync(abs)) throw new Error(`sound file not found: ${abs}`);
+  // `library:<id>` paths resolve against the user's sounds directory. Bare
+  // absolute paths keep working — backward-compat for tiles that predate the
+  // library UI and for streamers who want to point at files outside the
+  // library (network shares, external drives).
+  const libraryId = extractLibraryId(rawPath);
+  let abs: string;
+  if (libraryId !== null) {
+    const resolved = await resolveSoundPath(libraryId);
+    if (!resolved) throw new Error(`sound not in library: "${libraryId}"`);
+    abs = resolved;
+  } else {
+    abs = resolvePath(rawPath);
+    if (!existsSync(abs)) throw new Error(`sound file not found: ${abs}`);
+  }
 
   const volume = clamp01(opts.volume ?? 1);
   const fileUri = pathToFileURL(abs).href;

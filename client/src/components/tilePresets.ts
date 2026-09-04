@@ -186,7 +186,7 @@ export const TILE_PRESETS: TilePreset[] = [
   // ─── Soundboard ─────────────────────────────────────
   { key: 'sound-clip', category: 'Soundboard', label: 'Play a sound clip', hint: 'Pick an audio file in the editor; sets a memorable 80% default volume', iconName: 'music',
     keywords: 'sound audio clip soundboard sfx meme stinger alert play',
-    create: (id) => ({ kind: 'button', id, label: 'Sound', icon: 'music', action: { type: 'sound', path: '', volume: 0.8 } }) },
+    create: (id) => ({ kind: 'button', id, label: 'Sound', icon: 'music', action: { type: 'sound', path: 'library:', volume: 0.8 } }) },
 
   // ─── Mix It Up ──────────────────────────────────────
   { key: 'miu-run-command', category: 'Mix It Up', label: 'MIU: Run command', hint: 'Fire any Mix It Up command from a tile', iconName: 'zap',

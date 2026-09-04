@@ -402,7 +402,15 @@ function summarizeAction(a: Action): string {
     case 'url':              return a.url ? `Open · ${trail(a.url)}` : 'Open URL';
     case 'script':           return 'PowerShell';
     case 'volume':           return a.mute ? 'Mute toggle' : `Volume ${(a.delta ?? 0) >= 0 ? '+' : ''}${a.delta ?? 2}`;
-    case 'sound':            return a.path ? `Sound · ${trail(a.path)}` : 'Play sound';
+    case 'sound':
+      if (!a.path) return 'Play sound';
+      if (a.path.startsWith('library:')) {
+        const id = a.path.slice('library:'.length);
+        const base = id.split('/').pop() ?? id;
+        const dot = base.lastIndexOf('.');
+        return `Sound · ${dot > 0 ? base.slice(0, dot) : base}`;
+      }
+      return `Sound · ${trail(a.path)}`;
     case 'mic':              return `Mic · ${a.op}`;
     case 'app-audio':        return a.op === 'set-volume'
       ? `${a.params?.appName || 'App'} · ${a.params?.volumePercent ?? 50}%`

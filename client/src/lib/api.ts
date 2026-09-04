@@ -800,6 +800,62 @@ export async function reconnectNanoleaf(): Promise<NanoleafState_API> {
   return res.json();
 }
 
+// ─── Sound library ──────────────────────────────────────────────
+
+export type SoundClip = {
+  id: string;
+  name: string;
+  folder: string;
+  sizeBytes: number;
+  defaultVolume?: number;
+};
+
+export async function listSounds(): Promise<{ sounds: SoundClip[]; dir: string }> {
+  const res = await apiFetch('/api/sounds');
+  if (!res.ok) throw new Error(`GET sounds failed: ${res.status}`);
+  return res.json();
+}
+
+export async function refreshSounds(): Promise<{ sounds: SoundClip[]; dir: string }> {
+  const res = await apiFetch('/api/sounds/refresh', { method: 'POST' });
+  if (!res.ok) throw new Error(`POST sounds/refresh failed: ${res.status}`);
+  return res.json();
+}
+
+export async function playSoundOnServer(id: string, volume?: number): Promise<void> {
+  const res = await apiFetch('/api/sounds/play', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, volume }),
+  });
+  if (!res.ok) {
+    let msg = `play failed: ${res.status}`;
+    try { msg = (await res.json()).error ?? msg; } catch { /* keep default */ }
+    throw new Error(msg);
+  }
+}
+
+export async function setSoundDefaultVolume(id: string, volume: number | null): Promise<void> {
+  const res = await apiFetch('/api/sounds/default-volume', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, volume }),
+  });
+  if (!res.ok) {
+    let msg = `set default volume failed: ${res.status}`;
+    try { msg = (await res.json()).error ?? msg; } catch { /* keep default */ }
+    throw new Error(msg);
+  }
+}
+
+/** URL for the raw audio bytes — plug straight into <audio src>. Token in
+ *  query string because <audio> can't set an Authorization header. */
+export function soundFileUrl(id: string): string {
+  const base = `/api/sounds/file?id=${encodeURIComponent(id)}`;
+  const token = getStoredToken();
+  return token ? `${base}&token=${encodeURIComponent(token)}` : base;
+}
+
 // ─── Mix It Up ──────────────────────────────────────────────────
 
 export type MixItUpState =

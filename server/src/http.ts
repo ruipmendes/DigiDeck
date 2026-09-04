@@ -11,6 +11,12 @@ import { getHue } from './integrations/hue.js';
 import { getAppAudio } from './actions/appAudio.js';
 import { listIconPacks, readIcon, ICON_PACKS_DIR, invalidateIconPacksCache } from './icon-packs.js';
 import {
+  listSounds, invalidateCache as invalidateSoundsCache,
+  resolveSoundPath, setDefaultVolume, mimeType as soundMimeType,
+  SOUNDS_DIR,
+} from './sounds.js';
+import { execSound } from './actions/sound.js';
+import {
   saveImage, imagePath, imageExists, deleteImage, imageMime, MAX_IMAGE_BYTES,
 } from './images.js';
 import { exportBundle, importBundle } from './layout-bundle.js';
@@ -334,6 +340,90 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse, c
       'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'",
     });
     res.end(buf);
+    return;
+  }
+
+  // ─── Sound library ──────────────────────────────────────────
+  // Discovery is filesystem-based — users drop audio files into
+  // %APPDATA%/digi-deck/sounds/. Same shape as icon-packs. Files are streamed
+  // directly for browser-side preview via /api/sounds/file, and the same clip
+  // can be played through the deck's audio path via /api/sounds/play (used by
+  // the panel's "test on stream output" button, and by the sound action at
+  // press time).
+  if (pathname === '/api/sounds' && req.method === 'GET') {
+    if (!authorize(req, token())) return unauthorized(res);
+    try {
+      const sounds = await listSounds();
+      json(res, 200, { sounds, dir: SOUNDS_DIR });
+    } catch (err) {
+      json(res, 500, { error: (err as Error).message });
+    }
+    return;
+  }
+  if (pathname === '/api/sounds/refresh' && req.method === 'POST') {
+    if (!authorize(req, token())) return unauthorized(res);
+    invalidateSoundsCache();
+    const sounds = await listSounds();
+    json(res, 200, { sounds, dir: SOUNDS_DIR });
+    return;
+  }
+  // Browser-side preview — plays via <audio> in the config UI (through the
+  // config user's headphones, not the deck's output). Token in query string
+  // since <audio src> can't set an Authorization header.
+  if (pathname === '/api/sounds/file' && req.method === 'GET') {
+    if (!authorize(req, token())) return unauthorized(res);
+    const parsed = new URL(req.url ?? '', 'http://localhost');
+    const id = parsed.searchParams.get('id') ?? '';
+    const abs = await resolveSoundPath(id);
+    if (!abs) { res.writeHead(404); res.end(); return; }
+    try {
+      const st = await stat(abs);
+      res.writeHead(200, {
+        'Content-Type': soundMimeType(id),
+        'Content-Length': String(st.size),
+        // Aggressive cache — users only replace files when they intentionally
+        // curate their library, and the preview panel can force-refresh.
+        'Cache-Control': 'private, max-age=3600',
+      });
+      createReadStream(abs).pipe(res);
+    } catch (err) {
+      json(res, 500, { error: (err as Error).message });
+    }
+    return;
+  }
+  // Server-side playback — routes through the WPF MediaPlayer path used by
+  // the sound action at press time. Used by the panel's "test on stream
+  // output" button so streamers can verify volume before wiring to a tile.
+  if (pathname === '/api/sounds/play' && req.method === 'POST') {
+    if (!authorizeLocalhost(req, token())) return unauthorized(res);
+    try {
+      const body = await readJsonBody(req) as { id?: string; volume?: number };
+      const id = (body.id ?? '').trim();
+      if (!id) { json(res, 400, { error: 'id required' }); return; }
+      const abs = await resolveSoundPath(id);
+      if (!abs) { json(res, 404, { error: `sound not found: ${id}` }); return; }
+      await execSound({ path: abs, volume: body.volume });
+      json(res, 200, { ok: true });
+    } catch (err) {
+      json(res, 500, { error: (err as Error).message });
+    }
+    return;
+  }
+  // Set (or clear) the per-clip default volume — applied when a new sound
+  // tile is created that references this clip. Existing tiles keep their
+  // own per-tile volume; this is a template-time default, not a live rewrite.
+  if (pathname === '/api/sounds/default-volume' && req.method === 'PUT') {
+    if (!authorizeLocalhost(req, token())) return unauthorized(res);
+    try {
+      const body = await readJsonBody(req) as { id?: string; volume?: number | null };
+      const id = (body.id ?? '').trim();
+      if (!id) { json(res, 400, { error: 'id required' }); return; }
+      const volume = body.volume === null || body.volume === undefined ? undefined : Number(body.volume);
+      await setDefaultVolume(id, volume);
+      json(res, 200, { ok: true });
+    } catch (err) {
+      json(res, 400, { error: (err as Error).message });
+    }
     return;
   }
 

@@ -344,7 +344,7 @@ export function defaultAction(type: ActionType): Action {
     case 'url':    return { type: 'url', url: '' };
     case 'script': return { type: 'script', script: '' };
     case 'volume': return { type: 'volume', delta: 2 };
-    case 'sound':  return { type: 'sound', path: '', volume: 0.8 };
+    case 'sound':  return { type: 'sound', path: 'library:', volume: 0.8 };
     case 'mic':    return { type: 'mic', op: 'toggle-mute' };
     case 'app-audio': return { type: 'app-audio', op: 'toggle-mute' };
     case 'obs':    return { type: 'obs', op: 'toggle-record' };

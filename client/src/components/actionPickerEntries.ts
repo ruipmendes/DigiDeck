@@ -52,7 +52,7 @@ const desktop: ActionPickerEntry[] = [
 const soundboard: ActionPickerEntry[] = [
   { key: 'sound',   category: 'Audio', label: 'Play sound file',    hint: 'Soundboard-style — MP3/WAV/OGG at per-clip volume', iconName: 'music',
     keywords: 'sound audio play soundboard sfx clip mp3 wav ogg meme stinger alert',
-    create: () => ({ type: 'sound', path: '', volume: 0.8 }) },
+    create: () => ({ type: 'sound', path: 'library:', volume: 0.8 }) },
 ];
 
 const audio: ActionPickerEntry[] = [

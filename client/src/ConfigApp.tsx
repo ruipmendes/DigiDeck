@@ -11,6 +11,7 @@ import { defaultTile, nextButtonId, nextPageId } from './lib/types';
 import { ConfigRow } from './components/ConfigRow';
 import { PairingModal } from './components/PairingModal';
 import { IntegrationsPanel } from './components/IntegrationsPanel';
+import { SoundsPanel } from './components/SoundsPanel';
 import { SecurityPanel } from './components/SecurityPanel';
 import { IconPicker } from './components/IconPicker';
 import { TilePresetPicker } from './components/TilePresetPicker';
@@ -421,6 +422,7 @@ export function ConfigApp() {
       )}
 
       <IntegrationsPanel />
+      <SoundsPanel />
       <SecurityPanel />
 
       {!layout ? (
