@@ -13,7 +13,7 @@ export type ObsActionParams = { sceneName?: string; inputName?: string; sourceNa
 /** Which integrations are enabled at the current moment — used to gate action
  *  picker entries and slider providers on integration availability. */
 export type IntegrationStatus = {
-  obs: boolean; twitch: boolean; streamlabs: boolean; kick: boolean; discord: boolean; spotify: boolean; hue: boolean; homeassistant: boolean; openrgb: boolean; nanoleaf: boolean; mixitup: boolean;
+  obs: boolean; twitch: boolean; streamlabs: boolean; kick: boolean; discord: boolean; spotify: boolean; hue: boolean; homeassistant: boolean; openrgb: boolean; nanoleaf: boolean; mixitup: boolean; voicemeeter: boolean; voicemod: boolean;
   /** True when the connected Spotify account has Premium. Used to gate playback
    *  control tiles — free-tier accounts get a lock icon instead of being able
    *  to pick play/pause/next/previous/volume. */
@@ -152,6 +152,22 @@ export type OpenRgbActionParams = { profileName?: string };
 export type NanoleafOp = 'power-on' | 'power-off' | 'power-toggle' | 'effect-select' | 'identify';
 export type NanoleafActionParams = { effectName?: string };
 
+export type VoicemodOp =
+  | 'voice-changer-toggle'
+  | 'select-voice'
+  | 'mic-mute-toggle'
+  | 'play-sound';
+export type VoicemodActionParams = { voiceId?: string; soundFileName?: string };
+
+export type VoicemeeterRoute = 'A1' | 'A2' | 'A3' | 'A4' | 'A5' | 'B1' | 'B2' | 'B3';
+export type VoicemeeterOp =
+  | 'strip-mute-toggle' | 'strip-mute' | 'strip-unmute'
+  | 'strip-solo-toggle'
+  | 'strip-route-toggle' | 'strip-route-on' | 'strip-route-off'
+  | 'bus-mute-toggle' | 'bus-mute' | 'bus-unmute'
+  | 'restart-audio-engine';
+export type VoicemeeterActionParams = { index?: number; route?: VoicemeeterRoute };
+
 export type MixItUpOp =
   | 'run-command'
   | 'enable-command' | 'disable-command' | 'toggle-command'
@@ -207,6 +223,8 @@ export type Action =
   | { type: 'openrgb'; op: OpenRgbOp; params?: OpenRgbActionParams }
   | { type: 'nanoleaf'; op: NanoleafOp; params?: NanoleafActionParams }
   | { type: 'mixitup'; op: MixItUpOp; text?: string; params?: MixItUpActionParams }
+  | { type: 'voicemeeter'; op: VoicemeeterOp; params?: VoicemeeterActionParams }
+  | { type: 'voicemod'; op: VoicemodOp; params?: VoicemodActionParams }
   | { type: 'goto-page'; pageId: number }
   | { type: 'wait'; ms: number };
 
@@ -233,7 +251,7 @@ export type Button = {
   longPressAction?: ButtonAction;
 };
 
-export type SliderProvider = 'obs' | 'streamlabs' | 'discord' | 'spotify' | 'app-audio' | 'hue' | 'homeassistant' | 'nanoleaf';
+export type SliderProvider = 'obs' | 'streamlabs' | 'discord' | 'spotify' | 'app-audio' | 'hue' | 'homeassistant' | 'nanoleaf' | 'voicemeeter';
 
 export type SliderTile = {
   kind: 'slider';
@@ -360,6 +378,8 @@ export function defaultAction(type: ActionType): Action {
     case 'openrgb': return { type: 'openrgb', op: 'load-profile', params: {} };
     case 'nanoleaf': return { type: 'nanoleaf', op: 'power-toggle' };
     case 'mixitup': return { type: 'mixitup', op: 'run-command', params: {} };
+    case 'voicemeeter': return { type: 'voicemeeter', op: 'strip-mute-toggle', params: { index: 0 } };
+    case 'voicemod': return { type: 'voicemod', op: 'voice-changer-toggle' };
     case 'goto-page': return { type: 'goto-page', pageId: 0 };
     case 'wait': return { type: 'wait', ms: 200 };
   }

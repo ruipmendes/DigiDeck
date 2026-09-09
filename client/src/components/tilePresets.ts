@@ -188,6 +188,34 @@ export const TILE_PRESETS: TilePreset[] = [
     keywords: 'sound audio clip soundboard sfx meme stinger alert play',
     create: (id) => ({ kind: 'button', id, label: 'Sound', icon: 'music', action: { type: 'sound', path: 'library:', volume: 0.8 } }) },
 
+  // ─── Voicemod ───────────────────────────────────────
+  { key: 'voicemod-toggle', category: 'Voicemod', label: 'Voicemod: Toggle voice changer', hint: 'Tile lights when on', iconName: 'mic',
+    keywords: 'voicemod voice changer toggle',
+    create: (id) => ({ kind: 'button', id, label: 'Voice FX', icon: 'mic', action: { type: 'voicemod', op: 'voice-changer-toggle' } }) },
+  { key: 'voicemod-voice', category: 'Voicemod', label: 'Voicemod: Select voice', hint: 'Pick a voice preset in the editor', iconName: 'star',
+    keywords: 'voicemod voice select preset',
+    create: (id) => ({ kind: 'button', id, label: 'Voice', icon: 'star', action: { type: 'voicemod', op: 'select-voice', params: {} } }) },
+  { key: 'voicemod-mute', category: 'Voicemod', label: 'Voicemod: Toggle mic mute', iconName: 'mic-off',
+    keywords: 'voicemod mic mute',
+    create: (id) => ({ kind: 'button', id, label: 'Mic', icon: 'mic-off', action: { type: 'voicemod', op: 'mic-mute-toggle' } }) },
+  { key: 'voicemod-meme', category: 'Voicemod', label: 'Voicemod: Play soundboard clip', iconName: 'music',
+    keywords: 'voicemod sound meme soundboard clip play',
+    create: (id) => ({ kind: 'button', id, label: 'Meme', icon: 'music', action: { type: 'voicemod', op: 'play-sound', params: {} } }) },
+
+  // ─── Voicemeeter ────────────────────────────────────
+  { key: 'vm-mic-cough', category: 'Voicemeeter', label: 'VM: Toggle mic on stream mix', hint: 'Cough button — mute a Voicemeeter strip on B1 (OBS capture) only', iconName: 'volume-x',
+    keywords: 'voicemeeter vb audio mic cough mute strip stream b1',
+    create: (id) => ({ kind: 'button', id, label: 'Cough', icon: 'volume-x', action: { type: 'voicemeeter', op: 'strip-route-toggle', params: { index: 0, route: 'B1' } } }) },
+  { key: 'vm-strip-mute', category: 'Voicemeeter', label: 'VM: Toggle strip mute', hint: 'Mute a Voicemeeter input; tile lights when muted', iconName: 'volume-x',
+    keywords: 'voicemeeter vb audio mixer strip mute toggle',
+    create: (id) => ({ kind: 'button', id, label: 'Mute', icon: 'volume-x', action: { type: 'voicemeeter', op: 'strip-mute-toggle', params: { index: 0 } } }) },
+  { key: 'vm-strip-slider', category: 'Voicemeeter', label: 'VM: Strip gain slider', hint: 'Drag to set input gain (-60..+12 dB); tap to mute', iconName: 'sliders',
+    keywords: 'voicemeeter vb audio strip gain volume slider fader',
+    create: (id) => ({ kind: 'slider', id, label: 'Strip', provider: 'voicemeeter', inputName: 'strip:0' }) },
+  { key: 'vm-bus-slider', category: 'Voicemeeter', label: 'VM: Bus gain slider', hint: 'Drag to set output bus gain; tap to mute', iconName: 'sliders',
+    keywords: 'voicemeeter vb audio bus output volume slider fader',
+    create: (id) => ({ kind: 'slider', id, label: 'Bus', provider: 'voicemeeter', inputName: 'bus:0' }) },
+
   // ─── Mix It Up ──────────────────────────────────────
   { key: 'miu-run-command', category: 'Mix It Up', label: 'MIU: Run command', hint: 'Fire any Mix It Up command from a tile', iconName: 'zap',
     keywords: 'mix it up miu bot command run trigger fire',

@@ -12,6 +12,8 @@ import { getHue } from './integrations/hue.js';
 import { getHomeAssistant } from './integrations/homeassistant.js';
 import { getNanoleaf } from './integrations/nanoleaf.js';
 import { getMixItUp } from './integrations/mixitup.js';
+import { getVoicemeeter } from './integrations/voicemeeter.js';
+import { getVoicemod } from './integrations/voicemod.js';
 import { getStreamers } from './integrations/twitch-streamers.js';
 import { getKickStreamers } from './integrations/kick-streamers.js';
 import { getMic } from './actions/mic.js';
@@ -135,6 +137,23 @@ function computeOne(t: Tile, obs: ObsStatus, twitch: TwitchStatus, streamlabs: S
       if (nano.state !== 'connected') return { id: t.id, unavailable: true };
       const value = nano.brightness !== undefined ? Math.max(0, Math.min(1, nano.brightness / 100)) : (nano.isOn ? 1 : 0);
       return { id: t.id, sliderValue: value, sliderMuted: !nano.isOn };
+    }
+    if (provider === 'voicemeeter') {
+      const vm = getVoicemeeter().status();
+      if (vm.state !== 'connected') return { id: t.id, unavailable: true };
+      const idx = t.inputName.indexOf(':');
+      if (idx <= 0) return { id: t.id, unavailable: true };
+      const kind = t.inputName.slice(0, idx);
+      const targetIndex = Number(t.inputName.slice(idx + 1));
+      const target = kind === 'strip'
+        ? vm.strips?.find((s) => s.index === targetIndex)
+        : kind === 'bus'
+          ? vm.buses?.find((b) => b.index === targetIndex)
+          : undefined;
+      if (!target) return { id: t.id, unavailable: true };
+      // Gain range -60..+12 dB → slider 0..1 linear, matching the setSliderValue map.
+      const value = Math.max(0, Math.min(1, (target.gain + 60) / 72));
+      return { id: t.id, sliderValue: value, sliderMuted: target.mute };
     }
     const src = provider === 'streamlabs' ? streamlabs : obs;
     if (src.state !== 'connected') return { id: t.id, unavailable: true };
@@ -412,6 +431,65 @@ function computeStepState(a: Action, obs: ObsStatus, twitch: TwitchStatus, strea
       case 'scene-on':
         // Scenes fire-and-forget; no persistent "this scene is active" state
         // in the API. Leave active undefined so the tile stays neutral.
+        break;
+    }
+    return { active, unavailable };
+  }
+
+  if (a.type === 'voicemod') {
+    const vm = getVoicemod().status();
+    const unavailable = vm.state !== 'connected';
+    let active: boolean | undefined;
+    switch (a.op) {
+      case 'voice-changer-toggle':
+        active = vm.voiceChangerEnabled;
+        break;
+      case 'mic-mute-toggle':
+        // Convention: active = currently muted, matching OBS toggle-mute + our mic action.
+        active = vm.micMuted;
+        break;
+      case 'select-voice':
+        // Light up when the tile's target voice is the currently-selected one —
+        // same "sticky" feel as OBS set-scene tiles.
+        active = !!a.params?.voiceId && a.params.voiceId === vm.currentVoiceId;
+        break;
+      case 'play-sound':
+        // Fire-and-forget; no persistent state to reflect.
+        break;
+    }
+    return { active, unavailable };
+  }
+
+  if (a.type === 'voicemeeter') {
+    const vm = getVoicemeeter().status();
+    const unavailable = vm.state !== 'connected';
+    let active: boolean | undefined;
+    switch (a.op) {
+      case 'strip-mute-toggle': case 'strip-mute': case 'strip-unmute': {
+        const strip = vm.strips?.find((s) => s.index === a.params?.index);
+        if (strip) active = strip.mute;
+        break;
+      }
+      case 'strip-solo-toggle': {
+        const strip = vm.strips?.find((s) => s.index === a.params?.index);
+        if (strip) active = strip.solo;
+        break;
+      }
+      case 'strip-route-toggle': case 'strip-route-on': case 'strip-route-off': {
+        const strip = vm.strips?.find((s) => s.index === a.params?.index);
+        const route = a.params?.route;
+        if (strip && route && route in strip.routes) {
+          active = !!strip.routes[route];
+        }
+        break;
+      }
+      case 'bus-mute-toggle': case 'bus-mute': case 'bus-unmute': {
+        const bus = vm.buses?.find((b) => b.index === a.params?.index);
+        if (bus) active = bus.mute;
+        break;
+      }
+      case 'restart-audio-engine':
+        // Momentary — no persistent state to reflect.
         break;
     }
     return { active, unavailable };

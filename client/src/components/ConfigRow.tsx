@@ -430,6 +430,19 @@ function summarizeAction(a: Action): string {
     case 'nanoleaf':         return a.op === 'effect-select'
       ? (a.params?.effectName ? `Nanoleaf · "${ellipsis(a.params.effectName, 16)}"` : 'Nanoleaf · effect')
       : `Nanoleaf · ${a.op}`;
+    case 'voicemod': {
+      if (a.op === 'select-voice') return a.params?.voiceId ? `Voicemod · voice ${ellipsis(a.params.voiceId, 12)}` : 'Voicemod · pick voice';
+      if (a.op === 'play-sound')   return a.params?.soundFileName ? `Voicemod · ${ellipsis(a.params.soundFileName, 18)}` : 'Voicemod · play sound';
+      return `Voicemod · ${a.op}`;
+    }
+    case 'voicemeeter': {
+      const idx = a.params?.index;
+      const route = a.params?.route;
+      if (a.op === 'restart-audio-engine') return 'VM · restart engine';
+      const target = idx !== undefined ? `#${idx}` : '';
+      if (route) return `VM · ${a.op} ${target} → ${route}`;
+      return `VM · ${a.op}${target ? ` ${target}` : ''}`;
+    }
     case 'mixitup': {
       if (a.op === 'chat-message') return a.text ? `MIU · "${ellipsis(a.text, 20)}"` : 'MIU · chat';
       if (a.op === 'chat-clear') return 'MIU · clear chat';
@@ -651,6 +664,25 @@ function SliderEditor({
       const t = setInterval(load, 4000);
       return () => { alive = false; clearInterval(t); };
     }
+    if (provider === 'voicemeeter') {
+      // Voicemeeter slider — inputName encodes `strip:<idx>` or `bus:<idx>`.
+      let alive = true;
+      function load() {
+        api.getVoicemeeterState()
+          .then((d) => {
+            if (!alive) return;
+            const opts: string[] = [];
+            for (const s of d.status.strips ?? []) opts.push(`strip:${s.index}`);
+            for (const b of d.status.buses ?? []) opts.push(`bus:${b.index}`);
+            setInputs(opts);
+            setConnected(d.status.state === 'connected');
+          })
+          .catch(() => { if (alive) { setInputs([]); setConnected(false); } });
+      }
+      load();
+      const t = setInterval(load, 4000);
+      return () => { alive = false; clearInterval(t); };
+    }
     if (provider === 'homeassistant') {
       // HA slider — inputName encodes `light:<entity_id>` or
       // `media:<entity_id>`. We list light + media_player entities.
@@ -714,6 +746,7 @@ function SliderEditor({
     provider === 'hue'        ? 'Philips Hue' :
     provider === 'homeassistant' ? 'Home Assistant' :
     provider === 'nanoleaf'   ? 'Nanoleaf' :
+    provider === 'voicemeeter' ? 'Voicemeeter' :
                                 'OBS Studio';
 
   // Build the provider option list: include configured integrations, plus the
@@ -735,6 +768,7 @@ function SliderEditor({
   if (integrationStatus.hue        || provider === 'hue')        providerOpts.push({ value: 'hue',        label: 'Philips Hue' });
   if (integrationStatus.homeassistant || provider === 'homeassistant') providerOpts.push({ value: 'homeassistant', label: 'Home Assistant' });
   if (integrationStatus.nanoleaf   || provider === 'nanoleaf')   providerOpts.push({ value: 'nanoleaf',   label: 'Nanoleaf' });
+  if (integrationStatus.voicemeeter || provider === 'voicemeeter') providerOpts.push({ value: 'voicemeeter', label: 'Voicemeeter' });
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -746,6 +780,7 @@ function SliderEditor({
           provider === 'hue'       ? 'brightness slider — drag-to-set + tap toggles the light on/off' :
           provider === 'homeassistant' ? 'HA slider — light brightness or media_player volume; tap toggles / play-pauses' :
           provider === 'nanoleaf'   ? 'Nanoleaf brightness slider — drag-to-set + tap toggles the panels' :
+          provider === 'voicemeeter' ? 'Voicemeeter gain slider — drag sets dB (-60..+12), tap toggles mute' :
           'audio mixer slider — drag-to-set-volume + tap-to-mute'
         }
       </div>

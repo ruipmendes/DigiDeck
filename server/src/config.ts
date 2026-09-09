@@ -12,6 +12,8 @@ import { DEFAULT_HOMEASSISTANT_CONFIG, type HomeAssistantConfig } from './integr
 import { DEFAULT_OPENRGB_CONFIG, type OpenRgbConfig } from './integrations/openrgb.js';
 import { DEFAULT_NANOLEAF_CONFIG, type NanoleafConfig } from './integrations/nanoleaf.js';
 import { DEFAULT_MIXITUP_CONFIG, type MixItUpConfig } from './integrations/mixitup.js';
+import { DEFAULT_VOICEMEETER_CONFIG, type VoicemeeterConfig } from './integrations/voicemeeter.js';
+import { DEFAULT_VOICEMOD_CONFIG, type VoicemodConfig } from './integrations/voicemod.js';
 // scaffold-integration: additional imports inserted above this line
 
 const APP_DIR = join(
@@ -32,6 +34,8 @@ export type IntegrationsConfig = {
   openrgb: OpenRgbConfig;
   nanoleaf: NanoleafConfig;
   mixitup: MixItUpConfig;
+  voicemeeter: VoicemeeterConfig;
+  voicemod: VoicemodConfig;
   // scaffold-integration: additional fields inserted above this line
 };
 
@@ -79,6 +83,8 @@ function withDefaults(parsed: Partial<ServerConfig> | null | undefined): ServerC
       openrgb:    { ...DEFAULT_OPENRGB_CONFIG,    ...parsed?.integrations?.openrgb },
       nanoleaf:   { ...DEFAULT_NANOLEAF_CONFIG,   ...parsed?.integrations?.nanoleaf },
       mixitup:    { ...DEFAULT_MIXITUP_CONFIG,    ...parsed?.integrations?.mixitup },
+      voicemeeter: { ...DEFAULT_VOICEMEETER_CONFIG, ...parsed?.integrations?.voicemeeter },
+      voicemod:   { ...DEFAULT_VOICEMOD_CONFIG,    ...parsed?.integrations?.voicemod },
       // scaffold-integration: additional defaults inserted above this line
     },
     security: {

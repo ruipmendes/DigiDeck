@@ -25,6 +25,8 @@ import { getHomeAssistant } from './integrations/homeassistant.js';
 import { getOpenRgb } from './integrations/openrgb.js';
 import { getNanoleaf } from './integrations/nanoleaf.js';
 import { getMixItUp } from './integrations/mixitup.js';
+import { getVoicemeeter } from './integrations/voicemeeter.js';
+import { getVoicemod } from './integrations/voicemod.js';
 import { getAppAudio } from './actions/appAudio.js';
 import { ensureIconPacksDir } from './icon-packs.js';
 import { ensureSoundsDir } from './sounds.js';
@@ -137,6 +139,8 @@ const homeassistant = getHomeAssistant();
 getOpenRgb(); // registered via getter; no local ref needed (no state broadcasts consume it)
 const nanoleaf = getNanoleaf();
 getMixItUp(); // registered via getter; no local ref needed (no slider dispatch, no live-meta consumer)
+const voicemeeter = getVoicemeeter();
+getVoicemod(); // registered via getter; no local ref needed (no slider dispatch)
 // scaffold-integration: additional singleton calls inserted above this line
 
 // Uniform lifecycle wiring — applyConfig / attachSave / start — so adding a
@@ -454,6 +458,8 @@ wss.on('connection', (ws: WebSocket) => {
           await homeassistant.setSliderValue(tile.inputName, msg.value);
         } else if (provider === 'nanoleaf') {
           await nanoleaf.setBrightness(msg.value);
+        } else if (provider === 'voicemeeter') {
+          await voicemeeter.setSliderValue(tile.inputName, msg.value);
         } else {
           await obs.setInputVolume(tile.inputName, msg.value);
         }
@@ -490,6 +496,8 @@ wss.on('connection', (ws: WebSocket) => {
           await homeassistant.toggleSlider(tile.inputName);
         } else if (provider === 'nanoleaf') {
           await nanoleaf.togglePower();
+        } else if (provider === 'voicemeeter') {
+          await voicemeeter.toggleSliderMute(tile.inputName);
         } else {
           await obs.execute('toggle-mute', { inputName: tile.inputName });
         }

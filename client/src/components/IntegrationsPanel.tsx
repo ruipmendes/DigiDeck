@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   ChevronDown, ChevronRight, Plug,
   Video, Radio, MessageCircle, MessageSquare,
-  Headphones, Music, Bot, Lightbulb, Home, Palette, Star,
+  Headphones, Music, Bot, Lightbulb, Home, Palette, Star, Sliders, Mic,
 } from 'lucide-react';
 import * as api from '../lib/api';
 import { ObsPanel } from './ObsPanel';
@@ -16,6 +16,8 @@ import { HomeAssistantPanel } from './HomeAssistantPanel';
 import { OpenRgbPanel } from './OpenRgbPanel';
 import { NanoleafPanel } from './NanoleafPanel';
 import { MixItUpPanel } from './MixItUpPanel';
+import { VoicemeeterPanel } from './VoicemeeterPanel';
+import { VoicemodPanel } from './VoicemodPanel';
 
 /**
  * IntegrationsPanel — sidebar + detail pane layout.
@@ -37,9 +39,10 @@ type StatusKind = 'connected' | 'connecting' | 'disconnected' | 'error' | 'disab
 
 type IntegrationId =
   | 'obs' | 'streamlabs' | 'twitch' | 'kick' | 'discord' | 'spotify' | 'mixitup'
-  | 'hue' | 'homeassistant' | 'openrgb' | 'nanoleaf';
+  | 'hue' | 'homeassistant' | 'openrgb' | 'nanoleaf'
+  | 'voicemeeter' | 'voicemod';
 
-type Category = 'Streaming' | 'Lighting';
+type Category = 'Streaming' | 'Lighting' | 'Mixers';
 
 type IntegrationDef = {
   id: IntegrationId;
@@ -67,9 +70,11 @@ const DEFS: IntegrationDef[] = [
   { id: 'homeassistant', name: 'Home Asst',     category: 'Lighting',  Icon: Home,          accent: '#03A9F4', Panel: HomeAssistantPanel },
   { id: 'openrgb',       name: 'OpenRGB',       category: 'Lighting',  Icon: Palette,       accent: '#f472b6', Panel: OpenRgbPanel },
   { id: 'nanoleaf',      name: 'Nanoleaf',      category: 'Lighting',  Icon: Star,          accent: '#c084fc', Panel: NanoleafPanel },
+  { id: 'voicemeeter',   name: 'Voicemeeter',   category: 'Mixers',    Icon: Sliders,       accent: '#60a5fa', Panel: VoicemeeterPanel },
+  { id: 'voicemod',      name: 'Voicemod',      category: 'Mixers',    Icon: Mic,           accent: '#f472b6', Panel: VoicemodPanel },
 ];
 
-const CATEGORY_ORDER: Category[] = ['Streaming', 'Lighting'];
+const CATEGORY_ORDER: Category[] = ['Streaming', 'Lighting', 'Mixers'];
 
 type Summary = Record<IntegrationId, { enabled: boolean; state: StatusKind }>;
 
@@ -106,7 +111,7 @@ export function IntegrationsPanel() {
     let alive = true;
     async function load() {
       try {
-        const [obs, sl, tw, kk, dc, sp, hu, ha, org, nl, mu] = await Promise.all([
+        const [obs, sl, tw, kk, dc, sp, hu, ha, org, nl, mu, vm, vmod] = await Promise.all([
           api.getObsState().catch(() => null),
           api.getStreamlabsState().catch(() => null),
           api.getTwitchState().catch(() => null),
@@ -118,6 +123,8 @@ export function IntegrationsPanel() {
           api.getOpenRgbState().catch(() => null),
           api.getNanoleafState().catch(() => null),
           api.getMixItUpState().catch(() => null),
+          api.getVoicemeeterState().catch(() => null),
+          api.getVoicemodState().catch(() => null),
         ]);
         if (!alive) return;
         setSummary({
@@ -132,6 +139,8 @@ export function IntegrationsPanel() {
           openrgb:       { enabled: !!org?.config.enabled, state: (org?.status.state as StatusKind) ?? 'disabled' },
           nanoleaf:      { enabled: !!nl?.config.enabled,  state: (nl?.status.state  as StatusKind) ?? 'disabled' },
           mixitup:       { enabled: !!mu?.config.enabled,  state: (mu?.status.state  as StatusKind) ?? 'disabled' },
+          voicemeeter:   { enabled: !!vm?.config.enabled,  state: (vm?.status.state  as StatusKind) ?? 'disabled' },
+          voicemod:      { enabled: !!vmod?.config.enabled, state: (vmod?.status.state as StatusKind) ?? 'disabled' },
         });
       } catch { /* harmless */ }
     }

@@ -34,6 +34,8 @@ import { OpenRgbBody } from './OpenRgbBody';
 import { NanoleafBody } from './NanoleafBody';
 import { MixItUpBody } from './MixItUpBody';
 import { SoundBody } from './SoundBody';
+import { VoicemeeterBody } from './VoicemeeterBody';
+import { VoicemodBody } from './VoicemodBody';
 
 export type { IntegrationStatus };
 
@@ -375,6 +377,8 @@ function Body({ action, onChange, pages }: StepEditorProps) {
     case 'openrgb':    return <OpenRgbBody action={action} onChange={onChange} />;
     case 'nanoleaf':   return <NanoleafBody action={action} onChange={onChange} />;
     case 'mixitup':    return <MixItUpBody action={action} onChange={onChange} />;
+    case 'voicemeeter': return <VoicemeeterBody action={action} onChange={onChange} />;
+    case 'voicemod':    return <VoicemodBody action={action} onChange={onChange} />;
     case 'kick-streamer':
       return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>

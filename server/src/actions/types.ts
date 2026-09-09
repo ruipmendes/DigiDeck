@@ -27,6 +27,10 @@ import { getNanoleaf } from '../integrations/nanoleaf.js';
 import type { NanoleafOp, NanoleafActionParams } from '../integrations/nanoleaf.js';
 import { getMixItUp } from '../integrations/mixitup.js';
 import type { MixItUpOp, MixItUpActionParams } from '../integrations/mixitup.js';
+import { getVoicemeeter } from '../integrations/voicemeeter.js';
+import type { VoicemeeterOp, VoicemeeterActionParams } from '../integrations/voicemeeter.js';
+import { getVoicemod } from '../integrations/voicemod.js';
+import type { VoicemodOp, VoicemodActionParams } from '../integrations/voicemod.js';
 import { getMic } from './mic.js';
 import type { MicOp } from './mic.js';
 import { getAppAudio } from './appAudio.js';
@@ -55,6 +59,8 @@ export type Action =
   | { type: 'openrgb'; op: OpenRgbOp; params?: OpenRgbActionParams }
   | { type: 'nanoleaf'; op: NanoleafOp; params?: NanoleafActionParams }
   | { type: 'mixitup'; op: MixItUpOp; text?: string; params?: MixItUpActionParams }
+  | { type: 'voicemeeter'; op: VoicemeeterOp; params?: VoicemeeterActionParams }
+  | { type: 'voicemod'; op: VoicemodOp; params?: VoicemodActionParams }
   | { type: 'goto-page'; pageId: number }
   | { type: 'wait'; ms: number };
 
@@ -103,6 +109,8 @@ async function executeStep(step: Action): Promise<void> {
     case 'openrgb': return getOpenRgb().execute(step.op, step.params);
     case 'nanoleaf': return getNanoleaf().execute(step.op, step.params);
     case 'mixitup': return getMixItUp().execute(step.op, { ...step.params, text: step.text ?? step.params?.text });
+    case 'voicemeeter': return getVoicemeeter().execute(step.op, step.params);
+    case 'voicemod': return getVoicemod().execute(step.op, step.params);
     case 'goto-page':
       // Navigation is handled entirely on the phone — server has nothing to do.
       return;

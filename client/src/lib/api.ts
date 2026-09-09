@@ -800,6 +800,138 @@ export async function reconnectNanoleaf(): Promise<NanoleafState_API> {
   return res.json();
 }
 
+// ─── Voicemod ───────────────────────────────────────────────────
+
+export type VoicemodState =
+  | 'disabled' | 'not-configured' | 'needs-auth'
+  | 'connecting' | 'connected' | 'disconnected' | 'error';
+
+export type VoicemodVoice = {
+  id: string;
+  friendlyName: string;
+  enabled?: boolean;
+  favorited?: boolean;
+  isCustom?: boolean;
+};
+
+export type VoicemodSound = {
+  fileName: string;
+  name: string;
+  soundboard: string;
+};
+
+export type VoicemodStatus = {
+  state: VoicemodState;
+  error?: string;
+  host?: string;
+  port?: number;
+  voiceChangerEnabled?: boolean;
+  micMuted?: boolean;
+  currentVoiceId?: string;
+  voices?: VoicemodVoice[];
+  sounds?: VoicemodSound[];
+};
+
+export type VoicemodPublicConfig = {
+  enabled: boolean;
+  host: string;
+  port: number;
+  hasClientKey: boolean;
+};
+
+export type VoicemodState_API = { config: VoicemodPublicConfig; status: VoicemodStatus };
+
+export async function getVoicemodState(): Promise<VoicemodState_API> {
+  const res = await apiFetch('/api/integrations/voicemod');
+  if (!res.ok) throw new Error(`GET voicemod failed: ${res.status}`);
+  return res.json();
+}
+
+export async function putVoicemodConfig(c: { enabled: boolean; host: string; port: number; clientKey?: string | null }): Promise<VoicemodState_API> {
+  const res = await apiFetch('/api/integrations/voicemod/config', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(c),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(body || `PUT voicemod config failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function reconnectVoicemod(): Promise<VoicemodState_API> {
+  const res = await apiFetch('/api/integrations/voicemod/reconnect', { method: 'POST' });
+  if (!res.ok) throw new Error(`Voicemod reconnect failed: ${res.status}`);
+  return res.json();
+}
+
+// ─── Voicemeeter ────────────────────────────────────────────────
+
+export type VoicemeeterState =
+  | 'disabled' | 'not-configured'
+  | 'connecting' | 'connected' | 'disconnected' | 'error';
+
+export type VoicemeeterEdition = 'standard' | 'banana' | 'potato';
+
+export type VoicemeeterRoute = 'A1' | 'A2' | 'A3' | 'A4' | 'A5' | 'B1' | 'B2' | 'B3';
+
+export type VoicemeeterStrip = {
+  index: number;
+  label: string;
+  gain: number;
+  mute: boolean;
+  solo: boolean;
+  physical: boolean;
+  routes: Partial<Record<VoicemeeterRoute, boolean>>;
+};
+
+export type VoicemeeterBus = {
+  index: number;
+  label: string;
+  gain: number;
+  mute: boolean;
+  kind: VoicemeeterRoute;
+};
+
+export type VoicemeeterStatus = {
+  state: VoicemeeterState;
+  error?: string;
+  edition?: VoicemeeterEdition;
+  version?: string;
+  strips?: VoicemeeterStrip[];
+  buses?: VoicemeeterBus[];
+};
+
+export type VoicemeeterPublicConfig = { enabled: boolean };
+
+export type VoicemeeterState_API = { config: VoicemeeterPublicConfig; status: VoicemeeterStatus };
+
+export async function getVoicemeeterState(): Promise<VoicemeeterState_API> {
+  const res = await apiFetch('/api/integrations/voicemeeter');
+  if (!res.ok) throw new Error(`GET voicemeeter failed: ${res.status}`);
+  return res.json();
+}
+
+export async function putVoicemeeterConfig(c: { enabled: boolean }): Promise<VoicemeeterState_API> {
+  const res = await apiFetch('/api/integrations/voicemeeter/config', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(c),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(body || `PUT voicemeeter config failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function reconnectVoicemeeter(): Promise<VoicemeeterState_API> {
+  const res = await apiFetch('/api/integrations/voicemeeter/reconnect', { method: 'POST' });
+  if (!res.ok) throw new Error(`Voicemeeter reconnect failed: ${res.status}`);
+  return res.json();
+}
+
 // ─── Sound library ──────────────────────────────────────────────
 
 export type SoundClip = {

@@ -244,6 +244,39 @@ const nanoleafEntries: ActionPickerEntry[] = [
     create: () => ({ type: 'nanoleaf', op: 'identify' }) },
 ];
 
+const voicemodEntries: ActionPickerEntry[] = [
+  { key: 'voicemod:voice-changer-toggle', category: 'Voicemod', label: 'Toggle voice changer', hint: 'Tile lights when voice changer is on', iconName: 'mic',
+    keywords: 'voicemod voice changer toggle on off', requires: 'voicemod',
+    create: () => ({ type: 'voicemod', op: 'voice-changer-toggle' }) },
+  { key: 'voicemod:select-voice', category: 'Voicemod', label: 'Select voice', hint: 'Pick a voice preset in the editor; tile lights when active', iconName: 'star',
+    keywords: 'voicemod voice select load switch preset', requires: 'voicemod',
+    create: () => ({ type: 'voicemod', op: 'select-voice', params: {} }) },
+  { key: 'voicemod:mic-mute-toggle', category: 'Voicemod', label: 'Toggle Voicemod mic mute', hint: 'Voicemod-owned mic mute — distinct from Windows mic mute', iconName: 'mic-off',
+    keywords: 'voicemod mic mute toggle silence', requires: 'voicemod',
+    create: () => ({ type: 'voicemod', op: 'mic-mute-toggle' }) },
+  { key: 'voicemod:play-sound', category: 'Voicemod', label: 'Play Voicemod sound', hint: 'Pick a soundboard clip in the editor', iconName: 'music',
+    keywords: 'voicemod sound meme play soundboard clip', requires: 'voicemod',
+    create: () => ({ type: 'voicemod', op: 'play-sound', params: {} }) },
+];
+
+const voicemeeterEntries: ActionPickerEntry[] = [
+  { key: 'voicemeeter:strip-mute-toggle', category: 'Voicemeeter', label: 'Toggle strip mute', hint: 'Mute a mixer input (pick the strip in the editor)', iconName: 'volume-x',
+    keywords: 'voicemeeter vb audio mixer strip input mute toggle', requires: 'voicemeeter',
+    create: () => ({ type: 'voicemeeter', op: 'strip-mute-toggle', params: { index: 0 } }) },
+  { key: 'voicemeeter:strip-route-toggle', category: 'Voicemeeter', label: 'Toggle strip → bus route', hint: 'Send/stop sending a strip to a specific A/B bus', iconName: 'zap',
+    keywords: 'voicemeeter vb audio mixer route bus a1 a2 b1 b2 send toggle', requires: 'voicemeeter',
+    create: () => ({ type: 'voicemeeter', op: 'strip-route-toggle', params: { index: 0, route: 'A1' } }) },
+  { key: 'voicemeeter:strip-solo-toggle', category: 'Voicemeeter', label: 'Toggle strip solo', iconName: 'headphones',
+    keywords: 'voicemeeter vb audio mixer strip solo', requires: 'voicemeeter',
+    create: () => ({ type: 'voicemeeter', op: 'strip-solo-toggle', params: { index: 0 } }) },
+  { key: 'voicemeeter:bus-mute-toggle', category: 'Voicemeeter', label: 'Toggle bus mute', hint: 'Silence a whole output bus', iconName: 'volume-x',
+    keywords: 'voicemeeter vb audio mixer bus output mute toggle', requires: 'voicemeeter',
+    create: () => ({ type: 'voicemeeter', op: 'bus-mute-toggle', params: { index: 0 } }) },
+  { key: 'voicemeeter:restart-audio-engine', category: 'Voicemeeter', label: 'Restart audio engine', hint: 'Voicemeeter equivalent of unplug-and-replug the audio pipeline', iconName: 'refresh-ccw',
+    keywords: 'voicemeeter vb audio restart engine reset fix crackle', requires: 'voicemeeter',
+    create: () => ({ type: 'voicemeeter', op: 'restart-audio-engine' }) },
+];
+
 const mixItUpEntries: ActionPickerEntry[] = [
   { key: 'mixitup:run-command', category: 'Mix It Up', label: 'Run Mix It Up command', hint: 'Pick a MIU command (any type — chat, event, timer)', iconName: 'zap',
     keywords: 'mix it up miu bot command run trigger fire chat timer event', requires: 'mixitup',
@@ -369,6 +402,8 @@ export const ACTION_PICKER_ENTRIES: ActionPickerEntry[] = [
   ...openRgbEntries,
   ...nanoleafEntries,
   ...mixItUpEntries,
+  ...voicemeeterEntries,
+  ...voicemodEntries,
   ...flow,
 ];
 

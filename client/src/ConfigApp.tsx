@@ -56,7 +56,7 @@ export function ConfigApp() {
       return next;
     });
   }
-  const [integrationStatus, setIntegrationStatus] = useState<{ obs: boolean; twitch: boolean; streamlabs: boolean; kick: boolean; discord: boolean; spotify: boolean; spotifyPremium: boolean; hue: boolean; homeassistant: boolean; openrgb: boolean; nanoleaf: boolean; mixitup: boolean }>({
+  const [integrationStatus, setIntegrationStatus] = useState<{ obs: boolean; twitch: boolean; streamlabs: boolean; kick: boolean; discord: boolean; spotify: boolean; spotifyPremium: boolean; hue: boolean; homeassistant: boolean; openrgb: boolean; nanoleaf: boolean; mixitup: boolean; voicemeeter: boolean; voicemod: boolean }>({
     obs: false,
     twitch: false,
     streamlabs: false,
@@ -69,6 +69,8 @@ export function ConfigApp() {
     openrgb: false,
     nanoleaf: false,
     mixitup: false,
+    voicemeeter: false,
+    voicemod: false,
   });
   const importInputRef = useRef<HTMLInputElement>(null);
 
@@ -78,7 +80,7 @@ export function ConfigApp() {
     let alive = true;
     async function load() {
       try {
-        const [obs, twitch, streamlabs, kick, discord, spotify, hue, homeassistant, openrgb, nanoleaf, mixitup] = await Promise.all([
+        const [obs, twitch, streamlabs, kick, discord, spotify, hue, homeassistant, openrgb, nanoleaf, mixitup, voicemeeter, voicemod] = await Promise.all([
           api.getObsState().catch(() => null),
           api.getTwitchState().catch(() => null),
           api.getStreamlabsState().catch(() => null),
@@ -90,6 +92,8 @@ export function ConfigApp() {
           api.getOpenRgbState().catch(() => null),
           api.getNanoleafState().catch(() => null),
           api.getMixItUpState().catch(() => null),
+          api.getVoicemeeterState().catch(() => null),
+          api.getVoicemodState().catch(() => null),
         ]);
         if (!alive) return;
         setIntegrationStatus({
@@ -105,6 +109,8 @@ export function ConfigApp() {
           openrgb: !!openrgb?.config.enabled,
           nanoleaf: !!nanoleaf?.config.enabled,
           mixitup: !!mixitup?.config.enabled,
+          voicemeeter: !!voicemeeter?.config.enabled,
+          voicemod: !!voicemod?.config.enabled,
         });
       } catch { /* harmless */ }
     }
