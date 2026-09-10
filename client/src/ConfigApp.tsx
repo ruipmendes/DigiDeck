@@ -73,6 +73,7 @@ export function ConfigApp() {
     voicemod: false,
   });
   const importInputRef = useRef<HTMLInputElement>(null);
+  const streamDeckImportInputRef = useRef<HTMLInputElement>(null);
 
   // Poll integration availability so the action-type dropdown can hide types
   // for integrations the user hasn't set up (or has explicitly disabled).
@@ -182,6 +183,32 @@ export function ConfigApp() {
       setError((e as Error).message);
     } finally {
       if (importInputRef.current) importInputRef.current.value = '';
+    }
+  }
+
+  async function handleStreamDeckImportFile(file: File) {
+    setError(null);
+    if (dirty && !confirm('You have unsaved changes. The imported profile will preview over your layout. Continue?')) return;
+    try {
+      const summary = await api.importStreamDeckProfile(file);
+      // Summary is user-facing — surface both what worked and what dropped.
+      const unmappedTypes = Object.keys(summary.unmapped);
+      const unmappedCount = Object.values(summary.unmapped).reduce((n, c) => n + c, 0);
+      const parts = [
+        `Imported "${summary.originalName}": ${summary.tileCount} tile${summary.tileCount === 1 ? '' : 's'} across ${summary.pageCount} page${summary.pageCount === 1 ? '' : 's'}.`,
+      ];
+      if (unmappedCount > 0) {
+        parts.push(`${unmappedCount} button${unmappedCount === 1 ? '' : 's'} used an unsupported plugin action and became text tiles.`);
+        // Show up to 3 UUIDs — enough to identify the plugin, not so many
+        // it drowns the toast.
+        parts.push(`Unsupported: ${unmappedTypes.slice(0, 3).join(', ')}${unmappedTypes.length > 3 ? `, +${unmappedTypes.length - 3} more` : ''}`);
+      }
+      parts.push('Preview loaded — Accept to keep, or exit preview to discard.');
+      alert(parts.join('\n\n'));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      if (streamDeckImportInputRef.current) streamDeckImportInputRef.current.value = '';
     }
   }
 
@@ -378,9 +405,20 @@ export function ConfigApp() {
               if (f) void handleImportFile(f);
             }}
           />
+          <input
+            ref={streamDeckImportInputRef}
+            type="file"
+            accept=".streamDeckProfile,.zip,application/zip,application/x-zip-compressed"
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void handleStreamDeckImportFile(f);
+            }}
+          />
           <HeaderMoreMenu
             onTemplates={() => setTemplatesOpen(true)}
             onImport={() => importInputRef.current?.click()}
+            onImportStreamDeck={() => streamDeckImportInputRef.current?.click()}
             onExport={handleExport}
           />
           <button
@@ -858,10 +896,12 @@ function PageBar({ page, layout, canDelete, onChange, onDelete }: PageBarProps) 
 function HeaderMoreMenu({
   onTemplates,
   onImport,
+  onImportStreamDeck,
   onExport,
 }: {
   onTemplates: () => void;
   onImport: () => void;
+  onImportStreamDeck: () => void;
   onExport: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -912,6 +952,7 @@ function HeaderMoreMenu({
         >
           <MoreMenuItem icon={<LayoutGrid size={14} />} label="Templates…" onClick={() => run(onTemplates)} />
           <MoreMenuItem icon={<Download   size={14} />} label="Import layout…" onClick={() => run(onImport)} />
+          <MoreMenuItem icon={<Download   size={14} />} label="Import Stream Deck profile…" onClick={() => run(onImportStreamDeck)} />
           <MoreMenuItem icon={<Upload     size={14} />} label="Export layout" onClick={() => run(onExport)} />
         </div>
       )}

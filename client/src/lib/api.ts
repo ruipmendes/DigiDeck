@@ -130,6 +130,34 @@ export async function exportLayoutBundle(): Promise<void> {
   URL.revokeObjectURL(url);
 }
 
+export type StreamDeckImportSummary = {
+  tileCount: number;
+  pageCount: number;
+  /** Stream Deck action UUID → count of buttons that fell back to a text tile
+   *  because we don't know how to map that action. */
+  unmapped: Record<string, number>;
+  originalName: string;
+  preview: { name: string; title: string } | null;
+};
+
+/** POST a raw `.streamDeckProfile` ZIP; the server materializes it into a
+ *  layout and starts a template-style preview so the user can accept or
+ *  discard. Returns a summary the caller can show. */
+export async function importStreamDeckProfile(file: File): Promise<StreamDeckImportSummary> {
+  const buf = await file.arrayBuffer();
+  const res = await apiFetch('/api/import/stream-deck-profile', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/octet-stream' },
+    body: buf,
+  });
+  if (!res.ok) {
+    let msg = `Stream Deck import failed: ${res.status}`;
+    try { msg = (await res.json()).error ?? msg; } catch { /* keep default */ }
+    throw new Error(msg);
+  }
+  return res.json();
+}
+
 /** Read a bundle file and replace the current layout with its contents. Returns the new layout. */
 export async function importLayoutBundle(file: File): Promise<Layout> {
   const text = await file.text();

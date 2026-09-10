@@ -20,6 +20,7 @@ import {
   saveImage, imagePath, imageExists, deleteImage, imageMime, MAX_IMAGE_BYTES,
 } from './images.js';
 import { exportBundle, importBundle } from './layout-bundle.js';
+import { importStreamDeckProfile } from './stream-deck-import.js';
 import { browseForFile } from './system-dialog.js';
 import {
   listTemplates, loadTemplate, materializeTemplate,
@@ -130,6 +131,35 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse, c
       const layout = await importBundle(body);
       await saveLayout(layout);
       json(res, 200, { layout });
+    } catch (err) {
+      json(res, 400, { error: (err as Error).message });
+    }
+    return;
+  }
+
+  // ─── Stream Deck profile import ─────────────────────────────
+  // Accepts a raw .streamDeckProfile ZIP body, converts it into a Digi Deck
+  // layout, and pipes it through the template-preview mechanism so users get
+  // an accept/decline flow instead of an irreversible replacement. Response
+  // returns the summary (tile count + list of unmapped Stream Deck UUIDs)
+  // so the config UI can show "12 tiles mapped, 3 buttons dropped".
+  if (pathname === '/api/import/stream-deck-profile' && req.method === 'POST') {
+    if (!authorize(req, token())) return unauthorized(res);
+    try {
+      // Same 50 MB cap as image uploads — Stream Deck profiles with lots of
+      // custom PNGs can grow, but never past a few MB in practice.
+      const buf = await readBinaryBody(req, 50 * 1024 * 1024);
+      const summary = await importStreamDeckProfile(buf);
+      startPreview('stream-deck-import', `Imported: ${summary.originalName}`.slice(0, 60), summary.layout);
+      // Same broadcast + preview-info wiring the template preview uses —
+      // clients switch to the previewed layout immediately.
+      json(res, 200, {
+        tileCount: summary.tileCount,
+        pageCount: summary.pageCount,
+        unmapped: summary.unmapped,
+        originalName: summary.originalName,
+        preview: previewInfo(),
+      });
     } catch (err) {
       json(res, 400, { error: (err as Error).message });
     }
