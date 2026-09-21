@@ -18,10 +18,13 @@ import { registerIntegration, type CallbackOutcome, type IntegrationLifecycle, t
  *   - identify (brief pulse — useful for verifying the right controller)
  * Slider provider `'nanoleaf'` drives brightness 0..100; tap toggles power.
  *
- * Live state polls `GET /api/v1/<token>/` every 5 s. Nanoleaf also supports
- * an SSE event stream (`/api/v1/<token>/events`) that would give instant
- * updates from Nanoleaf-app / physical-remote / rhythm changes, but that's
- * follow-up scope.
+ * Live state comes over Nanoleaf's SSE event stream
+ * (`GET /api/v1/<token>/events?id=1,3` for state + effects namespaces), so
+ * flips from the Nanoleaf app, physical remote, or a rhythm module land in
+ * Digi Deck as they happen instead of on a 5 s poll boundary. The initial
+ * `/api/v1/<token>/` GET bootstraps state; the SSE takes over from there.
+ * If the stream drops we reconnect with exponential backoff (2 s → 60 s)
+ * and re-bootstrap on each attempt.
  */
 
 export type PublicNanoleafConfig = {
@@ -105,7 +108,8 @@ export type NanoleafActionParams = {
 };
 
 const PORT = 16021;
-const POLL_INTERVAL_MS = 5_000;
+const RECONNECT_MIN_MS = 2_000;
+const RECONNECT_MAX_MS = 60_000;
 
 class NanoleafClient implements IntegrationLifecycle {
   readonly manifest = NANOLEAF_MANIFEST;
@@ -127,7 +131,7 @@ class NanoleafClient implements IntegrationLifecycle {
     if (!this.cfg.enabled) state = 'disabled';
     else if (!this.cfg.host) state = 'not-configured';
     else if (!this.cfg.authToken) state = 'needs-auth';
-    else state = this.err ? 'error' : this.pollTimer ? 'connected' : 'connecting';
+    else state = this.err ? 'error' : this.streamActive ? 'connected' : 'connecting';
     return {
       state,
       error: state === 'error' ? this.err : undefined,
@@ -210,22 +214,26 @@ class NanoleafClient implements IntegrationLifecycle {
 
   async start(): Promise<void> {
     if (!this.cfg.enabled || !this.cfg.host || !this.cfg.authToken) return;
-    if (this.pollTimer) return;
+    if (this.eventAbort || this.reconnectTimer) return;
     this.err = undefined;
     try {
       await this.refresh();
     } catch (err) {
+      // Bootstrap can still fail (controller offline). Keep going — the SSE
+      // reconnect loop will pick things up when it recovers.
       this.err = friendlyError(err as Error);
       console.warn(`[nanoleaf] initial refresh failed: ${this.err}`);
       this.emitChange();
-      return;
     }
-    this.pollTimer = setInterval(() => { void this.pollState(); }, POLL_INTERVAL_MS);
+    this.openEventStream();
     this.emitChange();
   }
 
   async stop(): Promise<void> {
-    if (this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer = null; }
+    if (this.reconnectTimer) { clearTimeout(this.reconnectTimer); this.reconnectTimer = null; }
+    if (this.eventAbort) { this.eventAbort.abort(); this.eventAbort = null; }
+    this.streamActive = false;
+    this.reconnectDelayMs = 0;
     this.emitChange();
   }
 
@@ -287,7 +295,10 @@ class NanoleafClient implements IntegrationLifecycle {
   private saveFn: (() => Promise<void>) | undefined;
   private saveCb?: (cfg: NanoleafConfig) => Promise<void>;
   private onChangeCb: (() => void) | null = null;
-  private pollTimer: NodeJS.Timeout | null = null;
+  private eventAbort: AbortController | null = null;
+  private reconnectTimer: NodeJS.Timeout | null = null;
+  private reconnectDelayMs = 0;
+  private streamActive = false;
   private err: string | undefined;
   private name: string | undefined;
   private firmwareVersion: string | undefined;
@@ -323,36 +334,129 @@ class NanoleafClient implements IntegrationLifecycle {
     this.emitChange();
   }
 
-  private async pollState(): Promise<void> {
-    try {
-      // /state is lighter than the full root. But the effect selection is
-      // under /effects, so we poll both — still just two small requests.
-      const [state, effects] = await Promise.all([
-        this.apiGet<NanoleafStateResponse>('/state'),
-        this.apiGet<NanoleafEffectsResponse>('/effects'),
-      ]);
-      const nextIsOn = state.on?.value;
-      const nextBrightness = state.brightness?.value;
-      const nextEffect = effects.select;
-      const nextEffects = effects.effectsList;
-      const changed =
-        nextIsOn !== this.isOn ||
-        nextBrightness !== this.brightness ||
-        nextEffect !== this.currentEffect ||
-        !sameArray(nextEffects, this.effects);
-      if (changed) {
-        this.isOn = nextIsOn;
-        this.brightness = nextBrightness;
-        this.currentEffect = nextEffect;
-        this.effects = nextEffects;
+  /** Open the SSE stream and dispatch each event to the state / effects
+   *  handler. Reconnects with bounded exponential backoff on close or error;
+   *  a clean stop() aborts the fetch and skips the reconnect. */
+  private openEventStream(): void {
+    if (!this.cfg.host || !this.cfg.authToken) return;
+    const ctrl = new AbortController();
+    this.eventAbort = ctrl;
+    // Namespaces: 1 = state (power / brightness / …), 3 = effects (select +
+    // list mutations). We skip 2 (layout — rarely changes) and 4 (touch,
+    // Canvas-only) to keep the parser focused.
+    const url = `http://${this.cfg.host}:${PORT}/api/v1/${this.cfg.authToken}/events?id=1,3`;
+    void (async () => {
+      try {
+        const res = await fetch(url, {
+          signal: ctrl.signal,
+          headers: { Accept: 'text/event-stream' },
+        });
+        if (res.status === 401 || res.status === 403) throw new Error('unauthorized (bad or revoked token)');
+        if (!res.ok || !res.body) throw new Error(`event stream: HTTP ${res.status}`);
+        this.streamActive = true;
+        this.reconnectDelayMs = 0;
+        this.err = undefined;
         this.emitChange();
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let buf = '';
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          // SSE events are separated by a blank line; each event is a set of
+          // `field: value` lines. Multiple `data:` lines concatenate with \n.
+          let idx: number;
+          while ((idx = buf.indexOf('\n\n')) >= 0) {
+            this.handleSseEvent(buf.slice(0, idx));
+            buf = buf.slice(idx + 2);
+          }
+        }
+        throw new Error('event stream closed by peer');
+      } catch (err) {
+        if (ctrl.signal.aborted) return; // stopped intentionally
+        this.streamActive = false;
+        if (this.eventAbort === ctrl) this.eventAbort = null;
+        const friendly = friendlyError(err as Error);
+        console.warn(`[nanoleaf] event stream error: ${friendly}`);
+        this.err = friendly;
+        this.emitChange();
+        this.scheduleReconnect();
       }
-      this.err = undefined;
-    } catch (err) {
-      this.err = friendlyError(err as Error);
-      console.warn(`[nanoleaf] poll failed: ${this.err}`);
-      this.emitChange();
+    })();
+  }
+
+  private handleSseEvent(raw: string): void {
+    let eventId: string | undefined;
+    let dataText = '';
+    for (const line of raw.split(/\r?\n/)) {
+      if (!line || line.startsWith(':')) continue; // blank / heartbeat comment
+      const colon = line.indexOf(':');
+      if (colon < 0) continue;
+      const field = line.slice(0, colon);
+      const val = line.slice(colon + 1).replace(/^ /, '');
+      if (field === 'id') eventId = val;
+      else if (field === 'data') dataText += (dataText ? '\n' : '') + val;
     }
+    if (!dataText) return;
+    let payload: { events?: Array<{ attr?: number; value?: unknown }> };
+    try { payload = JSON.parse(dataText) as typeof payload; }
+    catch { return; }
+    const events = Array.isArray(payload.events) ? payload.events : [];
+    if (eventId === '1') this.applyStateEvents(events);
+    else if (eventId === '3') this.applyEffectsEvents(events);
+  }
+
+  /** State namespace (id=1). attr 1 = on, 2 = brightness. Hue/sat/CT/mode
+   *  exist too but we don't surface them today. */
+  private applyStateEvents(events: Array<{ attr?: number; value?: unknown }>): void {
+    let changed = false;
+    for (const e of events) {
+      if (e.attr === 1 && typeof e.value === 'boolean' && this.isOn !== e.value) {
+        this.isOn = e.value; changed = true;
+      } else if (e.attr === 2 && typeof e.value === 'number' && this.brightness !== e.value) {
+        this.brightness = e.value; changed = true;
+      }
+    }
+    if (changed) this.emitChange();
+  }
+
+  /** Effects namespace (id=3). attr 1 pushes the new selection; other attrs
+   *  signal list mutations (add / delete / rename). Cheapest correct thing
+   *  is to re-fetch `/effects` on any change — the payload is tiny. */
+  private applyEffectsEvents(events: Array<{ attr?: number; value?: unknown }>): void {
+    let changed = false;
+    for (const e of events) {
+      if (e.attr === 1 && typeof e.value === 'string' && this.currentEffect !== e.value) {
+        this.currentEffect = e.value; changed = true;
+      }
+    }
+    if (changed) this.emitChange();
+    void this.refreshEffects();
+  }
+
+  private async refreshEffects(): Promise<void> {
+    try {
+      const eff = await this.apiGet<NanoleafEffectsResponse>('/effects');
+      let changed = false;
+      if (!sameArray(eff.effectsList, this.effects)) { this.effects = eff.effectsList; changed = true; }
+      if (eff.select !== undefined && this.currentEffect !== eff.select) {
+        this.currentEffect = eff.select; changed = true;
+      }
+      if (changed) this.emitChange();
+    } catch { /* leave state as-is; the next SSE tick will retry */ }
+  }
+
+  private scheduleReconnect(): void {
+    if (this.reconnectTimer) return;
+    this.reconnectDelayMs = this.reconnectDelayMs === 0
+      ? RECONNECT_MIN_MS
+      : Math.min(RECONNECT_MAX_MS, this.reconnectDelayMs * 2);
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      if (!this.cfg.enabled || !this.cfg.host || !this.cfg.authToken) return;
+      void this.start();
+    }, this.reconnectDelayMs);
   }
 
   private async apiGet<T>(path: string): Promise<T> {
