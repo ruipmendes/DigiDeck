@@ -10,6 +10,7 @@ export function HotkeyInput({ value, onChange }: Props) {
   const [recording, setRecording] = useState(false);
   const [held, setHeld] = useState<string[]>([]);
   const heldRef = useRef<string[]>([]);
+  const rootRef = useRef<HTMLDivElement | null>(null);
 
   function update(next: string[]) {
     heldRef.current = next;
@@ -23,12 +24,6 @@ export function HotkeyInput({ value, onChange }: Props) {
     }
 
     function onKeyDown(e: KeyboardEvent) {
-      if (e.code === 'Escape') {
-        e.preventDefault();
-        update([]);
-        setRecording(false);
-        return;
-      }
       const k = codeToNutJs(e.code);
       if (!k) return;
       e.preventDefault();
@@ -54,11 +49,25 @@ export function HotkeyInput({ value, onChange }: Props) {
       setRecording(false);
     }
 
+    // Pointer-down anywhere outside the row cancels the recording — keeps a
+    // dangling recorder from swallowing keystrokes the user intended for
+    // something else. Uses pointerdown (capture phase) so it fires before the
+    // click reaches any other control.
+    function onPointerDown(e: PointerEvent) {
+      const root = rootRef.current;
+      if (root && e.target instanceof Node && !root.contains(e.target)) {
+        update([]);
+        setRecording(false);
+      }
+    }
+
     window.addEventListener('keydown', onKeyDown, true);
     window.addEventListener('keyup', onKeyUp, true);
+    window.addEventListener('pointerdown', onPointerDown, true);
     return () => {
       window.removeEventListener('keydown', onKeyDown, true);
       window.removeEventListener('keyup', onKeyUp, true);
+      window.removeEventListener('pointerdown', onPointerDown, true);
     };
   }, [recording, onChange]);
 
@@ -66,7 +75,7 @@ export function HotkeyInput({ value, onChange }: Props) {
   const savedDisplay = !recording && value.length > 0 ? value.map(displayKey).join(' + ') : null;
 
   return (
-    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+    <div ref={rootRef} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
       <button
         type="button"
         onClick={() => { if (!recording) setRecording(true); }}
@@ -85,13 +94,13 @@ export function HotkeyInput({ value, onChange }: Props) {
           gap: 8,
           minHeight: 36,
         }}
-        title={recording ? 'press your hotkey (Esc to cancel)' : 'click, then press the keys you want'}
+        title={recording ? 'press your hotkey (click outside or the X to cancel)' : 'click, then press the keys you want'}
       >
         <Keyboard size={14} style={{ color: recording ? '#f59e0b' : '#9ca3af', flexShrink: 0 }} />
         {recording ? (
           <span style={{ fontFamily: 'monospace' }}>
             <span style={{ color: '#f59e0b', fontFamily: 'system-ui' }}>● recording — </span>
-            {liveDisplay ?? <span style={{ color: '#9ca3af', fontFamily: 'system-ui' }}>press keys (Esc to cancel)</span>}
+            {liveDisplay ?? <span style={{ color: '#9ca3af', fontFamily: 'system-ui' }}>press keys</span>}
           </span>
         ) : savedDisplay ? (
           <span style={{ fontFamily: 'monospace' }}>{savedDisplay}</span>
@@ -99,7 +108,17 @@ export function HotkeyInput({ value, onChange }: Props) {
           <span style={{ color: '#6b7280' }}>click to record a hotkey</span>
         )}
       </button>
-      {value.length > 0 && !recording && (
+      {recording ? (
+        <button
+          type="button"
+          onClick={() => { update([]); setRecording(false); }}
+          style={{ background: 'transparent', border: 0, color: '#9ca3af', cursor: 'pointer', padding: 4 }}
+          title="cancel recording"
+          aria-label="cancel recording"
+        >
+          <X size={16} />
+        </button>
+      ) : value.length > 0 && (
         <button
           type="button"
           onClick={() => onChange([])}
@@ -130,7 +149,7 @@ const SPECIAL_MAP: Record<string, string> = {
   MetaLeft:    'LeftSuper',   MetaRight:    'RightSuper',
 
   Space: 'Space', Enter: 'Enter', Tab: 'Tab', Backspace: 'Backspace',
-  Delete: 'Delete', Insert: 'Insert',
+  Escape: 'Escape', Delete: 'Delete', Insert: 'Insert',
   Home: 'Home', End: 'End', PageUp: 'PageUp', PageDown: 'PageDown',
   ArrowUp: 'Up', ArrowDown: 'Down', ArrowLeft: 'Left', ArrowRight: 'Right',
   CapsLock: 'CapsLock', NumLock: 'NumLock', ScrollLock: 'ScrollLock',
