@@ -14,6 +14,7 @@ import { DEFAULT_NANOLEAF_CONFIG, type NanoleafConfig } from './integrations/nan
 import { DEFAULT_MIXITUP_CONFIG, type MixItUpConfig } from './integrations/mixitup.js';
 import { DEFAULT_VOICEMEETER_CONFIG, type VoicemeeterConfig } from './integrations/voicemeeter.js';
 import { DEFAULT_VOICEMOD_CONFIG, type VoicemodConfig } from './integrations/voicemod.js';
+import { DEFAULT_ELITE_DANGEROUS_CONFIG, type EliteDangerousConfig } from './integrations/elite-dangerous.js';
 // scaffold-integration: additional imports inserted above this line
 
 const APP_DIR = join(
@@ -36,6 +37,7 @@ export type IntegrationsConfig = {
   mixitup: MixItUpConfig;
   voicemeeter: VoicemeeterConfig;
   voicemod: VoicemodConfig;
+  'elite-dangerous': EliteDangerousConfig;
   // scaffold-integration: additional fields inserted above this line
 };
 
@@ -85,6 +87,7 @@ function withDefaults(parsed: Partial<ServerConfig> | null | undefined): ServerC
       mixitup:    { ...DEFAULT_MIXITUP_CONFIG,    ...parsed?.integrations?.mixitup },
       voicemeeter: { ...DEFAULT_VOICEMEETER_CONFIG, ...parsed?.integrations?.voicemeeter },
       voicemod:   { ...DEFAULT_VOICEMOD_CONFIG,    ...parsed?.integrations?.voicemod },
+      'elite-dangerous': { ...DEFAULT_ELITE_DANGEROUS_CONFIG, ...parsed?.integrations?.['elite-dangerous'] },
       // scaffold-integration: additional defaults inserted above this line
     },
     security: {

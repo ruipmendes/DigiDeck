@@ -15,6 +15,17 @@
  *   {spotify.playing}     → "playing" / "paused" / empty when nothing loaded
  *   {kick.viewerCount}    → current viewer count of authenticated Kick stream
  *   {kick.live}           → "live" while streaming, empty otherwise
+ *   {elite.commander}     → CMDR name (Elite Dangerous)
+ *   {elite.ship}          → ship internal type (e.g. "Anaconda")
+ *   {elite.shipName}      → user-set ship name
+ *   {elite.system}        → current star system
+ *   {elite.station}       → current station / carrier (empty when not docked)
+ *   {elite.credits}       → credit balance
+ *   {elite.fuelPercent}   → main tank as 0-100
+ *   {elite.status}        → best-effort short state: "docked" / "landed" / "supercruise" / "flight"
+ *   {elite.missionCount}  → number of active missions
+ *   {elite.missionReward} → sum of pending mission rewards (formatted M/B Cr)
+ *   {elite.nextExpiry}    → time until soonest mission expires (H:MM:SS)
  *
  * Anything else is left as-is (`{foo.bar}` stays visible so misspellings are
  * obvious rather than silently blank). The renderer is called at every tile
@@ -54,8 +65,49 @@ export function renderLabel(label: string, meta: LiveMeta, nowMs: number = Date.
       if (key === 'viewerCount') return k.viewerCount !== undefined ? String(k.viewerCount) : '';
       if (key === 'live')        return k.isLive ? 'live' : '';
     }
+    if (ns === 'elite' && meta.elite) {
+      const e = meta.elite;
+      if (key === 'commander')   return e.commander ?? '';
+      if (key === 'ship')        return e.ship ?? '';
+      // `shipName` falls back to ship type — Elite only writes a ShipName in
+      // the Journal when you've actually set a custom name. Stock ships get
+      // an empty string; showing the ship type ("Anaconda") is friendlier
+      // than a blank tile. Use `{elite.customShipName}` for strict.
+      if (key === 'shipName')    return e.shipName || e.ship || '';
+      if (key === 'customShipName') return e.shipName ?? '';
+      if (key === 'system')      return e.system ?? '';
+      if (key === 'station')     return e.station ?? '';
+      if (key === 'credits')     return e.credits !== undefined ? formatCredits(e.credits) : '';
+      if (key === 'fuelPercent') return e.fuelPercent !== undefined ? `${Math.round(e.fuelPercent)}%` : '';
+      if (key === 'cargoTons')   return e.cargoTons !== undefined ? `${e.cargoTons}t` : '';
+      if (key === 'status') {
+        if (e.docked) return 'docked';
+        if (e.landed) return 'landed';
+        if (e.supercruise) return 'supercruise';
+        return 'flight';
+      }
+      if (key === 'missionCount')  return e.missionCount !== undefined ? String(e.missionCount) : '';
+      if (key === 'missionReward') return e.missionTotalReward !== undefined ? formatCredits(e.missionTotalReward) : '';
+      if (key === 'nextExpiry') {
+        if (e.nextMissionExpiryAtMs === undefined) return '';
+        // Countdown ticks locally between broadcasts — same shape as
+        // {obs.recordingTime}. Negative → mission expired; render as "0:00"
+        // rather than a scary "-0:03:22" for the moment of overrun.
+        const remaining = Math.max(0, e.nextMissionExpiryAtMs - nowMs);
+        return formatDuration(remaining);
+      }
+    }
     return raw;
   });
+}
+
+/** Format a big credit number with thousand separators — 12.3M / 4.5B is
+ *  clearer than "12345678 Cr" on a tile that has to fit in a grid cell. */
+function formatCredits(cr: number): string {
+  if (cr >= 1_000_000_000) return `${(cr / 1_000_000_000).toFixed(2)}B Cr`;
+  if (cr >= 1_000_000)     return `${(cr / 1_000_000).toFixed(2)}M Cr`;
+  if (cr >= 1_000)         return `${(cr / 1_000).toFixed(0)}k Cr`;
+  return `${cr} Cr`;
 }
 
 function formatDuration(ms: number): string {
@@ -87,6 +139,11 @@ export function getNumericValue(source: string, meta: import('../ws').LiveMeta):
     case 'system.cpu':             return meta.system?.cpuPercent;
     case 'system.ram':             return meta.system?.ramPercent;
     case 'system.gpu':             return meta.system?.gpuPercent;
+    case 'elite.fuelPercent':      return meta.elite?.fuelPercent;
+    case 'elite.cargoTons':        return meta.elite?.cargoTons;
+    case 'elite.credits':          return meta.elite?.credits;
+    case 'elite.missionCount':     return meta.elite?.missionCount;
+    case 'elite.missionReward':    return meta.elite?.missionTotalReward;
     default: return undefined;
   }
 }

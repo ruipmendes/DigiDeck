@@ -55,7 +55,7 @@ export type DiscordVoicePanelTile = {
   accentColor?: string;
 };
 
-export type ChartSource = 'obs.droppedFrames' | 'spotify.volumePercent' | 'kick.viewerCount' | 'system.cpu' | 'system.ram' | 'system.gpu';
+export type ChartSource = 'obs.droppedFrames' | 'spotify.volumePercent' | 'kick.viewerCount' | 'system.cpu' | 'system.ram' | 'system.gpu' | 'elite.fuelPercent' | 'elite.cargoTons' | 'elite.credits' | 'elite.missionCount' | 'elite.missionReward';
 
 /** Small sparkline tile that traces a numeric LiveMeta value over a rolling
  *  window. No tap action; purely display. */
@@ -145,6 +145,34 @@ export type LiveMeta = {
     cpuPercent?: number;
     ramPercent?: number;
     gpuPercent?: number;
+  };
+  elite?: {
+    commander?: string;
+    ship?: string;
+    shipName?: string;
+    system?: string;
+    station?: string;
+    credits?: number;
+    fuelMain?: number;
+    fuelCapacity?: number;
+    fuelPercent?: number;
+    cargoTons?: number;
+    docked?: boolean;
+    landed?: boolean;
+    supercruise?: boolean;
+    hardpointsDeployed?: boolean;
+    landingGearDown?: boolean;
+    cargoScoopDeployed?: boolean;
+    scoopingFuel?: boolean;
+    silentRunning?: boolean;
+    nightVision?: boolean;
+    lowFuel?: boolean;
+    overHeating?: boolean;
+    fsdCharging?: boolean;
+    fsdCooldown?: boolean;
+    missionCount?: number;
+    missionTotalReward?: number;
+    nextMissionExpiryAtMs?: number;
   };
 };
 

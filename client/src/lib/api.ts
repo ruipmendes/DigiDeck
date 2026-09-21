@@ -828,6 +828,109 @@ export async function reconnectNanoleaf(): Promise<NanoleafState_API> {
   return res.json();
 }
 
+// ─── Elite Dangerous ────────────────────────────────────────────
+
+export type EliteDangerousState =
+  | 'disabled' | 'not-configured'
+  | 'connecting' | 'connected' | 'disconnected' | 'error';
+
+export type EliteFlags = {
+  docked: boolean;
+  landed: boolean;
+  landingGearDown: boolean;
+  shieldsUp: boolean;
+  supercruise: boolean;
+  flightAssistOff: boolean;
+  hardpointsDeployed: boolean;
+  inWing: boolean;
+  lightsOn: boolean;
+  cargoScoopDeployed: boolean;
+  silentRunning: boolean;
+  scoopingFuel: boolean;
+  srvHandbrake: boolean;
+  fsdMassLocked: boolean;
+  fsdCharging: boolean;
+  fsdCooldown: boolean;
+  lowFuel: boolean;
+  overHeating: boolean;
+  inMainShip: boolean;
+  inFighter: boolean;
+  inSrv: boolean;
+  analysisMode: boolean;
+  nightVision: boolean;
+};
+
+export type EliteMission = {
+  missionId: number;
+  name: string;
+  localisedName?: string;
+  faction: string;
+  destinationSystem?: string;
+  destinationStation?: string;
+  expiresAt?: number;
+  reward?: number;
+  targetType?: string;
+  target?: string;
+  targetFaction?: string;
+  commodity?: string;
+  count?: number;
+  passengers?: boolean;
+  detailed: boolean;
+};
+
+export type EliteDangerousStatus = {
+  state: EliteDangerousState;
+  error?: string;
+  journalPath?: string;
+  activeJournal?: string;
+  commander?: string;
+  ship?: string;
+  shipName?: string;
+  system?: string;
+  station?: string;
+  credits?: number;
+  fuelMain?: number;
+  fuelReservoir?: number;
+  fuelCapacity?: number;
+  cargoTons?: number;
+  flags?: EliteFlags;
+  missions?: EliteMission[];
+  missionTotalReward?: number;
+  nextMissionExpiryAtMs?: number;
+};
+
+export type EliteDangerousPublicConfig = {
+  enabled: boolean;
+  journalPath: string;
+};
+
+export type EliteDangerousState_API = { config: EliteDangerousPublicConfig; status: EliteDangerousStatus };
+
+export async function getEliteDangerousState(): Promise<EliteDangerousState_API> {
+  const res = await apiFetch('/api/integrations/elite-dangerous');
+  if (!res.ok) throw new Error(`GET elite-dangerous failed: ${res.status}`);
+  return res.json();
+}
+
+export async function putEliteDangerousConfig(c: { enabled: boolean; journalPath: string }): Promise<EliteDangerousState_API> {
+  const res = await apiFetch('/api/integrations/elite-dangerous/config', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(c),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(body || `PUT elite-dangerous config failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function reconnectEliteDangerous(): Promise<EliteDangerousState_API> {
+  const res = await apiFetch('/api/integrations/elite-dangerous/reconnect', { method: 'POST' });
+  if (!res.ok) throw new Error(`Elite Dangerous reconnect failed: ${res.status}`);
+  return res.json();
+}
+
 // ─── Voicemod ───────────────────────────────────────────────────
 
 export type VoicemodState =

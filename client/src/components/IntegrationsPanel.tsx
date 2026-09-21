@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   ChevronDown, ChevronRight, Plug,
   Video, Radio, MessageCircle, MessageSquare,
-  Headphones, Music, Bot, Lightbulb, Home, Palette, Star, Sliders, Mic,
+  Headphones, Music, Bot, Lightbulb, Home, Palette, Star, Sliders, Mic, Rocket,
 } from 'lucide-react';
 import * as api from '../lib/api';
 import { ObsPanel } from './ObsPanel';
@@ -18,6 +18,7 @@ import { NanoleafPanel } from './NanoleafPanel';
 import { MixItUpPanel } from './MixItUpPanel';
 import { VoicemeeterPanel } from './VoicemeeterPanel';
 import { VoicemodPanel } from './VoicemodPanel';
+import { EliteDangerousPanel } from './EliteDangerousPanel';
 
 /**
  * IntegrationsPanel — sidebar + detail pane layout.
@@ -40,9 +41,10 @@ type StatusKind = 'connected' | 'connecting' | 'disconnected' | 'error' | 'disab
 type IntegrationId =
   | 'obs' | 'streamlabs' | 'twitch' | 'kick' | 'discord' | 'spotify' | 'mixitup'
   | 'hue' | 'homeassistant' | 'openrgb' | 'nanoleaf'
-  | 'voicemeeter' | 'voicemod';
+  | 'voicemeeter' | 'voicemod'
+  | 'elite-dangerous';
 
-type Category = 'Streaming' | 'Lighting' | 'Mixers';
+type Category = 'Streaming' | 'Lighting' | 'Mixers' | 'Gaming';
 
 type IntegrationDef = {
   id: IntegrationId;
@@ -72,9 +74,10 @@ const DEFS: IntegrationDef[] = [
   { id: 'nanoleaf',      name: 'Nanoleaf',      category: 'Lighting',  Icon: Star,          accent: '#c084fc', Panel: NanoleafPanel },
   { id: 'voicemeeter',   name: 'Voicemeeter',   category: 'Mixers',    Icon: Sliders,       accent: '#60a5fa', Panel: VoicemeeterPanel },
   { id: 'voicemod',      name: 'Voicemod',      category: 'Mixers',    Icon: Mic,           accent: '#f472b6', Panel: VoicemodPanel },
+  { id: 'elite-dangerous', name: 'Elite',        category: 'Gaming',    Icon: Rocket,        accent: '#f97316', Panel: EliteDangerousPanel },
 ];
 
-const CATEGORY_ORDER: Category[] = ['Streaming', 'Lighting', 'Mixers'];
+const CATEGORY_ORDER: Category[] = ['Streaming', 'Lighting', 'Mixers', 'Gaming'];
 
 type Summary = Record<IntegrationId, { enabled: boolean; state: StatusKind }>;
 
@@ -111,7 +114,7 @@ export function IntegrationsPanel() {
     let alive = true;
     async function load() {
       try {
-        const [obs, sl, tw, kk, dc, sp, hu, ha, org, nl, mu, vm, vmod] = await Promise.all([
+        const [obs, sl, tw, kk, dc, sp, hu, ha, org, nl, mu, vm, vmod, ed] = await Promise.all([
           api.getObsState().catch(() => null),
           api.getStreamlabsState().catch(() => null),
           api.getTwitchState().catch(() => null),
@@ -125,6 +128,7 @@ export function IntegrationsPanel() {
           api.getMixItUpState().catch(() => null),
           api.getVoicemeeterState().catch(() => null),
           api.getVoicemodState().catch(() => null),
+          api.getEliteDangerousState().catch(() => null),
         ]);
         if (!alive) return;
         setSummary({
@@ -141,6 +145,7 @@ export function IntegrationsPanel() {
           mixitup:       { enabled: !!mu?.config.enabled,  state: (mu?.status.state  as StatusKind) ?? 'disabled' },
           voicemeeter:   { enabled: !!vm?.config.enabled,  state: (vm?.status.state  as StatusKind) ?? 'disabled' },
           voicemod:      { enabled: !!vmod?.config.enabled, state: (vmod?.status.state as StatusKind) ?? 'disabled' },
+          'elite-dangerous': { enabled: !!ed?.config.enabled, state: (ed?.status.state  as StatusKind) ?? 'disabled' },
         });
       } catch { /* harmless */ }
     }

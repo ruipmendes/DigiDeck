@@ -13,7 +13,7 @@ export type ObsActionParams = { sceneName?: string; inputName?: string; sourceNa
 /** Which integrations are enabled at the current moment — used to gate action
  *  picker entries and slider providers on integration availability. */
 export type IntegrationStatus = {
-  obs: boolean; twitch: boolean; streamlabs: boolean; kick: boolean; discord: boolean; spotify: boolean; hue: boolean; homeassistant: boolean; openrgb: boolean; nanoleaf: boolean; mixitup: boolean; voicemeeter: boolean; voicemod: boolean;
+  obs: boolean; twitch: boolean; streamlabs: boolean; kick: boolean; discord: boolean; spotify: boolean; hue: boolean; homeassistant: boolean; openrgb: boolean; nanoleaf: boolean; mixitup: boolean; voicemeeter: boolean; voicemod: boolean; eliteDangerous: boolean;
   /** True when the connected Spotify account has Premium. Used to gate playback
    *  control tiles — free-tier accounts get a lock icon instead of being able
    *  to pick play/pause/next/previous/volume. */
@@ -285,7 +285,7 @@ export type DiscordVoicePanelTile = {
 };
 
 /** Numeric LiveMeta sources that can feed a chart tile. */
-export type ChartSource = 'obs.droppedFrames' | 'spotify.volumePercent' | 'kick.viewerCount' | 'system.cpu' | 'system.ram' | 'system.gpu';
+export type ChartSource = 'obs.droppedFrames' | 'spotify.volumePercent' | 'kick.viewerCount' | 'system.cpu' | 'system.ram' | 'system.gpu' | 'elite.fuelPercent' | 'elite.cargoTons' | 'elite.credits' | 'elite.missionCount' | 'elite.missionReward';
 
 /** Small sparkline tile — no tap action; renders a rolling trace of a
  *  numeric LiveMeta value. Value mode plots raw; delta mode plots

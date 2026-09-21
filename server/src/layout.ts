@@ -72,7 +72,12 @@ export type ChartSource =
   | 'kick.viewerCount'
   | 'system.cpu'
   | 'system.ram'
-  | 'system.gpu';
+  | 'system.gpu'
+  | 'elite.fuelPercent'
+  | 'elite.cargoTons'
+  | 'elite.credits'
+  | 'elite.missionCount'
+  | 'elite.missionReward';
 
 /** Small sparkline tile — no action, no tap; renders a rolling trace of a
  *  numeric LiveMeta value. Value mode plots the raw number; delta mode plots
@@ -470,6 +475,11 @@ const VALID_CHART_SOURCES = new Set<string>([
   'system.cpu',
   'system.ram',
   'system.gpu',
+  'elite.fuelPercent',
+  'elite.cargoTons',
+  'elite.credits',
+  'elite.missionCount',
+  'elite.missionReward',
 ]);
 
 export function validateLayout(input: unknown): Layout {

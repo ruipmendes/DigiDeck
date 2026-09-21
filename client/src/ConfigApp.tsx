@@ -56,7 +56,7 @@ export function ConfigApp() {
       return next;
     });
   }
-  const [integrationStatus, setIntegrationStatus] = useState<{ obs: boolean; twitch: boolean; streamlabs: boolean; kick: boolean; discord: boolean; spotify: boolean; spotifyPremium: boolean; hue: boolean; homeassistant: boolean; openrgb: boolean; nanoleaf: boolean; mixitup: boolean; voicemeeter: boolean; voicemod: boolean }>({
+  const [integrationStatus, setIntegrationStatus] = useState<{ obs: boolean; twitch: boolean; streamlabs: boolean; kick: boolean; discord: boolean; spotify: boolean; spotifyPremium: boolean; hue: boolean; homeassistant: boolean; openrgb: boolean; nanoleaf: boolean; mixitup: boolean; voicemeeter: boolean; voicemod: boolean; eliteDangerous: boolean }>({
     obs: false,
     twitch: false,
     streamlabs: false,
@@ -71,6 +71,7 @@ export function ConfigApp() {
     mixitup: false,
     voicemeeter: false,
     voicemod: false,
+    eliteDangerous: false,
   });
   const importInputRef = useRef<HTMLInputElement>(null);
   const streamDeckImportInputRef = useRef<HTMLInputElement>(null);
@@ -81,7 +82,7 @@ export function ConfigApp() {
     let alive = true;
     async function load() {
       try {
-        const [obs, twitch, streamlabs, kick, discord, spotify, hue, homeassistant, openrgb, nanoleaf, mixitup, voicemeeter, voicemod] = await Promise.all([
+        const [obs, twitch, streamlabs, kick, discord, spotify, hue, homeassistant, openrgb, nanoleaf, mixitup, voicemeeter, voicemod, eliteDangerous] = await Promise.all([
           api.getObsState().catch(() => null),
           api.getTwitchState().catch(() => null),
           api.getStreamlabsState().catch(() => null),
@@ -95,6 +96,7 @@ export function ConfigApp() {
           api.getMixItUpState().catch(() => null),
           api.getVoicemeeterState().catch(() => null),
           api.getVoicemodState().catch(() => null),
+          api.getEliteDangerousState().catch(() => null),
         ]);
         if (!alive) return;
         setIntegrationStatus({
@@ -112,6 +114,7 @@ export function ConfigApp() {
           mixitup: !!mixitup?.config.enabled,
           voicemeeter: !!voicemeeter?.config.enabled,
           voicemod: !!voicemod?.config.enabled,
+          eliteDangerous: !!eliteDangerous?.config.enabled,
         });
       } catch { /* harmless */ }
     }

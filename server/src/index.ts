@@ -27,6 +27,7 @@ import { getNanoleaf } from './integrations/nanoleaf.js';
 import { getMixItUp } from './integrations/mixitup.js';
 import { getVoicemeeter } from './integrations/voicemeeter.js';
 import { getVoicemod } from './integrations/voicemod.js';
+import { getEliteDangerous } from './integrations/elite-dangerous.js';
 import { getAppAudio } from './actions/appAudio.js';
 import { ensureIconPacksDir } from './icon-packs.js';
 import { ensureSoundsDir } from './sounds.js';
@@ -91,6 +92,41 @@ type LiveMeta = {
     ramPercent?: number;
     gpuPercent?: number;
   };
+  elite?: {
+    commander?: string;
+    ship?: string;
+    shipName?: string;
+    system?: string;
+    station?: string;
+    credits?: number;
+    fuelMain?: number;
+    fuelCapacity?: number;
+    /** Fuel main tank as a 0..100 percentage — computed from fuelMain +
+     *  fuelCapacity for chart tile convenience. Undefined when we don't
+     *  yet know the ship's capacity (haven't seen a Loadout event). */
+    fuelPercent?: number;
+    cargoTons?: number;
+    docked?: boolean;
+    landed?: boolean;
+    supercruise?: boolean;
+    hardpointsDeployed?: boolean;
+    landingGearDown?: boolean;
+    cargoScoopDeployed?: boolean;
+    scoopingFuel?: boolean;
+    silentRunning?: boolean;
+    nightVision?: boolean;
+    lowFuel?: boolean;
+    overHeating?: boolean;
+    fsdCharging?: boolean;
+    fsdCooldown?: boolean;
+    /** Count of currently-active missions. */
+    missionCount?: number;
+    /** Sum of pending rewards across active missions (credits). */
+    missionTotalReward?: number;
+    /** Unix ms of the soonest-expiring active mission — powers a local
+     *  countdown tick in the label renderer, same shape as OBS's REC time. */
+    nextMissionExpiryAtMs?: number;
+  };
 };
 
 await migrateAppData();
@@ -141,6 +177,7 @@ const nanoleaf = getNanoleaf();
 getMixItUp(); // registered via getter; no local ref needed (no slider dispatch, no live-meta consumer)
 const voicemeeter = getVoicemeeter();
 getVoicemod(); // registered via getter; no local ref needed (no slider dispatch)
+const eliteDangerous = getEliteDangerous();
 // scaffold-integration: additional singleton calls inserted above this line
 
 // Uniform lifecycle wiring — applyConfig / attachSave / start — so adding a
@@ -327,6 +364,41 @@ function buildLiveMeta(): LiveMeta {
       };
     })(),
     system: systemMetrics.status(),
+    elite: (() => {
+      const s = eliteDangerous.status();
+      const fuelPercent = s.fuelMain !== undefined && s.fuelCapacity && s.fuelCapacity > 0
+        ? Math.max(0, Math.min(100, (s.fuelMain / s.fuelCapacity) * 100))
+        : undefined;
+      const f = s.flags;
+      return {
+        commander: s.commander,
+        ship: s.ship,
+        shipName: s.shipName,
+        system: s.system,
+        station: s.station,
+        credits: s.credits,
+        fuelMain: s.fuelMain,
+        fuelCapacity: s.fuelCapacity,
+        fuelPercent,
+        cargoTons: s.cargoTons,
+        docked: f?.docked,
+        landed: f?.landed,
+        supercruise: f?.supercruise,
+        hardpointsDeployed: f?.hardpointsDeployed,
+        landingGearDown: f?.landingGearDown,
+        cargoScoopDeployed: f?.cargoScoopDeployed,
+        scoopingFuel: f?.scoopingFuel,
+        silentRunning: f?.silentRunning,
+        nightVision: f?.nightVision,
+        lowFuel: f?.lowFuel,
+        overHeating: f?.overHeating,
+        fsdCharging: f?.fsdCharging,
+        fsdCooldown: f?.fsdCooldown,
+        missionCount: s.missions?.length,
+        missionTotalReward: s.missionTotalReward,
+        nextMissionExpiryAtMs: s.nextMissionExpiryAtMs,
+      };
+    })(),
   };
 }
 
