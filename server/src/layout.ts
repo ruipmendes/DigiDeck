@@ -95,6 +95,16 @@ export type ChartTile = {
    *  auto-scales across the window. */
   min?: number;
   max?: number;
+  /** Optional value-driven color overrides applied to the stroke + current-
+   *  value text, in the current sample's band. Each entry either matches when
+   *  the value is `atOrBelow` a threshold (fuel-warning shape) or `atOrAbove`
+   *  one (CPU-danger shape); the LAST matching entry in array order wins so
+   *  users can layer bands (`atOrBelow: 25` amber → `atOrBelow: 10` red). */
+  thresholds?: Array<{
+    atOrBelow?: number;
+    atOrAbove?: number;
+    color: string;
+  }>;
 };
 
 export type Tile = Button | SliderTile | BlankTile | DiscordVoicePanelTile | ChartTile;
@@ -181,6 +191,7 @@ export type PublicChart = {
   color?: string;
   min?: number;
   max?: number;
+  thresholds?: Array<{ atOrBelow?: number; atOrAbove?: number; color: string }>;
 };
 
 export type PublicTile = PublicButton | PublicSlider | PublicBlank | PublicDiscordVoicePanel | PublicChart;
@@ -292,7 +303,7 @@ export function toPublic(layout: Layout): PublicLayout {
           return { kind: 'discord-voice-panel', id: t.id, label: t.label, icon: t.icon, image: t.image, accentColor: t.accentColor };
         }
         if (t.kind === 'chart') {
-          return { kind: 'chart', id: t.id, label: t.label, icon: t.icon, image: t.image, accentColor: t.accentColor, source: t.source, mode: t.mode, color: t.color, min: t.min, max: t.max };
+          return { kind: 'chart', id: t.id, label: t.label, icon: t.icon, image: t.image, accentColor: t.accentColor, source: t.source, mode: t.mode, color: t.color, min: t.min, max: t.max, thresholds: t.thresholds };
         }
         const out: PublicButton = { kind: 'button', id: t.id, label: t.label, icon: t.icon, image: t.image, imageFit: t.imageFit, accentColor: t.accentColor };
         if (t.longPressAction !== undefined) out.hasLongPress = true;
@@ -606,6 +617,26 @@ function validateButtons(input: unknown[], seenIds: Set<number>): Tile[] {
       }
       if (tile.max !== undefined && typeof tile.max !== 'number') {
         throw new Error(`tile ${tile.id}: chart max must be a number`);
+      }
+      if (tile.thresholds !== undefined) {
+        if (!Array.isArray(tile.thresholds)) {
+          throw new Error(`tile ${tile.id}: chart thresholds must be an array`);
+        }
+        for (const [i, raw] of (tile.thresholds as unknown[]).entries()) {
+          if (!raw || typeof raw !== 'object') {
+            throw new Error(`tile ${tile.id}: chart threshold ${i} must be an object`);
+          }
+          const th = raw as Record<string, unknown>;
+          const hasBelow = typeof th.atOrBelow === 'number';
+          const hasAbove = typeof th.atOrAbove === 'number';
+          if (!hasBelow && !hasAbove) {
+            throw new Error(`tile ${tile.id}: chart threshold ${i} needs atOrBelow or atOrAbove`);
+          }
+          validateColorField(th.color, `tile ${tile.id}`, `thresholds[${i}].color`);
+          if (typeof th.color !== 'string' || !th.color) {
+            throw new Error(`tile ${tile.id}: chart threshold ${i} needs a color`);
+          }
+        }
       }
     } else {
       throw new Error(`tile ${tile.id}: unknown kind "${kind}"`);

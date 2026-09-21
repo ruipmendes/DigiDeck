@@ -302,6 +302,15 @@ export type ChartTile = {
   color?: string;
   min?: number;
   max?: number;
+  /** Value-driven color overrides applied to the stroke + current-value
+   *  text based on which band the latest sample falls into. Layered — the
+   *  last matching entry wins, so `[{atOrBelow:25,amber}, {atOrBelow:10,red}]`
+   *  gives amber under 25 %, red under 10 %. */
+  thresholds?: Array<{
+    atOrBelow?: number;
+    atOrAbove?: number;
+    color: string;
+  }>;
 };
 
 export type Tile = Button | SliderTile | BlankTile | DiscordVoicePanelTile | ChartTile;

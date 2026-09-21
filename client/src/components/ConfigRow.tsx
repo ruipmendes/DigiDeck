@@ -582,9 +582,87 @@ function ChartEditor({
         />
         <span style={{ fontSize: 11, color: '#6b7280' }}>leave blank to auto-scale</span>
       </div>
+      <ChartThresholdsEditor
+        thresholds={tile.thresholds ?? []}
+        onChange={(next) => onChange({ thresholds: next.length > 0 ? next : undefined })}
+      />
       {src?.hint && (
         <span style={{ fontSize: 11, color: '#f59e0b' }}>{src.hint}</span>
       )}
+    </div>
+  );
+}
+
+type Threshold = NonNullable<Extract<Tile, { kind: 'chart' }>['thresholds']>[number];
+
+function ChartThresholdsEditor({
+  thresholds,
+  onChange,
+}: {
+  thresholds: Threshold[];
+  onChange: (next: Threshold[]) => void;
+}) {
+  function patch(i: number, p: Partial<Threshold>) {
+    onChange(thresholds.map((t, idx) => (idx === i ? { ...t, ...p } : t)));
+  }
+  function remove(i: number) { onChange(thresholds.filter((_, idx) => idx !== i)); }
+  function add() { onChange([...thresholds, { atOrBelow: 25, color: '#f59e0b' }]); }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontSize: 12, color: '#9ca3af', minWidth: 76 }}>Thresholds</span>
+        <button
+          type="button"
+          onClick={add}
+          style={{
+            background: '#0a0a0a', color: '#e5e7eb', border: '1px solid #374151',
+            borderRadius: 4, padding: '2px 8px', fontSize: 11, cursor: 'pointer',
+          }}
+        >
+          + add
+        </button>
+        <span style={{ fontSize: 11, color: '#6b7280' }}>colors the trace + value when the sample is in-band; last match wins</span>
+      </div>
+      {thresholds.map((t, i) => {
+        const mode: 'below' | 'above' = t.atOrAbove !== undefined ? 'above' : 'below';
+        const value = mode === 'above' ? t.atOrAbove : t.atOrBelow;
+        return (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, paddingLeft: 84 }}>
+            <select
+              value={mode}
+              onChange={(e) => {
+                const m = e.target.value as 'below' | 'above';
+                patch(i, m === 'above'
+                  ? { atOrAbove: value ?? 0, atOrBelow: undefined }
+                  : { atOrBelow: value ?? 0, atOrAbove: undefined });
+              }}
+              style={selectStyle}
+            >
+              <option value="below">at or below</option>
+              <option value="above">at or above</option>
+            </select>
+            <input
+              type="number"
+              value={value ?? ''}
+              onChange={(e) => {
+                const n = e.target.value === '' ? 0 : Number(e.target.value);
+                patch(i, mode === 'above' ? { atOrAbove: n } : { atOrBelow: n });
+              }}
+              style={{ ...inputStyle, width: 80 }}
+            />
+            <ColorPicker value={t.color} onChange={(c) => patch(i, { color: c || '#f59e0b' })} />
+            <button
+              type="button"
+              onClick={() => remove(i)}
+              style={{ background: 'transparent', border: 0, color: '#9ca3af', cursor: 'pointer', padding: 2 }}
+              title="remove threshold"
+              aria-label="remove threshold"
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
+        );
+      })}
     </div>
   );
 }

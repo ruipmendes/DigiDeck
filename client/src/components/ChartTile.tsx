@@ -70,8 +70,14 @@ export function ChartTileView({ tile, liveMeta, colorFallback }: {
   }, [tile.source, tile.mode]);
 
   const label = renderLabel(tile.label, liveMeta);
-  const stroke = tile.color || tile.accentColor || colorFallback;
   const current = samples.length > 0 ? samples[samples.length - 1] : undefined;
+  // Threshold match against the latest sample — the last matching entry in
+  // the config array wins so users can layer bands (`atOrBelow: 25` amber
+  // → `atOrBelow: 10` red for Elite-fuel-warning shape).
+  const thresholdColor = current !== undefined
+    ? pickThresholdColor(current, tile.thresholds)
+    : undefined;
+  const stroke = thresholdColor ?? tile.color ?? tile.accentColor ?? colorFallback;
 
   return (
     <div
@@ -186,6 +192,16 @@ function Sparkline({ values, stroke, min, max, deltaFloorZero }: {
       <circle cx={lastX} cy={lastY} r={1.4} fill={stroke} vectorEffect="non-scaling-stroke" />
     </svg>
   );
+}
+
+function pickThresholdColor(value: number, thresholds: ChartTile['thresholds']): string | undefined {
+  if (!thresholds || thresholds.length === 0) return undefined;
+  let color: string | undefined;
+  for (const t of thresholds) {
+    if (t.atOrBelow !== undefined && value <= t.atOrBelow) color = t.color;
+    if (t.atOrAbove !== undefined && value >= t.atOrAbove) color = t.color;
+  }
+  return color;
 }
 
 function formatValue(v: number): string {
