@@ -683,4 +683,18 @@ function validateActionStep(input: unknown, buttonId: number, stepIndex?: number
   if (!VALID_ACTION_TYPES.has(step.type)) {
     throw new Error(`${where}: unknown action type "${step.type}"`);
   }
+  // Validate the URL step's scheme at layout-save time so an imported bundle,
+  // template, or Stream Deck profile can't slip a `file:` / `javascript:` /
+  // etc URL onto a tile. `execUrl` also validates at fire time — this is
+  // defense in depth so bad URLs never reach the disk.
+  if (step.type === 'url') {
+    const u = step.url;
+    if (typeof u !== 'string' || !u) throw new Error(`${where}: url action needs a url string`);
+    if (!/^[a-z][a-z0-9+.\-]*:/i.test(u)) {
+      throw new Error(`${where}: url must include a scheme (e.g. https://)`);
+    }
+    if (/^(file|javascript|vbscript|data|jar|about|blob):/i.test(u)) {
+      throw new Error(`${where}: url scheme not allowed`);
+    }
+  }
 }

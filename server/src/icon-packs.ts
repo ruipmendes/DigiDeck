@@ -123,8 +123,11 @@ export async function installPackFromZip(zipBuffer: Buffer, packName: string): P
     if (rel.includes('..') || rel.startsWith('/') || rel.startsWith('\\')) continue;
     const dest = resolve(packDir, rel);
     if (!dest.startsWith(packDir + sep)) continue;
+    // Reject before decompressing to keep an oversized entry from being
+    // materialized into memory. The header's `size` is the uncompressed size.
+    if (entry.header.size > MAX_SVG_BYTES) continue;
     const data = entry.getData();
-    if (data.length > MAX_SVG_BYTES) continue; // silently skip bloat
+    if (data.length > MAX_SVG_BYTES) continue; // header lied — belt + suspenders
     await fs.mkdir(resolve(dest, '..'), { recursive: true });
     await fs.writeFile(dest, data);
     written++;

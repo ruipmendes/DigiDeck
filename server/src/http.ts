@@ -250,7 +250,10 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse, c
   // returns the chosen path. Useful for the Launch action's path field so
   // users don't have to copy-paste app locations.
   if (pathname === '/api/system/browse-file' && req.method === 'POST') {
-    if (!authorize(req, token())) return unauthorized(res);
+    // Native OpenFileDialog only makes sense from the config UI on the PC —
+    // gate to localhost so a paired phone can't repeatedly steal focus with
+    // topmost dialogs.
+    if (!authorizeLocalhost(req, token())) return unauthorized(res);
     try {
       const body = await readJsonBody(req).catch(() => ({})) as { title?: string; initialDir?: string; filter?: string };
       const path = await browseForFile(body);
@@ -856,11 +859,17 @@ async function sendFile(res: ServerResponse, filePath: string): Promise<boolean>
     ext === '.html' ? 'no-cache' :
     filePath.includes(`${pathSep}assets${pathSep}`) ? 'public, max-age=31536000, immutable' :
     'public, max-age=3600';
-  res.writeHead(200, {
+  const headers: Record<string, string> = {
     'Content-Type': mime,
     'Content-Length': String(stats.size),
     'Cache-Control': cache,
-  });
+  };
+  // Suppress Referer on outbound requests from the SPA — keeps the auth
+  // token (which may appear as `?token=…` on `<img src>` URLs the SPA
+  // constructs) out of Referer headers sent to third-party image hosts
+  // (Twitch, Kick, Spotify avatars).
+  if (ext === '.html') headers['Referrer-Policy'] = 'no-referrer';
+  res.writeHead(200, headers);
   createReadStream(filePath).pipe(res);
   return true;
 }

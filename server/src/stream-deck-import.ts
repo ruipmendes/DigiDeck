@@ -121,14 +121,27 @@ export type ImportSummary = {
 /** Entry point — parse a raw `.streamDeckProfile` ZIP buffer into a Layout
  *  (and side-write images to disk via saveImage). Caller starts a preview
  *  with the returned layout. */
+/** Cap on entries in a single archive — a normal profile has a few dozen. */
+const MAX_ARCHIVE_ENTRIES = 2_000;
+/** Cap on total decompressed bytes across the whole archive. Normal profiles
+ *  are a few MB; anything past 100 MB is either not a Stream Deck profile or
+ *  an attempt to blow up the heap. */
+const MAX_ARCHIVE_DECOMPRESSED_BYTES = 100 * 1024 * 1024;
+/** Per-entry decompressed cap. Icons + PNGs top out around a few hundred KB. */
+const MAX_ENTRY_DECOMPRESSED_BYTES = 5 * 1024 * 1024;
+
 export async function importStreamDeckProfile(zipBuffer: Buffer): Promise<ImportSummary> {
   const zip = new AdmZip(zipBuffer);
   const entries = zip.getEntries();
+  if (entries.length > MAX_ARCHIVE_ENTRIES) {
+    throw new Error(`archive has ${entries.length} entries — cap is ${MAX_ARCHIVE_ENTRIES}`);
+  }
 
   // Discover all sdProfile dirs (each contains a manifest.json). Some
   // archives nest them (sub-profiles for folders); we resolve those by
   // walking the top-level profile first and expanding references as we go.
   const profileByUuid = new Map<string, ProfileDir>();
+  let totalBytes = 0;
   for (const entry of entries) {
     if (entry.isDirectory) continue;
     const parts = entry.entryName.split('/');
@@ -143,7 +156,18 @@ export async function importStreamDeckProfile(zipBuffer: Buffer): Promise<Import
       profile = { uuid, files: new Map() };
       profileByUuid.set(uuid, profile);
     }
-    if (rel) profile.files.set(rel, entry.getData());
+    if (rel) {
+      // Check header size BEFORE decompressing so a zip-bombed entry never
+      // lands in memory. Cap total decompressed bytes across the archive.
+      if (entry.header.size > MAX_ENTRY_DECOMPRESSED_BYTES) {
+        throw new Error(`archive entry "${rel}" exceeds per-file cap`);
+      }
+      totalBytes += entry.header.size;
+      if (totalBytes > MAX_ARCHIVE_DECOMPRESSED_BYTES) {
+        throw new Error('archive decompressed size exceeds cap');
+      }
+      profile.files.set(rel, entry.getData());
+    }
   }
 
   if (profileByUuid.size === 0) {

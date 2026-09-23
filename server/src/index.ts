@@ -9,7 +9,7 @@ import { loadOrInitLayout, reloadLayout, toPublic, watchLayout, findTile, collec
 import { executeAction, setShellActionsGate, withPromptValues } from './actions/types.js';
 import { handleRequest } from './http.js';
 import { loadOrInitConfig, saveConfig, CONFIG_FILE } from './config.js';
-import { authorize, isLocalhost, isAllowedHost, isAllowedOrigin } from './auth.js';
+import { authorize, isAllowedHost, isAllowedOrigin } from './auth.js';
 import { startMdns, stopMdns } from './mdns.js';
 import { migrateAppData } from './migrations.js';
 import { getObs } from './integrations/obs.js';
@@ -308,7 +308,7 @@ const wss = new WebSocketServer({
       cb(false, 403, 'forbidden');
       return;
     }
-    if (isLocalhost(info.req) || authorize(info.req, serverConfig.token)) {
+    if (authorize(info.req, serverConfig.token)) {
       cb(true);
     } else {
       console.warn(`[auth] WS rejected from ${info.req.socket.remoteAddress}`);
