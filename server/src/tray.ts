@@ -17,19 +17,37 @@ export type TrayActions = {
  */
 export type TrayMenu = Array<{ name: string; displayName: string; enabled: boolean }>;
 
+/** Threshold above which the flat "Restart <X>" items collapse into a single
+ *  "Restart integration ▶" parent with the entries as children. Keeps the
+ *  main right-click menu scannable once a user has more than a handful of
+ *  integrations configured. */
+const RESTART_SUBMENU_THRESHOLD = 4;
+
 function buildPsScript(menu: TrayMenu, version: string): string {
+  const enabledEntries = menu.filter((e) => e.enabled);
+  const useSubmenu = enabledEntries.length > RESTART_SUBMENU_THRESHOLD;
   const restartItems: string[] = [];
+  const parentVar = '$restartParent';
+  if (useSubmenu && enabledEntries.length > 0) {
+    restartItems.push(`${parentVar} = New-Object System.Windows.Forms.ToolStripMenuItem('Restart integration')`);
+  }
   let idx = 0;
-  for (const entry of menu) {
-    if (!entry.enabled) continue;
+  for (const entry of enabledEntries) {
     // Escape single quotes in displayName for the PS single-quoted string literal.
     const label = entry.displayName.replace(/'/g, "''");
     const varName = `$restartItem${idx++}`;
     const cmd = `RESTART_${entry.name.toUpperCase()}`;
-    restartItems.push(`${varName} = $menu.Items.Add('Restart ${label} connection')`);
+    if (useSubmenu) {
+      restartItems.push(`${varName} = ${parentVar}.DropDownItems.Add('Restart ${label} connection')`);
+    } else {
+      restartItems.push(`${varName} = $menu.Items.Add('Restart ${label} connection')`);
+    }
     restartItems.push(`${varName}.Add_Click({ Send-Cmd '${cmd}' })`);
   }
-  // Only emit the separator when at least one restart item exists, otherwise it dangles.
+  if (useSubmenu && enabledEntries.length > 0) {
+    restartItems.push(`[void]$menu.Items.Add(${parentVar})`);
+  }
+  // Only emit the trailing separator when at least one restart item exists, otherwise it dangles.
   const restartBlock = restartItems.length > 0
     ? `${restartItems.join('\n')}\n[void]$menu.Items.Add('-')`
     : '';
@@ -46,8 +64,70 @@ Add-Type -AssemblyName System.Drawing
 
 $ErrorActionPreference = 'Stop'
 
+# Draw the Digi Deck brand mark (dark rounded backdrop, 2x2 tile grid with the
+# top-right tile lit blue) at 32x32 and hand it to the NotifyIcon. Mirrors the
+# client's icon.svg so the tray and the web UI read as the same product.
+function New-BrandIcon {
+  $size = 32
+  $bmp = New-Object System.Drawing.Bitmap $size, $size
+  $g = [System.Drawing.Graphics]::FromImage($bmp)
+  $g.SmoothingMode = 'AntiAlias'
+  $g.Clear([System.Drawing.Color]::Transparent)
+
+  # Rounded backdrop — matches client icon's #0a0a0a with 96/512 corner radius (~6px at 32px).
+  $bgPath = New-Object System.Drawing.Drawing2D.GraphicsPath
+  $r = 6
+  $bgRect = New-Object System.Drawing.Rectangle 0, 0, $size, $size
+  $bgPath.AddArc($bgRect.X, $bgRect.Y, $r*2, $r*2, 180, 90)
+  $bgPath.AddArc($bgRect.Right - $r*2, $bgRect.Y, $r*2, $r*2, 270, 90)
+  $bgPath.AddArc($bgRect.Right - $r*2, $bgRect.Bottom - $r*2, $r*2, $r*2, 0, 90)
+  $bgPath.AddArc($bgRect.X, $bgRect.Bottom - $r*2, $r*2, $r*2, 90, 90)
+  $bgPath.CloseFigure()
+  $bgBrush = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(255, 10, 10, 10))
+  $g.FillPath($bgBrush, $bgPath)
+
+  # 2x2 grid — one lit tile (blue #3b82f6, top-right), three dim (#3f3f3f).
+  $tileSize = 12
+  $gap = 3
+  $margin = 2
+  $tileR = 2
+  $dimColor = [System.Drawing.Color]::FromArgb(255, 63, 63, 63)
+  $litColor = [System.Drawing.Color]::FromArgb(255, 59, 130, 246)
+  for ($row = 0; $row -lt 2; $row++) {
+    for ($col = 0; $col -lt 2; $col++) {
+      $x = $margin + $col * ($tileSize + $gap)
+      $y = $margin + $row * ($tileSize + $gap)
+      $tilePath = New-Object System.Drawing.Drawing2D.GraphicsPath
+      $tilePath.AddArc($x, $y, $tileR*2, $tileR*2, 180, 90)
+      $tilePath.AddArc($x + $tileSize - $tileR*2, $y, $tileR*2, $tileR*2, 270, 90)
+      $tilePath.AddArc($x + $tileSize - $tileR*2, $y + $tileSize - $tileR*2, $tileR*2, $tileR*2, 0, 90)
+      $tilePath.AddArc($x, $y + $tileSize - $tileR*2, $tileR*2, $tileR*2, 90, 90)
+      $tilePath.CloseFigure()
+      $isLit = ($row -eq 0 -and $col -eq 1)
+      $tileBrush = New-Object System.Drawing.SolidBrush ($(if ($isLit) { $litColor } else { $dimColor }))
+      $g.FillPath($tileBrush, $tilePath)
+      $tileBrush.Dispose()
+      $tilePath.Dispose()
+    }
+  }
+
+  $bgBrush.Dispose()
+  $bgPath.Dispose()
+  $g.Dispose()
+
+  $hIcon = $bmp.GetHicon()
+  $icon = [System.Drawing.Icon]::FromHandle($hIcon)
+  return $icon
+}
+
 $notify = New-Object System.Windows.Forms.NotifyIcon
-$notify.Icon = [System.Drawing.SystemIcons]::Application
+try {
+  $notify.Icon = New-BrandIcon
+} catch {
+  # Fall back to the generic Application icon if the branded draw fails for
+  # any reason (missing GDI+, exotic .NET runtime, …) — tray still shows up.
+  $notify.Icon = [System.Drawing.SystemIcons]::Application
+}
 $notify.Visible = $true
 $notify.Text = '${tooltipText}'
 
