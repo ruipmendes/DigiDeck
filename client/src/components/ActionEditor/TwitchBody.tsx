@@ -2,7 +2,7 @@ import { X, Plus } from 'lucide-react';
 import type { Action, TwitchOp, TwitchActionParams, TwitchAnnouncementColor, TwitchPrompt, TwitchPromptField } from '../../lib/types';
 import { inputStyle, selectStyle, addStepBtnStyle, stepIconBtn } from './shared';
 
-type TwitchNeeds = 'chat-text' | 'announcement' | 'run-ad' | 'marker' | 'follower-only' | 'slow-mode' | 'target' | 'title' | 'gameName' | 'poll' | 'prediction' | null;
+type TwitchNeeds = 'chat-text' | 'announcement' | 'run-ad' | 'marker' | 'follower-only' | 'slow-mode' | 'target' | 'title' | 'gameName' | 'messageId' | 'poll' | 'prediction' | null;
 type TwitchOpDef = { value: TwitchOp; label: string; needs: TwitchNeeds };
 type TwitchOpGroup = { label: string; options: TwitchOpDef[] };
 
@@ -13,6 +13,7 @@ const TWITCH_OP_GROUPS: TwitchOpGroup[] = [
       { value: 'chat',              label: 'Send chat message',       needs: 'chat-text' },
       { value: 'chat-announcement', label: 'Send /announce…',          needs: 'announcement' },
       { value: 'clear-chat',        label: 'Clear chat',               needs: null },
+      { value: 'delete-message',    label: 'Delete chat message…',    needs: 'messageId' },
     ],
   },
   {
@@ -64,9 +65,10 @@ const TWITCH_OP_GROUPS: TwitchOpGroup[] = [
 ];
 
 const PROMPT_META: Record<TwitchPromptField, { label: string; placeholder: string }> = {
-  target:   { label: 'Streamer',        placeholder: 'e.g. ninja (login, no @)' },
-  title:    { label: 'Stream title',    placeholder: 'e.g. Speedrunning Elden Ring' },
-  gameName: { label: 'Game / category', placeholder: 'e.g. Elden Ring' },
+  target:    { label: 'Streamer',        placeholder: 'e.g. ninja (login, no @)' },
+  title:     { label: 'Stream title',    placeholder: 'e.g. Speedrunning Elden Ring' },
+  gameName:  { label: 'Game / category', placeholder: 'e.g. Elden Ring' },
+  messageId: { label: 'Message id',      placeholder: 'UUID copied from the chat message' },
 };
 
 const TWITCH_OPS: TwitchOpDef[] = TWITCH_OP_GROUPS.flatMap((g) => g.options);
@@ -226,6 +228,7 @@ export function TwitchBody({ action, onChange }: { action: Extract<Action, { typ
       {needs === 'target' && renderPromptableField('target')}
       {needs === 'title' && renderPromptableField('title')}
       {needs === 'gameName' && renderPromptableField('gameName')}
+      {needs === 'messageId' && renderPromptableField('messageId')}
 
       {(needs === 'poll' || needs === 'prediction') && (
         <PollForm

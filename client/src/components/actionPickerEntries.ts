@@ -138,6 +138,7 @@ const twitchEntries = ((): ActionPickerEntry[] => {
     { op: 'chat',                    label: 'Send chat message',        hint: 'Baked-in text — great for !commands',  kw: 'chat message send command' },
     { op: 'chat-announcement',       label: 'Send /announce',           hint: 'Highlighted in-chat announcement',      kw: 'announcement announce highlighted chat message' },
     { op: 'clear-chat',              label: 'Clear chat',                                                              kw: 'clear chat delete messages' },
+    { op: 'delete-message',          label: 'Delete chat message',      hint: 'Ask for id on tap (paste from chat)',   kw: 'delete message chat remove moderation single' },
     { op: 'run-ad',                  label: 'Run ad',                   hint: 'Preset length; needs live stream',      kw: 'ad advertisement commercial run play' },
     { op: 'snooze-ad',               label: 'Snooze next ad',                                                          kw: 'ad snooze skip delay next' },
     { op: 'create-clip',             label: 'Create clip',              hint: 'Needs live stream',                     kw: 'clip clips create make record' },

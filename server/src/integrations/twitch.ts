@@ -78,6 +78,7 @@ export type TwitchOp =
   | 'create-clip'
   | 'stream-marker'
   | 'clear-chat'
+  | 'delete-message'
   | 'toggle-shield-mode'
   | 'toggle-emote-only'
   | 'toggle-sub-only'
@@ -113,11 +114,14 @@ export type TwitchActionParams = {
   choices?: string[];
   /** Prediction outcomes for `create-prediction` — 2 to 10 entries, each ≤25 chars. */
   outcomes?: string[];
+  /** IRC message id (UUID) to delete for `delete-message`. Typically pasted
+   *  at press time via a prompt, since chat clients surface it on hover. */
+  messageId?: string;
 };
 
 /** Runtime prompt shown on the phone before executing the action. Field names
  *  map to `TwitchActionParams` keys — the merged value lands in `params[field]`. */
-export type TwitchPromptField = 'target' | 'title' | 'gameName';
+export type TwitchPromptField = 'target' | 'title' | 'gameName' | 'messageId';
 export type TwitchPrompt = { field: TwitchPromptField; label: string; placeholder?: string };
 
 const REDIRECT_URI = 'http://localhost:8765/api/integrations/twitch/callback';
@@ -409,6 +413,7 @@ class TwitchClient implements IntegrationLifecycle {
       case 'create-clip':          return this.execCreateClip(bid);
       case 'stream-marker':        return this.execStreamMarker(bid, params);
       case 'clear-chat':           return this.execClearChat(bid);
+      case 'delete-message':       return this.execDeleteMessage(bid, params);
       case 'toggle-shield-mode':   return this.execToggleShield(bid);
       case 'toggle-emote-only':    return this.execToggleBoolSetting(bid, 'emote_mode');
       case 'toggle-sub-only':      return this.execToggleBoolSetting(bid, 'subscriber_mode');
@@ -587,6 +592,15 @@ class TwitchClient implements IntegrationLifecycle {
     await this.helixWrite(
       'DELETE', '/moderation/chat',
       { broadcaster_id: bid, moderator_id: bid },
+    );
+  }
+
+  private async execDeleteMessage(bid: string, params: TwitchActionParams): Promise<void> {
+    const id = params.messageId?.trim();
+    if (!id) throw new Error('Twitch delete-message: messageId required');
+    await this.helixWrite(
+      'DELETE', '/moderation/chat/messages',
+      { broadcaster_id: bid, moderator_id: bid, message_id: id },
     );
   }
 

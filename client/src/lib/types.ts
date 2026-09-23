@@ -28,6 +28,7 @@ export type TwitchOp =
   | 'create-clip'
   | 'stream-marker'
   | 'clear-chat'
+  | 'delete-message'
   | 'toggle-shield-mode'
   | 'toggle-emote-only'
   | 'toggle-sub-only'
@@ -53,9 +54,10 @@ export type TwitchActionParams = {
   gameName?: string;
   choices?: string[];
   outcomes?: string[];
+  messageId?: string;
 };
 
-export type TwitchPromptField = 'target' | 'title' | 'gameName';
+export type TwitchPromptField = 'target' | 'title' | 'gameName' | 'messageId';
 export type TwitchPrompt = { field: TwitchPromptField; label: string; placeholder?: string };
 
 export type KickOp =
