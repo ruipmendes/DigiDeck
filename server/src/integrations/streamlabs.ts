@@ -80,6 +80,9 @@ export type StreamlabsStatus = {
   sceneItems: Record<string, string[]>;
   /** Keys are `"<sceneName>::<sourceName>"`; value is whether that scene item is currently visible. */
   sourceStates: Record<string, boolean>;
+  /** Subset of sources whose kind is `browser_source` — used by the
+   *  refresh-browser-source op. */
+  browserSources: string[];
   currentScene?: string;
   recording: boolean;
   streaming: boolean;
@@ -88,6 +91,18 @@ export type StreamlabsStatus = {
   mutedInputs: string[];
   /** Audio input name → current fader deflection (0..1). */
   inputVolumes: Record<string, number>;
+  /** Unix ms when the current recording started. Undefined when not recording. */
+  recordingStartedAtMs?: number;
+  /** Unix ms when the current stream started. Undefined when not live. */
+  streamingStartedAtMs?: number;
+  /** Cumulative dropped frames while streaming. */
+  droppedFrames?: number;
+  /** CPU % from Streamlabs' internal meter (0..100). */
+  cpuPercent?: number;
+  /** Current render fps. */
+  fps?: number;
+  /** Streaming bitrate in bits per second (0 when not live). */
+  bandwidthBps?: number;
   retryStopped: boolean;
 };
 
@@ -98,7 +113,8 @@ export type StreamlabsOp =
   | 'toggle-replay-buffer' | 'save-replay-buffer'
   | 'set-scene'
   | 'toggle-mute'
-  | 'toggle-source' | 'show-source' | 'hide-source';
+  | 'toggle-source' | 'show-source' | 'hide-source'
+  | 'refresh-browser-source';
 
 export type StreamlabsActionParams = { sceneName?: string; inputName?: string; sourceName?: string };
 
@@ -173,6 +189,16 @@ class StreamlabsClient implements IntegrationLifecycle {
   private streaming = false;
   private virtualCam = false;
   private replayBuffer = false;
+  /** Browser-source names ordered as they appear in the sources list. */
+  private browserSourceNames: string[] = [];
+  /** Browser-source name → resource id, for the .refresh() call. */
+  private browserSourceIdByName = new Map<string, string>();
+  private recordingStartedAtMs: number | undefined;
+  private streamingStartedAtMs: number | undefined;
+  private droppedFrames: number | undefined;
+  private cpuPercent: number | undefined;
+  private fps: number | undefined;
+  private bandwidthBps: number | undefined;
 
   // Retry / lifecycle
   private retryTimer: NodeJS.Timeout | null = null;
@@ -184,6 +210,9 @@ class StreamlabsClient implements IntegrationLifecycle {
   // reliably push per-source volume events. Diff-checked so we only broadcast
   // when something actually changed.
   private audioPollTimer: NodeJS.Timeout | null = null;
+  /** Polls PerformanceService.getModel() every 2 s while connected — dropped
+   *  frames, CPU %, fps, bandwidth. Streamlabs doesn't push these as events. */
+  private perfPollTimer: NodeJS.Timeout | null = null;
 
   setConfig(cfg: StreamlabsConfig): void {
     this.cfg = { ...cfg };
@@ -205,6 +234,7 @@ class StreamlabsClient implements IntegrationLifecycle {
       inputs: this.audioSources.map((s) => s.name),
       sceneItems: Object.fromEntries(this.sceneItemsByName),
       sourceStates: Object.fromEntries(this.sourceStatesByKey),
+      browserSources: [...this.browserSourceNames],
       currentScene: this.currentSceneName,
       recording: this.recording,
       streaming: this.streaming,
@@ -212,6 +242,12 @@ class StreamlabsClient implements IntegrationLifecycle {
       replayBuffer: this.replayBuffer,
       mutedInputs: [...this.mutedSet],
       inputVolumes: Object.fromEntries(this.inputVolumesByName),
+      recordingStartedAtMs: this.recording ? this.recordingStartedAtMs : undefined,
+      streamingStartedAtMs: this.streaming ? this.streamingStartedAtMs : undefined,
+      droppedFrames: this.droppedFrames,
+      cpuPercent: this.cpuPercent,
+      fps: this.fps,
+      bandwidthBps: this.bandwidthBps,
       retryStopped: this.retryStopped,
     };
   }
@@ -241,6 +277,7 @@ class StreamlabsClient implements IntegrationLifecycle {
       await this.refreshSnapshot().catch((e) => console.warn('[streamlabs] snapshot failed:', (e as Error).message));
       this.subscribeToEvents();
       this.startAudioPoll();
+      this.startPerformancePoll();
       this.emitChange();
     } catch (err) {
       this.err = (err as Error).message;
@@ -254,6 +291,7 @@ class StreamlabsClient implements IntegrationLifecycle {
     this.explicitStop = true;
     if (this.retryTimer) { clearTimeout(this.retryTimer); this.retryTimer = null; }
     this.stopAudioPoll();
+    this.stopPerformancePoll();
     this.firstFailureAt = null;
     this.retryStopped = false;
     if (this.ws) {
@@ -387,6 +425,7 @@ class StreamlabsClient implements IntegrationLifecycle {
 
   private handleClose(): void {
     this.stopAudioPoll();
+    this.stopPerformancePoll();
     if (this.explicitStop) return;
     const wasConnected = this.state === 'connected';
     if (wasConnected) {
@@ -514,6 +553,21 @@ class StreamlabsClient implements IntegrationLifecycle {
     }
   }
 
+  private startPerformancePoll(): void {
+    if (this.perfPollTimer) return;
+    this.perfPollTimer = setInterval(() => {
+      if (this.state !== 'connected') return;
+      void this.refreshPerformance().catch(() => undefined);
+    }, 2000);
+  }
+
+  private stopPerformancePoll(): void {
+    if (this.perfPollTimer) {
+      clearInterval(this.perfPollTimer);
+      this.perfPollTimer = null;
+    }
+  }
+
   // ─── Snapshot + subscriptions ───────────────────────────────────
 
   private async refreshSnapshot(): Promise<void> {
@@ -523,7 +577,56 @@ class StreamlabsClient implements IntegrationLifecycle {
       this.refreshStreamingStatus(),
       this.refreshAudio(),
       this.refreshVirtualCam(),
+      this.refreshBrowserSources(),
+      this.refreshPerformance(),
     ]);
+  }
+
+  /** List all sources of kind `browser_source` and map name → resource id so
+   *  the refresh-browser-source op can address them without a per-fire lookup. */
+  private async refreshBrowserSources(): Promise<void> {
+    const sources = await this.callMethod('SourcesService', 'getSources') as
+      Array<{ sourceId?: string; resourceId?: string; name?: string; type?: string }> | undefined;
+    if (!Array.isArray(sources)) return;
+    const names: string[] = [];
+    const idByName = new Map<string, string>();
+    for (const s of sources) {
+      if (s.type !== 'browser_source') continue;
+      if (typeof s.name !== 'string' || !s.name) continue;
+      const id = s.sourceId ?? s.resourceId;
+      if (!id) continue;
+      names.push(s.name);
+      idByName.set(s.name, id);
+    }
+    // Diff-check so we don't fire a state broadcast unless the set changed.
+    if (sameStringArray(names, this.browserSourceNames) && sameStringMap(idByName, this.browserSourceIdByName)) return;
+    this.browserSourceNames = names;
+    this.browserSourceIdByName = idByName;
+    this.emitChange();
+  }
+
+  private async refreshPerformance(): Promise<void> {
+    try {
+      const model = await this.callMethod('PerformanceService', 'getModel') as
+        { CPU?: number; numberDroppedFrames?: number; percentageDroppedFrames?: number; bandwidth?: number; frameRate?: number } | undefined;
+      if (!model) return;
+      const cpu = typeof model.CPU === 'number' ? model.CPU : undefined;
+      const dropped = typeof model.numberDroppedFrames === 'number' ? model.numberDroppedFrames : undefined;
+      const fps = typeof model.frameRate === 'number' ? model.frameRate : undefined;
+      const bw = typeof model.bandwidth === 'number' ? model.bandwidth : undefined;
+      const changed =
+        this.cpuPercent !== cpu ||
+        this.droppedFrames !== dropped ||
+        this.fps !== fps ||
+        this.bandwidthBps !== bw;
+      this.cpuPercent = cpu;
+      this.droppedFrames = dropped;
+      this.fps = fps;
+      this.bandwidthBps = bw;
+      if (changed) this.emitChange();
+    } catch {
+      // Older Streamlabs builds may lack PerformanceService — silently degrade.
+    }
   }
 
   private async refreshScenes(): Promise<void> {
@@ -583,10 +686,15 @@ class StreamlabsClient implements IntegrationLifecycle {
   }
 
   private async refreshStreamingStatus(): Promise<void> {
-    // StreamingService exposes a `getModel` returning { streamingStatus, recordingStatus, replayBufferStatus }.
+    // StreamingService exposes a `getModel` returning { streamingStatus,
+    // recordingStatus, replayBufferStatus, streamingStatusTime, recordingStatusTime }.
+    // The *StatusTime fields are ISO datetimes marking when the current state
+    // was entered; we parse and store as unix ms so the label renderer can
+    // tick a local elapsed counter without further polling.
     try {
       const model = await this.callMethod('StreamingService', 'getModel') as
-        { streamingStatus?: string; recordingStatus?: string; replayBufferStatus?: string } | undefined;
+        { streamingStatus?: string; recordingStatus?: string; replayBufferStatus?: string;
+          streamingStatusTime?: string; recordingStatusTime?: string } | undefined;
       if (model) {
         const s = model.streamingStatus;
         const r = model.recordingStatus;
@@ -594,6 +702,8 @@ class StreamlabsClient implements IntegrationLifecycle {
         this.streaming = s === 'live' || s === 'starting' || s === 'reconnecting';
         this.recording = r === 'recording' || r === 'starting';
         this.replayBuffer = rb === 'running' || rb === 'starting' || rb === 'saving';
+        this.streamingStartedAtMs = parseIsoMs(model.streamingStatusTime);
+        this.recordingStartedAtMs = parseIsoMs(model.recordingStatusTime);
       }
     } catch {
       // Some versions don't expose getModel; fall back to assuming off and
@@ -735,6 +845,17 @@ class StreamlabsClient implements IntegrationLifecycle {
         await this.callMethod(`AudioSource["${id}"]`, 'setMuted', [wantMuted]);
         break;
       }
+      case 'refresh-browser-source': {
+        // Streamlabs Desktop exposes `.refresh()` on a Source resource. Fire
+        // it through the internal resource form the same way we drive
+        // AudioSource setMuted — the JSON-RPC bridge handles both.
+        const name = params?.inputName?.trim();
+        if (!name) throw new Error('refresh-browser-source: inputName required');
+        const id = this.browserSourceIdByName.get(name);
+        if (!id) throw new Error(`refresh-browser-source: browser source "${name}" not found`);
+        await this.callMethod(`Source["${id}"]`, 'refresh');
+        break;
+      }
     }
     // Refresh shortly after so the live indicator updates even if no event fires.
     setTimeout(() => this.refresh(), 200);
@@ -774,6 +895,26 @@ function sameStringSet(a: Set<string>, b: Set<string>): boolean {
   if (a.size !== b.size) return false;
   for (const x of a) if (!b.has(x)) return false;
   return true;
+}
+
+function sameStringArray(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
+function sameStringMap(a: Map<string, string>, b: Map<string, string>): boolean {
+  if (a.size !== b.size) return false;
+  for (const [k, va] of a) {
+    if (b.get(k) !== va) return false;
+  }
+  return true;
+}
+
+function parseIsoMs(iso: string | undefined): number | undefined {
+  if (!iso) return undefined;
+  const t = Date.parse(iso);
+  return Number.isFinite(t) ? t : undefined;
 }
 
 function sameVolumeMap(a: Map<string, number>, b: Map<string, number>): boolean {

@@ -125,6 +125,7 @@ const streamlabsEntries = ((): ActionPickerEntry[] => {
     { op: 'show-source',          label: 'Show source…',           hint: 'Pick scene + source in editor',      kw: 'source show visibility' },
     { op: 'hide-source',          label: 'Hide source…',           hint: 'Pick scene + source in editor',      kw: 'source hide visibility' },
     { op: 'toggle-source',        label: 'Toggle source visibility…', hint: 'Pick scene + source in editor',   kw: 'source toggle visibility' },
+    { op: 'refresh-browser-source', label: 'Refresh browser source…', hint: 'Reload a Streamlabs browser source (bypass cache)', kw: 'browser source refresh reload chat overlay widget' },
   ];
   return rows.map((r) => ({
     key: `streamlabs:${r.op}`, category: 'Streamlabs Desktop', label: r.label, hint: r.hint, iconName: 'streamlabs',

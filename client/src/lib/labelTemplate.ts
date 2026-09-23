@@ -6,6 +6,13 @@
  *   {obs.streamingTime}   → same shape for streaming
  *   {obs.droppedFrames}   → number as string
  *   {obs.currentScene}    → active OBS scene name
+ *   {streamlabs.recordingTime}  → same shape as {obs.recordingTime}
+ *   {streamlabs.streamingTime}  → same shape as {obs.streamingTime}
+ *   {streamlabs.droppedFrames}  → number as string
+ *   {streamlabs.currentScene}   → active Streamlabs scene name
+ *   {streamlabs.cpu}            → CPU % (Streamlabs' internal meter)
+ *   {streamlabs.fps}            → current render frame rate
+ *   {streamlabs.bandwidth}      → outgoing bitrate, formatted (e.g. "6.0 Mbps")
  *   {discord.channel}     → current voice channel name (or empty)
  *   {discord.mute}        → "muted" while self-muted, else empty
  *   {discord.deaf}        → "deafened" while self-deafened, else empty
@@ -43,6 +50,16 @@ export function renderLabel(label: string, meta: LiveMeta, nowMs: number = Date.
       if (key === 'streamingTime') return o.streamingStartedAtMs ? formatDuration(nowMs - o.streamingStartedAtMs) : '';
       if (key === 'droppedFrames') return String(o.droppedFrames ?? 0);
       if (key === 'currentScene') return o.currentScene ?? '';
+    }
+    if (ns === 'streamlabs' && meta.streamlabs) {
+      const s = meta.streamlabs;
+      if (key === 'recordingTime') return s.recordingStartedAtMs ? formatDuration(nowMs - s.recordingStartedAtMs) : '';
+      if (key === 'streamingTime') return s.streamingStartedAtMs ? formatDuration(nowMs - s.streamingStartedAtMs) : '';
+      if (key === 'droppedFrames') return String(s.droppedFrames ?? 0);
+      if (key === 'currentScene')  return s.currentScene ?? '';
+      if (key === 'cpu')           return s.cpuPercent !== undefined ? `${Math.round(s.cpuPercent)}%` : '';
+      if (key === 'fps')           return s.fps !== undefined ? String(Math.round(s.fps)) : '';
+      if (key === 'bandwidth')     return s.bandwidthBps !== undefined ? formatBandwidth(s.bandwidthBps) : '';
     }
     if (ns === 'discord' && meta.discord) {
       const d = meta.discord;
@@ -110,6 +127,12 @@ function formatCredits(cr: number): string {
   return `${cr} Cr`;
 }
 
+function formatBandwidth(bps: number): string {
+  if (!Number.isFinite(bps) || bps <= 0) return '0 kbps';
+  if (bps >= 1_000_000) return `${(bps / 1_000_000).toFixed(1)} Mbps`;
+  return `${Math.round(bps / 1_000)} kbps`;
+}
+
 function formatDuration(ms: number): string {
   const totalSec = Math.max(0, Math.floor(ms / 1000));
   const h = Math.floor(totalSec / 3600);
@@ -134,6 +157,9 @@ export function isDynamicLabel(label: string): boolean {
 export function getNumericValue(source: string, meta: import('../ws').LiveMeta): number | undefined {
   switch (source) {
     case 'obs.droppedFrames':      return meta.obs?.droppedFrames;
+    case 'streamlabs.droppedFrames': return meta.streamlabs?.droppedFrames;
+    case 'streamlabs.cpu':         return meta.streamlabs?.cpuPercent;
+    case 'streamlabs.fps':         return meta.streamlabs?.fps;
     case 'spotify.volumePercent':  return meta.spotify?.volumePercent;
     case 'kick.viewerCount':       return meta.kick?.viewerCount;
     case 'system.cpu':             return meta.system?.cpuPercent;

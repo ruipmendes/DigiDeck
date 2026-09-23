@@ -68,6 +68,9 @@ export type DiscordVoicePanelTile = {
  *  numeric-shaped fields work; boolean/string fields aren't chartable. */
 export type ChartSource =
   | 'obs.droppedFrames'
+  | 'streamlabs.droppedFrames'
+  | 'streamlabs.cpu'
+  | 'streamlabs.fps'
   | 'spotify.volumePercent'
   | 'kick.viewerCount'
   | 'system.cpu'
@@ -470,6 +473,9 @@ const VALID_ACTION_TYPES = new Set(['hotkey', 'text', 'launch', 'url', 'script',
  *  ChartSource union above and with resolveChartValue() on the client. */
 const VALID_CHART_SOURCES = new Set<string>([
   'obs.droppedFrames',
+  'streamlabs.droppedFrames',
+  'streamlabs.cpu',
+  'streamlabs.fps',
   'spotify.volumePercent',
   'kick.viewerCount',
   'system.cpu',

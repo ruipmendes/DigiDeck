@@ -198,7 +198,8 @@ export type StreamlabsOp =
   | 'toggle-replay-buffer' | 'save-replay-buffer'
   | 'set-scene'
   | 'toggle-mute'
-  | 'toggle-source' | 'show-source' | 'hide-source';
+  | 'toggle-source' | 'show-source' | 'hide-source'
+  | 'refresh-browser-source';
 
 export type StreamlabsActionParams = { sceneName?: string; inputName?: string; sourceName?: string };
 
@@ -287,7 +288,7 @@ export type DiscordVoicePanelTile = {
 };
 
 /** Numeric LiveMeta sources that can feed a chart tile. */
-export type ChartSource = 'obs.droppedFrames' | 'spotify.volumePercent' | 'kick.viewerCount' | 'system.cpu' | 'system.ram' | 'system.gpu' | 'elite.fuelPercent' | 'elite.cargoTons' | 'elite.credits' | 'elite.missionCount' | 'elite.missionReward';
+export type ChartSource = 'obs.droppedFrames' | 'streamlabs.droppedFrames' | 'streamlabs.cpu' | 'streamlabs.fps' | 'spotify.volumePercent' | 'kick.viewerCount' | 'system.cpu' | 'system.ram' | 'system.gpu' | 'elite.fuelPercent' | 'elite.cargoTons' | 'elite.credits' | 'elite.missionCount' | 'elite.missionReward';
 
 /** Small sparkline tile — no tap action; renders a rolling trace of a
  *  numeric LiveMeta value. Value mode plots raw; delta mode plots

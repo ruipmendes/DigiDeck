@@ -351,6 +351,7 @@ export type StreamlabsStatus = {
   inputs: string[];
   sceneItems: Record<string, string[]>;
   sourceStates: Record<string, boolean>;
+  browserSources?: string[];
   currentScene?: string;
   recording: boolean;
   streaming: boolean;
@@ -358,6 +359,12 @@ export type StreamlabsStatus = {
   replayBuffer: boolean;
   mutedInputs: string[];
   inputVolumes: Record<string, number>;
+  recordingStartedAtMs?: number;
+  streamingStartedAtMs?: number;
+  droppedFrames?: number;
+  cpuPercent?: number;
+  fps?: number;
+  bandwidthBps?: number;
   retryStopped: boolean;
 };
 

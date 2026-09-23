@@ -55,7 +55,7 @@ export type DiscordVoicePanelTile = {
   accentColor?: string;
 };
 
-export type ChartSource = 'obs.droppedFrames' | 'spotify.volumePercent' | 'kick.viewerCount' | 'system.cpu' | 'system.ram' | 'system.gpu' | 'elite.fuelPercent' | 'elite.cargoTons' | 'elite.credits' | 'elite.missionCount' | 'elite.missionReward';
+export type ChartSource = 'obs.droppedFrames' | 'streamlabs.droppedFrames' | 'streamlabs.cpu' | 'streamlabs.fps' | 'spotify.volumePercent' | 'kick.viewerCount' | 'system.cpu' | 'system.ram' | 'system.gpu' | 'elite.fuelPercent' | 'elite.cargoTons' | 'elite.credits' | 'elite.missionCount' | 'elite.missionReward';
 
 /** Small sparkline tile that traces a numeric LiveMeta value over a rolling
  *  window. No tap action; purely display. */
@@ -123,6 +123,17 @@ export type LiveMeta = {
     streamingStartedAtMs?: number;
     droppedFrames?: number;
     currentScene?: string;
+  };
+  streamlabs?: {
+    recording?: boolean;
+    streaming?: boolean;
+    recordingStartedAtMs?: number;
+    streamingStartedAtMs?: number;
+    droppedFrames?: number;
+    currentScene?: string;
+    cpuPercent?: number;
+    fps?: number;
+    bandwidthBps?: number;
   };
   discord?: {
     currentVoiceChannelName?: string | null;

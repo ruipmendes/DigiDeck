@@ -70,6 +70,17 @@ type LiveMeta = {
     droppedFrames?: number;
     currentScene?: string;
   };
+  streamlabs?: {
+    recording?: boolean;
+    streaming?: boolean;
+    recordingStartedAtMs?: number;
+    streamingStartedAtMs?: number;
+    droppedFrames?: number;
+    currentScene?: string;
+    cpuPercent?: number;
+    fps?: number;
+    bandwidthBps?: number;
+  };
   discord?: {
     currentVoiceChannelName?: string | null;
     mute?: boolean;
@@ -340,6 +351,20 @@ function buildLiveMeta(): LiveMeta {
       droppedFrames: obsStatus.droppedFrames,
       currentScene: obsStatus.currentScene,
     },
+    streamlabs: (() => {
+      const s = streamlabs.status();
+      return {
+        recording: s.recording,
+        streaming: s.streaming,
+        recordingStartedAtMs: s.recordingStartedAtMs,
+        streamingStartedAtMs: s.streamingStartedAtMs,
+        droppedFrames: s.droppedFrames,
+        currentScene: s.currentScene,
+        cpuPercent: s.cpuPercent,
+        fps: s.fps,
+        bandwidthBps: s.bandwidthBps,
+      };
+    })(),
     discord: {
       currentVoiceChannelName: discordStatus.currentVoiceChannelName,
       mute: discordStatus.mute,

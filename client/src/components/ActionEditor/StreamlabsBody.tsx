@@ -3,22 +3,23 @@ import type { Action, StreamlabsOp } from '../../lib/types';
 import * as api from '../../lib/api';
 import { PickOrType, selectStyle } from './shared';
 
-type StreamlabsNeeds = 'scene' | 'input' | 'scene+source' | null;
+type StreamlabsNeeds = 'scene' | 'input' | 'scene+source' | 'browser-source' | null;
 const STREAMLABS_OPS: { value: StreamlabsOp; label: string; needs: StreamlabsNeeds }[] = [
-  { value: 'toggle-record',         label: 'Toggle recording',         needs: null },
-  { value: 'start-record',          label: 'Start recording',          needs: null },
-  { value: 'stop-record',           label: 'Stop recording',           needs: null },
-  { value: 'toggle-stream',         label: 'Toggle stream',            needs: null },
-  { value: 'start-stream',          label: 'Start stream',             needs: null },
-  { value: 'stop-stream',           label: 'Stop stream',              needs: null },
-  { value: 'toggle-virtual-cam',    label: 'Toggle virtual camera',    needs: null },
-  { value: 'toggle-replay-buffer',  label: 'Toggle replay buffer',     needs: null },
-  { value: 'save-replay-buffer',    label: 'Save replay buffer',       needs: null },
-  { value: 'set-scene',             label: 'Switch to scene…',         needs: 'scene' },
-  { value: 'toggle-mute',           label: 'Toggle mute…',             needs: 'input' },
-  { value: 'show-source',           label: 'Show source…',             needs: 'scene+source' },
-  { value: 'hide-source',           label: 'Hide source…',             needs: 'scene+source' },
-  { value: 'toggle-source',         label: 'Toggle visibility…',       needs: 'scene+source' },
+  { value: 'toggle-record',            label: 'Toggle recording',         needs: null },
+  { value: 'start-record',             label: 'Start recording',          needs: null },
+  { value: 'stop-record',              label: 'Stop recording',           needs: null },
+  { value: 'toggle-stream',            label: 'Toggle stream',            needs: null },
+  { value: 'start-stream',             label: 'Start stream',             needs: null },
+  { value: 'stop-stream',              label: 'Stop stream',              needs: null },
+  { value: 'toggle-virtual-cam',       label: 'Toggle virtual camera',    needs: null },
+  { value: 'toggle-replay-buffer',     label: 'Toggle replay buffer',     needs: null },
+  { value: 'save-replay-buffer',       label: 'Save replay buffer',       needs: null },
+  { value: 'set-scene',                label: 'Switch to scene…',         needs: 'scene' },
+  { value: 'toggle-mute',              label: 'Toggle mute…',             needs: 'input' },
+  { value: 'show-source',              label: 'Show source…',             needs: 'scene+source' },
+  { value: 'hide-source',              label: 'Hide source…',             needs: 'scene+source' },
+  { value: 'toggle-source',            label: 'Toggle visibility…',       needs: 'scene+source' },
+  { value: 'refresh-browser-source',   label: 'Refresh browser source…',  needs: 'browser-source' },
 ];
 
 export function StreamlabsBody({ action, onChange }: { action: Extract<Action, { type: 'streamlabs' }>; onChange: (a: Action) => void }) {
@@ -27,6 +28,7 @@ export function StreamlabsBody({ action, onChange }: { action: Extract<Action, {
     inputs: string[];
     sceneItems: Record<string, string[]>;
     sourceStates: Record<string, boolean>;
+    browserSources: string[];
     connected: boolean;
   } | null>(null);
 
@@ -39,9 +41,10 @@ export function StreamlabsBody({ action, onChange }: { action: Extract<Action, {
           inputs: d.status.inputs,
           sceneItems: d.status.sceneItems ?? {},
           sourceStates: d.status.sourceStates ?? {},
+          browserSources: d.status.browserSources ?? [],
           connected: d.status.state === 'connected',
         }); })
-        .catch(() => { if (alive) setSnap({ scenes: [], inputs: [], sceneItems: {}, sourceStates: {}, connected: false }); });
+        .catch(() => { if (alive) setSnap({ scenes: [], inputs: [], sceneItems: {}, sourceStates: {}, browserSources: [], connected: false }); });
     }
     load();
     const t = setInterval(load, 4000);
@@ -101,6 +104,18 @@ export function StreamlabsBody({ action, onChange }: { action: Extract<Action, {
             labelOf={sourceLabel}
           />
         </>
+      )}
+      {needs === 'browser-source' && (
+        <PickOrType
+          value={action.params?.inputName ?? ''}
+          options={snap?.browserSources ?? []}
+          placeholder={
+            snap?.browserSources.length === 0
+              ? 'no browser sources — add one in Streamlabs first'
+              : 'browser source name'
+          }
+          onChange={(v) => onChange({ ...action, params: { ...action.params, inputName: v } })}
+        />
       )}
       {snap && !snap.connected && needs && (
         <span style={{ fontSize: 11, color: '#9ca3af' }}>
