@@ -1,4 +1,5 @@
-import { request as httpsRequest, Agent as HttpsAgent } from 'node:https';
+import { request as httpsRequest } from 'node:https';
+import { connect as tlsConnect } from 'node:tls';
 import type { IntegrationsConfig, ServerConfig } from '../config.js';
 import { registerIntegration, type CallbackOutcome, type IntegrationLifecycle, type IntegrationManifest } from './base.js';
 
@@ -54,9 +55,12 @@ export function validateHueConfig(input: unknown, existing: HueConfig): HueConfi
   return {
     enabled: !!o.enabled,
     bridgeIp: typeof o.bridgeIp === 'string' ? o.bridgeIp.trim() : existing.bridgeIp,
-    // Application key + bridge id come from the link-button flow, not user input.
+    // Application key, bridge id, and pinned cert fingerprint all come from
+    // the link-button flow, not user input — they're read-only from the UI's
+    // perspective and preserved across config updates.
     applicationKey: existing.applicationKey,
     bridgeId: existing.bridgeId,
+    pinnedCertFingerprint: existing.pinnedCertFingerprint,
   };
 }
 
@@ -75,6 +79,11 @@ export type HueConfig = {
   bridgeIp: string;
   applicationKey: string;
   bridgeId: string;
+  /** SHA-256 fingerprint of the bridge's TLS cert, captured on link (TOFU).
+   *  Every subsequent connection verifies against this value BEFORE any
+   *  bytes with the app key are written to the socket, so an attacker who
+   *  spoofs the bridge's IP after pairing can't intercept new commands. */
+  pinnedCertFingerprint?: string;
 };
 
 export const DEFAULT_HUE_CONFIG: HueConfig = {
@@ -132,11 +141,15 @@ export type HueActionParams = {
   sceneId?: string;
 };
 
-// ─── Cert bypass ────────────────────────────────────────────────
+// ─── Cert handling ──────────────────────────────────────────────
 // Hue bridges ship with a self-signed certificate signed for their bridge id,
-// not their IP. Since we can't trust a per-user CA out of the box, we bypass
-// verification with a scoped agent — never touches other integrations' traffic.
-const hueAgent = new HttpsAgent({ rejectUnauthorized: false, keepAlive: true });
+// not their IP, so Node's default hostname check refuses them. Instead of
+// blindly bypassing verification, we pre-connect a TLS socket per request and
+// verify its SHA-256 fingerprint against the value we pinned on link (TOFU).
+// Only after the fingerprint matches (or when no pin exists yet — the initial
+// link exchange itself) is the socket handed to the HTTP client, so the
+// hue-application-key header never lands on a mismatched socket. Scoped
+// entirely to bridge traffic; never touches other integrations' fetches.
 
 const POLL_INTERVAL_MS = 5_000;
 
@@ -206,6 +219,8 @@ class HueClient implements IntegrationLifecycle {
    *  `[{"error":{"type":101,"description":"link button not pressed"}}]`. */
   async connectInteractive(): Promise<CallbackOutcome> {
     if (!this.cfg.bridgeIp) throw new Error('Set the bridge IP first (or run discovery).');
+    // Initial link — no pinned fingerprint yet. Capture whatever cert the
+    // bridge presents and pin it on success (Trust On First Use).
     const res = await hueFetch(this.cfg.bridgeIp, '/api', {
       method: 'POST',
       body: JSON.stringify({ devicetype: 'digi-deck#server', generateclientkey: true }),
@@ -223,8 +238,10 @@ class HueClient implements IntegrationLifecycle {
     const key = parsed?.find((p) => p.success?.username)?.success?.username;
     if (!key) throw new Error('Hue link succeeded but no application key returned.');
 
-    // Fetch the bridge's own metadata to grab its stable id + name.
+    // Pin the cert fingerprint from the link exchange; every future request
+    // will verify against this value before the app key touches the wire.
     this.cfg.applicationKey = key;
+    if (res.certFingerprint) this.cfg.pinnedCertFingerprint = res.certFingerprint;
     try {
       const meta = await this.clipGet<{ data?: Array<{ id?: string; product_name?: string }> }>('/clip/v2/resource/bridge');
       const b = meta?.data?.[0];
@@ -241,6 +258,9 @@ class HueClient implements IntegrationLifecycle {
     await this.stop();
     this.cfg.applicationKey = '';
     this.cfg.bridgeId = '';
+    // Also drop the cert pin so the next link cycle establishes a fresh one —
+    // covers bridge swaps + firmware-triggered cert rotations.
+    this.cfg.pinnedCertFingerprint = undefined;
     this.bridgeName = undefined;
     this.lights = undefined;
     this.rooms = undefined;
@@ -449,7 +469,7 @@ class HueClient implements IntegrationLifecycle {
   private async clipGet<T>(path: string): Promise<T> {
     const res = await hueFetch(this.cfg.bridgeIp, path, {
       headers: { 'hue-application-key': this.cfg.applicationKey },
-    });
+    }, this.cfg.pinnedCertFingerprint);
     if (res.status < 200 || res.status >= 300) {
       throw new Error(`Hue GET ${path}: HTTP ${res.status} ${res.body.slice(0, 100)}`);
     }
@@ -464,7 +484,7 @@ class HueClient implements IntegrationLifecycle {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(body),
-    });
+    }, this.cfg.pinnedCertFingerprint);
     if (res.status < 200 || res.status >= 300) {
       throw new Error(`Hue PUT ${path}: HTTP ${res.status} ${res.body.slice(0, 200)}`);
     }
@@ -509,13 +529,56 @@ function requireId(id: string | undefined, name: string): string {
   return id.trim();
 }
 
-/** Node-native HTTPS request with the Hue-scoped agent (rejectUnauthorized:
- *  false). Returns a fetch-shaped {status, body} tuple. */
+/** Node-native HTTPS request with TOFU cert pinning. Pre-connects a TLS
+ *  socket, verifies its SHA-256 fingerprint against `expectedFingerprint`
+ *  BEFORE any application data is written, and only then reuses the socket
+ *  for the HTTP request. When `expectedFingerprint` is omitted (initial link
+ *  before we've pinned anything), the verification step is skipped and the
+ *  observed fingerprint is returned so the caller can pin it. Returns a
+ *  fetch-shaped {status, body, certFingerprint} tuple. */
 async function hueFetch(
   bridgeIp: string,
   path: string,
   init: { method?: string; body?: string; headers?: Record<string, string> } = {},
-): Promise<{ status: number; body: string }> {
+  expectedFingerprint?: string,
+): Promise<{ status: number; body: string; certFingerprint?: string }> {
+  const socket = tlsConnect({
+    host: bridgeIp,
+    port: 443,
+    // Self-signed by design; we verify the fingerprint ourselves below.
+    rejectUnauthorized: false,
+    servername: bridgeIp,
+  });
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const cleanup = () => {
+        socket.off('error', onError);
+        socket.off('secureConnect', onSecure);
+        clearTimeout(handshakeTimer);
+      };
+      const onError = (e: Error) => { cleanup(); reject(e); };
+      const onSecure = () => { cleanup(); resolve(); };
+      const handshakeTimer = setTimeout(() => {
+        cleanup();
+        reject(new Error('Hue TLS handshake timed out (bridge unreachable?)'));
+      }, 8000);
+      socket.on('error', onError);
+      socket.on('secureConnect', onSecure);
+    });
+  } catch (e) {
+    socket.destroy();
+    throw e;
+  }
+  const cert = socket.getPeerCertificate(true);
+  const certFingerprint = cert?.fingerprint256 || undefined;
+  if (expectedFingerprint && certFingerprint !== expectedFingerprint) {
+    socket.destroy();
+    throw new Error(
+      `Hue: bridge cert fingerprint changed — expected ${short(expectedFingerprint)} but got ${short(certFingerprint)}. ` +
+      'If you replaced the bridge, click Disconnect on the Hue panel and re-link.',
+    );
+  }
+
   return new Promise((resolve, reject) => {
     const req = httpsRequest({
       hostname: bridgeIp,
@@ -526,23 +589,31 @@ async function hueFetch(
         Accept: 'application/json',
         ...(init.headers ?? {}),
       },
-      agent: hueAgent,
-      // Bridge is on LAN — 8 s covers even sluggish v1 bridges.
+      // Skip Node's agent + verification — we've already handshake'd and
+      // verified. Reuse the pre-connected socket.
+      agent: false,
+      createConnection: () => socket,
       timeout: 8000,
     }, (res) => {
       const chunks: Buffer[] = [];
       res.on('data', (c: Buffer) => chunks.push(c));
       res.on('end', () => {
         const body = Buffer.concat(chunks).toString('utf8');
-        resolve({ status: res.statusCode ?? 0, body });
+        resolve({ status: res.statusCode ?? 0, body, certFingerprint });
       });
       res.on('error', reject);
     });
-    req.on('error', reject);
+    req.on('error', (err) => { socket.destroy(); reject(err); });
     req.on('timeout', () => { req.destroy(new Error('Hue request timed out (bridge unreachable?)')); });
     if (init.body) req.write(init.body);
     req.end();
   });
+}
+
+/** Truncate a `AA:BB:CC:…` fingerprint to something readable in error messages. */
+function short(fp: string | undefined): string {
+  if (!fp) return '(none)';
+  return fp.length > 32 ? `${fp.slice(0, 32)}…` : fp;
 }
 
 let _instance: HueClient | null = null;
