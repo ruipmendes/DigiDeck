@@ -3,6 +3,7 @@ import { useMacroWS } from './ws';
 import { ButtonGrid } from './components/ButtonGrid';
 import { PreviewBanner, usePreviewHeartbeat } from './components/PreviewBanner';
 import { readUrlTokenAndStore, getStoredToken, clearToken } from './lib/token';
+import { setPackTints } from './lib/icons';
 import * as api from './lib/api';
 
 const STORAGE_KEY = 'digi-deck:ws_url';
@@ -38,6 +39,16 @@ export function GridApp() {
   useEffect(() => {
     document.title = 'Digi Deck';
   }, []);
+
+  // Fetch icon-pack tint modes once the token is available, so pack icons
+  // rendered by ButtonGrid pick the right CSS filter. Non-fatal on failure —
+  // tiles fall back to the invert default.
+  useEffect(() => {
+    if (!token) return;
+    api.listIconPacks()
+      .then((data) => setPackTints(data.packs))
+      .catch(() => { /* ignore — tiles fall back to invert default */ });
+  }, [token]);
 
   // On localhost (PC preview), bootstrap the token via /api/pairing if this
   // browser doesn't have one yet. On the phone (non-localhost), bootstrap is

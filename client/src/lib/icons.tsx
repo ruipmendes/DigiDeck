@@ -1,5 +1,5 @@
-import type { ComponentType, SVGProps, CSSProperties } from 'react';
-import { iconPackUrl } from './api';
+import { useEffect, useState, type ComponentType, type SVGProps, type CSSProperties } from 'react';
+import { iconPackUrl, type IconPack, type TintMode } from './api';
 import {
   Play, Pause, Square, FastForward, Rewind, SkipBack, SkipForward,
   Volume1, Volume2, VolumeX,
@@ -66,25 +66,57 @@ export const ICONS: Record<string, IconComponent> = {
 
 export const ICON_NAMES = Object.keys(ICONS).sort();
 
+/** Module-level cache of per-pack tint modes. Populated on app boot (both
+ *  the config UI and the grid app fetch the pack list at mount) and refreshed
+ *  whenever the picker re-lists them. Unknown packs default to `invert` — the
+ *  historical behavior. */
+const _packTints: Record<string, TintMode> = {};
+const _tintListeners = new Set<() => void>();
+
+export function setPackTints(packs: Array<Pick<IconPack, 'name' | 'tint'>>): void {
+  let changed = false;
+  for (const p of packs) {
+    if (_packTints[p.name] !== p.tint) { _packTints[p.name] = p.tint; changed = true; }
+  }
+  if (changed) for (const l of _tintListeners) l();
+}
+
+/** Bumps whenever the pack-tint cache changes. Components that render pack
+ *  icons via `<img>` (ButtonGrid tiles, IconPicker grid) call this so React
+ *  re-renders them when the config UI flips a pack's tint mode. */
+export function useTintVersion(): number {
+  const [v, setV] = useState(0);
+  useEffect(() => {
+    const l = () => setV((x) => x + 1);
+    _tintListeners.add(l);
+    return () => { _tintListeners.delete(l); };
+  }, []);
+  return v;
+}
+
+export function tintFilter(mode: TintMode): string | undefined {
+  // `invert(1) brightness(1.5)` is the monochrome-black baseline (Simple
+  // Icons convention). `none` skips CSS filtering so colored packs render
+  // as-drawn.
+  return mode === 'none' ? undefined : 'invert(1) brightness(1.5)';
+}
+
 /** Pack icons are stored server-side and served via `<img src>` — wrap that
  *  into an IconComponent shape so every call-site keeps working unchanged.
  *  Pack format: `<pack>:<name>` (e.g. `simple-icons:spotify`, or
- *  `simple-icons:gaming/steam` for nested pack subdirs). */
+ *  `simple-icons:gaming/steam` for nested pack subdirs). Tint mode comes from
+ *  the module cache; call-sites can override via `style.filter`. */
 function makePackIcon(pack: string, iconName: string): IconComponent {
   const url = iconPackUrl(pack, iconName);
   return function PackIcon({ size = 24, style }: { size?: number | string; style?: CSSProperties }) {
-    // Pack SVGs (Simple Icons especially) come as black-on-transparent by
-    // convention, so they'd be invisible on the dark tile / picker background
-    // as-is. `filter: invert(1)` flips black → white. If callers need the
-    // original colors (e.g. a colored preview), passing style.filter='none'
-    // overrides this.
+    const filter = tintFilter(_packTints[pack] ?? 'invert');
     return (
       <img
         src={url}
         alt=""
         width={size}
         height={size}
-        style={{ objectFit: 'contain', display: 'block', filter: 'invert(1) brightness(1.5)', ...style }}
+        style={{ objectFit: 'contain', display: 'block', ...(filter ? { filter } : null), ...style }}
         draggable={false}
       />
     );

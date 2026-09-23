@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Volume2, VolumeX, ArrowLeft, Home, Headphones, MicOff } from 'lucide-react';
 import type { ButtonState, Layout, LiveMeta, PressPrompt, Tile, VoicePanelMember } from '../ws';
-import { getIcon } from '../lib/icons';
+import { getIcon, useTintVersion } from '../lib/icons';
 import { imageUrl, fetchPromptChoices } from '../lib/api';
 import { isDynamicLabel, renderLabel } from '../lib/labelTemplate';
 import { ChartTileView } from './ChartTile';
@@ -37,6 +37,9 @@ const PAGE_KEY = 'digi-deck:active_page';
 const BACK_TILE_ID = -1; // synthetic id; never collides with real tile ids (which are >= 0)
 
 export function ButtonGrid({ layout, lastAck, lastNack, buttonStates, onPress, onSliderChange, onSliderMute, onVoicePanelVolume, onVoicePanelMute, liveMeta }: Props) {
+  // Subscribe to pack-tint updates so pack `<img>` icons re-render when the
+  // config UI flips a pack between invert and native.
+  useTintVersion();
   // Flash state carries the tile id AND the kind of flash so failed actions
   // can briefly tint red while successful ones tint blue/accent.
   const [flash, setFlash] = useState<{ id: number; kind: 'ack' | 'nack' } | null>(null);

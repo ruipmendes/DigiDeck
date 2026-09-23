@@ -537,7 +537,8 @@ export async function recheckSpotifySubscription(): Promise<SpotifyState_API> {
 
 // ─── Icon packs ─────────────────────────────────────────────────
 
-export type IconPack = { name: string; icons: string[] };
+export type TintMode = 'invert' | 'none';
+export type IconPack = { name: string; icons: string[]; tint: TintMode };
 
 export async function listIconPacks(): Promise<{ packs: IconPack[]; dir: string }> {
   const res = await apiFetch('/api/icon-packs');
@@ -548,6 +549,30 @@ export async function listIconPacks(): Promise<{ packs: IconPack[]; dir: string 
 export async function refreshIconPacks(): Promise<{ packs: IconPack[]; dir: string }> {
   const res = await apiFetch('/api/icon-packs/refresh', { method: 'POST' });
   if (!res.ok) throw new Error(`POST icon-packs/refresh failed: ${res.status}`);
+  return res.json();
+}
+
+/** POST a raw zip body — the pack name lands as `icon-packs/<name>/`. Server
+ *  auto-detects and strips a common container prefix so GitHub-style archives
+ *  land clean at the pack root. */
+export async function uploadIconPack(name: string, zip: Blob): Promise<{ pack: string; iconCount: number; packs: IconPack[]; dir: string }> {
+  const res = await apiFetch(`/api/icon-packs/upload?name=${encodeURIComponent(name)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/zip' },
+    body: zip,
+  });
+  const data = await res.json() as { pack?: string; iconCount?: number; packs?: IconPack[]; dir?: string; error?: string };
+  if (!res.ok) throw new Error(data.error ?? `upload failed: ${res.status}`);
+  return data as { pack: string; iconCount: number; packs: IconPack[]; dir: string };
+}
+
+export async function setIconPackTint(name: string, tint: TintMode): Promise<{ packs: IconPack[]; dir: string }> {
+  const res = await apiFetch(`/api/icon-packs/${encodeURIComponent(name)}/tint`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tint }),
+  });
+  if (!res.ok) throw new Error(`tint update failed: ${res.status}`);
   return res.json();
 }
 

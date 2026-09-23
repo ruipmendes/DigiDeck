@@ -21,7 +21,7 @@ import { ColorPicker } from './components/ColorPicker';
 import { AppearancePopover, AppearanceSection } from './components/AppearancePopover';
 import { TemplatesPanel } from './components/TemplatesPanel';
 import { PreviewBanner, usePreviewHeartbeat } from './components/PreviewBanner';
-import { getIcon } from './lib/icons';
+import { getIcon, setPackTints } from './lib/icons';
 
 const CONFIG_ACTIVE_PAGE_KEY = 'digi-deck:config_active_page';
 
@@ -222,6 +222,14 @@ export function ConfigApp() {
 
   useEffect(() => {
     document.title = 'Digi Deck — Config';
+  }, []);
+
+  // Fetch icon-pack tint modes on mount so pack icons render with the right
+  // CSS filter. Non-fatal on failure — pack icons fall back to invert default.
+  useEffect(() => {
+    api.listIconPacks()
+      .then((data) => setPackTints(data.packs))
+      .catch(() => { /* ignore */ });
   }, []);
 
   useEffect(() => {

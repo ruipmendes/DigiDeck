@@ -9,7 +9,7 @@ import { getDiscord } from './integrations/discord.js';
 import { getSpotify } from './integrations/spotify.js';
 import { getHue } from './integrations/hue.js';
 import { getAppAudio } from './actions/appAudio.js';
-import { listIconPacks, readIcon, ICON_PACKS_DIR, invalidateIconPacksCache } from './icon-packs.js';
+import { listIconPacks, readIcon, ICON_PACKS_DIR, invalidateIconPacksCache, installPackFromZip, setPackTint, type TintMode } from './icon-packs.js';
 import {
   listSounds, invalidateCache as invalidateSoundsCache,
   resolveSoundPath, setDefaultVolume, mimeType as soundMimeType,
@@ -338,6 +338,41 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse, c
     invalidateIconPacksCache();
     const packs = await listIconPacks();
     json(res, 200, { packs, dir: ICON_PACKS_DIR });
+    return;
+  }
+  // Upload an icon-pack zip. The `name` query param names the destination
+  // folder (`icon-packs/<name>/`); server auto-strips a common container
+  // prefix so GitHub-style archives (`repo-branch/…`) land clean.
+  if (pathname === '/api/icon-packs/upload' && req.method === 'POST') {
+    if (!authorize(req, token())) return unauthorized(res);
+    try {
+      const uploadUrl = new URL(req.url ?? '', 'http://localhost');
+      const name = (uploadUrl.searchParams.get('name') || '').trim();
+      if (!name) throw new Error('missing ?name= query parameter');
+      // 50 MB cap — Simple Icons' full pack is ~5 MB, so this is generous.
+      const buf = await readBinaryBody(req, 50 * 1024 * 1024);
+      const result = await installPackFromZip(buf, name);
+      const packs = await listIconPacks();
+      json(res, 200, { ...result, packs, dir: ICON_PACKS_DIR });
+    } catch (err) {
+      json(res, 400, { error: (err as Error).message });
+    }
+    return;
+  }
+  // PUT /api/icon-packs/<pack>/tint — body `{tint: 'invert' | 'none'}`.
+  if (pathname.startsWith('/api/icon-packs/') && pathname.endsWith('/tint') && req.method === 'PUT') {
+    if (!authorize(req, token())) return unauthorized(res);
+    try {
+      const pack = decodeURIComponent(pathname.slice('/api/icon-packs/'.length, -'/tint'.length));
+      const body = await readJsonBody(req) as { tint?: unknown };
+      const tint = body.tint;
+      if (tint !== 'invert' && tint !== 'none') throw new Error("tint must be 'invert' or 'none'");
+      await setPackTint(pack, tint as TintMode);
+      const packs = await listIconPacks();
+      json(res, 200, { packs, dir: ICON_PACKS_DIR });
+    } catch (err) {
+      json(res, 400, { error: (err as Error).message });
+    }
     return;
   }
   // Serve an individual SVG. Path shape: /api/icon-packs/<pack>/<iconName>.svg

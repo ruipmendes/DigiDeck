@@ -1,5 +1,6 @@
 import { promises as fs } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
+import AdmZip from 'adm-zip';
 
 /**
  * Icon-pack discovery + serving.
@@ -26,8 +27,18 @@ const APP_DIR = join(
   'digi-deck',
 );
 export const ICON_PACKS_DIR = join(APP_DIR, 'icon-packs');
+/** Sidecar for per-pack settings (tint mode today; room for more later).
+ *  Kept OUTSIDE the packs folder so users can sync `icon-packs/` externally
+ *  without dragging our settings along. */
+const PACK_SETTINGS_FILE = join(APP_DIR, 'icon-pack-settings.json');
 
 const CACHE_TTL_MS = 5_000;
+/** Sane cap for zip uploads — Simple Icons' full pack is ~5 MB, so 50 MB is
+ *  generous with no realistic ceiling in sight. */
+const MAX_PACK_FILES = 10_000;
+/** Reject SVGs bigger than this. Real-world icon SVGs are 1-4 KB; anything
+ *  vastly larger is either not an icon or an attempt to blow up the disk. */
+const MAX_SVG_BYTES = 512 * 1024;
 
 /** Ensure the icon-packs directory exists on disk. Called at server startup
  *  so the picker's help text points at a real folder the user can click through
@@ -36,12 +47,20 @@ export async function ensureIconPacksDir(): Promise<void> {
   await fs.mkdir(ICON_PACKS_DIR, { recursive: true });
 }
 
+/** How the client renders a pack's SVGs. `invert` is our default and matches
+ *  Simple Icons' black-on-transparent convention (light-on-dark tile). `none`
+ *  preserves original colors — the right choice for packs that already ship
+ *  colored SVGs (screenshots of app icons, streamer logos in brand colors). */
+export type TintMode = 'invert' | 'none';
+
 export type IconPack = {
   /** Pack folder name — used as the prefix in the tile `icon` field. */
   name: string;
   /** Sorted list of icon names inside the pack. Names include subfolder
    *  prefixes (e.g. `gaming/steam`) but never a `.svg` extension. */
   icons: string[];
+  /** Per-pack render setting. Default `invert` matches existing behavior. */
+  tint: TintMode;
 };
 
 type Cache = { at: number; packs: IconPack[] };
@@ -52,6 +71,66 @@ export async function listIconPacks(): Promise<IconPack[]> {
   const packs = await scanIconPacks();
   cache = { at: Date.now(), packs };
   return packs;
+}
+
+/** Persist a pack's tint mode. `invert` is the default, so we omit rather
+ *  than write it — keeps the sidecar minimal for users on defaults. */
+export async function setPackTint(name: string, tint: TintMode): Promise<void> {
+  if (!isValidPackName(name)) throw new Error(`invalid pack name "${name}"`);
+  if (tint !== 'invert' && tint !== 'none') throw new Error(`invalid tint "${tint}"`);
+  const settings = await readPackSettings();
+  if (tint === 'invert') delete settings[name];
+  else settings[name] = { tint };
+  await writePackSettings(settings);
+  invalidateIconPacksCache();
+}
+
+/** Extract a zip into `icon-packs/<packName>/`. Auto-detects and strips a
+ *  common folder prefix so GitHub-style archives (`repo-branch/…`) land clean
+ *  at the pack root. Overwrites existing files so users can re-upload updated
+ *  packs. Rejects zip entries that would escape the pack dir. */
+export async function installPackFromZip(zipBuffer: Buffer, packName: string): Promise<{ pack: string; iconCount: number }> {
+  if (!isValidPackName(packName)) {
+    throw new Error(`invalid pack name "${packName}" — use letters, digits, dot, dash, underscore`);
+  }
+  let zip: AdmZip;
+  try { zip = new AdmZip(zipBuffer); }
+  catch (err) { throw new Error(`not a valid zip: ${(err as Error).message}`); }
+  const entries = zip.getEntries();
+  if (entries.length > MAX_PACK_FILES) {
+    throw new Error(`zip has ${entries.length} entries — cap is ${MAX_PACK_FILES}`);
+  }
+  // Collect SVG entries with normalized forward-slash paths.
+  const svgEntries = entries
+    .filter((e) => !e.isDirectory && e.entryName.toLowerCase().endsWith('.svg'))
+    .map((e) => ({ path: e.entryName.replace(/\\/g, '/'), entry: e }));
+  if (svgEntries.length === 0) throw new Error('zip contained no .svg files');
+  const commonPrefix = detectCommonPrefix(svgEntries.map((s) => s.path));
+
+  const packDir = resolve(ICON_PACKS_DIR, packName);
+  const packsRoot = resolve(ICON_PACKS_DIR);
+  if (!packDir.startsWith(packsRoot + sep) && packDir !== packsRoot) {
+    throw new Error('pack path resolution failed');
+  }
+  await fs.mkdir(packDir, { recursive: true });
+
+  let written = 0;
+  for (const { path: p, entry } of svgEntries) {
+    // Strip the common prefix so `simple-icons-14.x/icons/adobe.svg` lands
+    // as `adobe.svg` at the pack root.
+    const rel = commonPrefix && p.startsWith(commonPrefix) ? p.slice(commonPrefix.length) : p;
+    // Belt + suspenders: reject anything that resolves outside the pack dir.
+    if (rel.includes('..') || rel.startsWith('/') || rel.startsWith('\\')) continue;
+    const dest = resolve(packDir, rel);
+    if (!dest.startsWith(packDir + sep)) continue;
+    const data = entry.getData();
+    if (data.length > MAX_SVG_BYTES) continue; // silently skip bloat
+    await fs.mkdir(resolve(dest, '..'), { recursive: true });
+    await fs.writeFile(dest, data);
+    written++;
+  }
+  invalidateIconPacksCache();
+  return { pack: packName, iconCount: written };
 }
 
 /** Force a re-scan on the next call — call from the pack-management panel
@@ -70,6 +149,7 @@ async function scanIconPacks(): Promise<IconPack[]> {
     // Directory hasn't been created yet — no packs installed. Not an error.
     return [];
   }
+  const settings = await readPackSettings();
   for (const entry of entries) {
     if (!isValidPackName(entry)) continue;
     const packDir = join(ICON_PACKS_DIR, entry);
@@ -79,10 +159,49 @@ async function scanIconPacks(): Promise<IconPack[]> {
     const icons = await walkSvgs(packDir);
     if (icons.length === 0) continue;
     icons.sort();
-    packs.push({ name: entry, icons });
+    const tint = settings[entry]?.tint === 'none' ? 'none' : 'invert';
+    packs.push({ name: entry, icons, tint });
   }
   packs.sort((a, b) => a.name.localeCompare(b.name));
   return packs;
+}
+
+type PackSettings = Record<string, { tint?: TintMode }>;
+
+async function readPackSettings(): Promise<PackSettings> {
+  try {
+    const raw = await fs.readFile(PACK_SETTINGS_FILE, 'utf8');
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object') return {};
+    return parsed as PackSettings;
+  } catch { return {}; }
+}
+
+async function writePackSettings(settings: PackSettings): Promise<void> {
+  await fs.mkdir(APP_DIR, { recursive: true });
+  await fs.writeFile(PACK_SETTINGS_FILE, JSON.stringify(settings, null, 2), 'utf8');
+}
+
+/** Longest slash-terminated prefix shared by every path — used to strip
+ *  container folders from a GitHub-style archive so files land clean at the
+ *  pack root. Returns empty string when there's no useful shared prefix. */
+function detectCommonPrefix(paths: string[]): string {
+  if (paths.length === 0) return '';
+  if (paths.length === 1) {
+    const idx = paths[0].lastIndexOf('/');
+    return idx > 0 ? paths[0].slice(0, idx + 1) : '';
+  }
+  let prefix = paths[0];
+  for (let i = 1; i < paths.length; i++) {
+    while (!paths[i].startsWith(prefix)) {
+      prefix = prefix.slice(0, -1);
+      if (!prefix) return '';
+    }
+  }
+  // Only strip up to a full slash-terminated segment; a partial filename
+  // prefix would corrupt the leaf names.
+  const lastSlash = prefix.lastIndexOf('/');
+  return lastSlash > 0 ? prefix.slice(0, lastSlash + 1) : '';
 }
 
 async function walkSvgs(root: string, subPath = ''): Promise<string[]> {
