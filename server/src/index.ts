@@ -293,9 +293,9 @@ const httpServer = await createServerForConfig();
 async function createServerForConfig() {
   if (serverConfig.security.httpsEnabled) {
     try {
-      const { pfx, passphrase } = await loadOrGenerateCert();
+      const material = await loadOrGenerateCert();
       console.log('[https] listening with self-signed cert');
-      return createHttpsServer({ pfx, passphrase }, requestHandler);
+      return createHttpsServer(material, requestHandler);
     } catch (err) {
       console.error('[https] cert setup failed, falling back to HTTP:', (err as Error).message);
     }

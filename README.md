@@ -1,8 +1,10 @@
 # Digi Deck
 
-Personal Stream Deck-style app: a PWA on your phone triggers actions on your Windows PC over LAN.
+Personal Stream Deck-style app: a PWA on your phone triggers actions on your PC over LAN.
 
 A single Node process runs on the PC (port 8765) — it owns the layout file, executes actions, hosts the WebSocket, and serves the built React PWA as static files. Your phone connects to that one port over your Wi-Fi. (Developers can still run Vite in dev mode separately; see *Manually running the server and client* below.)
+
+**Platform support:** Windows is the first-class target — tray icon, native file-browse dialog, Core-Audio mic / per-app audio, Voicemeeter, one-click HTTPS cert trust. The server also runs on **macOS and Linux** (`./start.sh`) with the full deck UI, every integration, hotkey / text / launch / url / script / sound actions, HTTPS, CPU + RAM chart sources — the Windows-only extras degrade cleanly with friendly errors. See [INSTALL.md](INSTALL.md) for details.
 
 ---
 
@@ -34,7 +36,7 @@ If you see no label, assume **PowerShell or cmd** is fine.
 
 | What | Minimum | Why |
 | ---- | ------- | --- |
-| Windows | 10 or 11 | Tray icon uses .NET `NotifyIcon`; default action shells out to `cmd /c start`; appdata lives in `%APPDATA%`. |
+| OS | **Windows 10 / 11** (first-class), **macOS**, or **Linux** | Tray icon + Core-Audio-dependent actions are Windows-only; everything else runs cross-platform. |
 | Node.js | **22 LTS or newer** | Top-level `await` and built-in `fetch`. |
 | Wi-Fi | Same network for PC and phone | The WebSocket runs over LAN. |
 | Windows Firewall | Allow Node.js on Private networks (prompted on first run) | Phone needs to reach the PC's server. |

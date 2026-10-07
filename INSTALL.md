@@ -6,7 +6,7 @@ A ~10 minute setup, no programming knowledge required. Follow each step in order
 
 ## What you need
 
-- Windows 10 or 11
+- Windows 10 / 11, macOS, or Linux (Windows is the first-class target — see **macOS & Linux** at the bottom for the per-OS gaps)
 - A phone on the same Wi-Fi as your PC
 - The `digi-deck.zip` file — grab it from the [latest release](https://github.com/ruipmendes/DigiDeck/releases/latest) (recommended — counts toward download totals and gives you release notes), or use "Code → Download ZIP" on the main repo page.
 
@@ -125,3 +125,34 @@ You should now see a **Digi Deck** icon on your desktop.
 ---
 
 That's it. For customizing buttons, integrations, or technical details, see `README.md` in the project folder.
+
+---
+
+## macOS & Linux
+
+The server runs on both. There's no `install.bat` equivalent yet — install manually:
+
+```bash
+# 1. Clone the repo (or download + unzip the source zip)
+git clone https://github.com/ruipmendes/DigiDeck.git
+cd DigiDeck
+
+# 2. Install dependencies
+(cd server && npm ci)
+(cd client && npm ci)
+
+# 3. Launch — builds server + client on first run, then starts
+./start.sh
+```
+
+Config page opens automatically at `http://localhost:8765/config` (or `https://` if you flip the HTTPS switch — `selfsigned` ships the cert pure-JS, no OpenSSL needed).
+
+**What works everywhere:** the full deck UI, every integration (OBS, Streamlabs Desktop, Twitch, Kick, Discord, Spotify, Hue, Home Assistant, OpenRGB, Nanoleaf, Mix It Up, Voicemod, Elite Dangerous), hotkey / text / launch / url / script actions, sound playback (`afplay` on macOS, `paplay` on Linux), HTTPS, CPU + RAM chart sources, pairing + QR, mDNS discovery.
+
+**Windows-only features** (degrade cleanly on other OSes):
+- **Tray icon** — no tray; keep a browser tab on the config page or `ps`/`pkill` to stop.
+- **Native file-browse dialog** — type paths manually in the Launch / Sound editors.
+- **One-click HTTPS cert trust** — HTTPS still works via `selfsigned`; trust the cert in your OS keychain manually (macOS: Keychain Access → System → Trust; Linux: distro-specific).
+- **Mic mute, per-app audio, Voicemeeter** — Windows Core Audio only. Use OS-equivalent hotkeys (e.g. macOS: `osascript -e 'set volume input volume 0'`).
+- **GPU utilization chart source** — Windows perf counter only; CPU / RAM still work.
+- **Update MessageBox** — results print to the server log instead; the release page opens in your browser.
