@@ -1,7 +1,16 @@
-import { useEffect, useState } from 'react';
-import { MessageCircle, RefreshCw, ChevronDown, ChevronRight, ExternalLink } from 'lucide-react';
+import { Fragment, useEffect, useState } from 'react';
+import { Bell, MessageCircle, RefreshCw, ChevronDown, ChevronRight, ExternalLink } from 'lucide-react';
 import * as api from '../lib/api';
-import type { TwitchPublicConfig, TwitchStatus } from '../lib/api';
+import type { TwitchPublicConfig, TwitchStatus, TwitchNotificationEventType, TwitchNotificationEventConfig, TwitchNotificationsConfig } from '../lib/api';
+
+const NOTIFICATION_EVENTS: Array<{ type: TwitchNotificationEventType; label: string; amountLabel?: string; amountPlaceholder?: string }> = [
+  { type: 'twitch.raid',           label: 'Raid',           amountLabel: 'Min viewers', amountPlaceholder: 'any' },
+  { type: 'twitch.subscribe',      label: 'Sub' },
+  { type: 'twitch.cheer',          label: 'Cheer',          amountLabel: 'Min bits',    amountPlaceholder: 'any' },
+  { type: 'twitch.follow',         label: 'Follow' },
+  { type: 'twitch.stream-online',  label: 'Stream online' },
+  { type: 'twitch.stream-offline', label: 'Stream offline' },
+];
 
 export function TwitchPanel({ alwaysOpen = false }: { alwaysOpen?: boolean } = {}) {
   const [config, setConfig] = useState<TwitchPublicConfig | null>(null);
@@ -230,11 +239,178 @@ export function TwitchPanel({ alwaysOpen = false }: { alwaysOpen?: boolean } = {
           )}
 
           {error && <div style={{ fontSize: 12, color: '#f87171' }}>{error}</div>}
+
+          {state === 'connected' && (
+            <NotificationsSection
+              config={config.notifications}
+              onSave={async (notifications) => {
+                setBusy(true);
+                try {
+                  const data = await api.putTwitchConfig({
+                    enabled: config.enabled,
+                    clientId: config.clientId,
+                    notifications,
+                  });
+                  setConfig(data.config);
+                  setStatus(data.status);
+                } catch (e) {
+                  setError((e as Error).message);
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            />
+          )}
         </div>
       )}
     </div>
   );
 }
+
+function NotificationsSection({
+  config,
+  onSave,
+}: {
+  config: TwitchNotificationsConfig;
+  onSave: (next: TwitchNotificationsConfig) => Promise<void>;
+}) {
+  const [draft, setDraft] = useState<TwitchNotificationsConfig>(config);
+  const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
+
+  // Resync when the server-side config changes (e.g. after another save).
+  useEffect(() => {
+    if (!dirty) setDraft(config);
+  }, [config, dirty]);
+
+  function updateEvent(type: TwitchNotificationEventType, patch: Partial<TwitchNotificationEventConfig>): void {
+    setDirty(true);
+    setDraft((prev) => {
+      const current = prev.events[type] ?? {};
+      const merged = { ...current, ...patch };
+      // Collapse to undefined so the server's "no entry at all" shape kicks in.
+      const next = { ...prev, events: { ...prev.events } };
+      const hasAnything = merged.push || merged.toast || merged.cooldownMs !== undefined || merged.minAmount !== undefined;
+      if (hasAnything) next.events[type] = merged;
+      else delete next.events[type];
+      return next;
+    });
+  }
+
+  function updateMaster(enabled: boolean): void {
+    setDirty(true);
+    setDraft((prev) => ({ ...prev, enabled }));
+  }
+
+  async function save(): Promise<void> {
+    setSaving(true);
+    try {
+      await onSave(draft);
+      setDirty(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div style={{ paddingTop: 10, marginTop: 2, borderTop: '1px solid #1f2937' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+        <Bell size={16} style={{ color: '#a78bfa' }} />
+        <strong style={{ color: '#fff' }}>Twitch notifications</strong>
+        <label style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#d1d5db', cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={draft.enabled}
+            onChange={(e) => updateMaster(e.target.checked)}
+          />
+          enabled
+        </label>
+      </div>
+
+      <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 10 }}>
+        Fire deck-wide alerts when something happens on your channel. <em>Toast</em> flashes a banner in the deck UI;
+        <em> push</em> sends a notification to any paired phone that's opted in (phone opts in via its own menu).
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(130px, auto) auto auto 1fr 1fr', columnGap: 10, rowGap: 6, alignItems: 'center', fontSize: 12 }}>
+        <span style={{ color: '#6b7280' }}>Event</span>
+        <span style={{ color: '#6b7280', textAlign: 'center' }}>Toast</span>
+        <span style={{ color: '#6b7280', textAlign: 'center' }}>Push</span>
+        <span style={{ color: '#6b7280' }}>Amount</span>
+        <span style={{ color: '#6b7280' }}>Cooldown (s)</span>
+        {NOTIFICATION_EVENTS.map(({ type, label, amountLabel, amountPlaceholder }) => {
+          const ev = draft.events[type] ?? {};
+          const disabled = !draft.enabled;
+          return (
+            <Fragment key={type}>
+              <span style={{ color: disabled ? '#4b5563' : '#e5e7eb' }}>{label}</span>
+              <input
+                type="checkbox"
+                checked={!!ev.toast}
+                disabled={disabled}
+                onChange={(e) => updateEvent(type, { toast: e.target.checked || undefined })}
+                style={{ justifySelf: 'center' }}
+              />
+              <input
+                type="checkbox"
+                checked={!!ev.push}
+                disabled={disabled}
+                onChange={(e) => updateEvent(type, { push: e.target.checked || undefined })}
+                style={{ justifySelf: 'center' }}
+              />
+              <input
+                type="number"
+                min={0}
+                placeholder={amountLabel ? amountPlaceholder : '—'}
+                disabled={disabled || !amountLabel}
+                value={ev.minAmount ?? ''}
+                onChange={(e) => {
+                  const v = e.target.value === '' ? undefined : Math.max(0, Number(e.target.value) || 0);
+                  updateEvent(type, { minAmount: v });
+                }}
+                title={amountLabel ?? 'Not applicable'}
+                style={{ ...notifInp, opacity: amountLabel ? 1 : 0.3 }}
+              />
+              <input
+                type="number"
+                min={0}
+                placeholder="0"
+                disabled={disabled}
+                value={ev.cooldownMs !== undefined ? Math.round(ev.cooldownMs / 1000) : ''}
+                onChange={(e) => {
+                  const v = e.target.value === '' ? undefined : Math.max(0, Number(e.target.value) || 0) * 1000;
+                  updateEvent(type, { cooldownMs: v });
+                }}
+                style={notifInp}
+              />
+            </Fragment>
+          );
+        })}
+      </div>
+
+      <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button onClick={() => void save()} disabled={!dirty || saving} style={notifSaveBtn}>
+          {saving ? 'Saving…' : 'Save notifications'}
+        </button>
+        {dirty && <span style={{ fontSize: 11, color: '#eab308' }}>unsaved</span>}
+      </div>
+
+      <div style={{ marginTop: 10, fontSize: 11, color: '#6b7280' }}>
+        Needs new scopes: <code style={codeStyle}>moderator:read:followers</code>, <code style={codeStyle}>channel:read:subscriptions</code>, <code style={codeStyle}>bits:read</code>.
+        After enabling for the first time, click <em>Disconnect</em> above then <em>Connect to Twitch</em> to re-authorize.
+      </div>
+    </div>
+  );
+}
+
+const notifInp: React.CSSProperties = {
+  padding: '4px 6px', background: '#0a0a0a', color: '#fff',
+  border: '1px solid #374151', borderRadius: 4, fontSize: 12, width: 80,
+};
+const notifSaveBtn: React.CSSProperties = {
+  padding: '6px 12px', background: '#a78bfa', color: '#fff',
+  border: 0, borderRadius: 6, fontSize: 13, cursor: 'pointer',
+};
 
 function StatusBadge({ state }: { state?: string }) {
   const map: Record<string, { color: string; label: string }> = {

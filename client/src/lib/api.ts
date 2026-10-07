@@ -450,7 +450,7 @@ export async function getTwitchState(): Promise<TwitchState_API> {
   return res.json();
 }
 
-export async function putTwitchConfig(c: { enabled: boolean; clientId: string; clientSecret?: string }): Promise<TwitchState_API> {
+export async function putTwitchConfig(c: { enabled: boolean; clientId: string; clientSecret?: string; notifications?: TwitchNotificationsConfig }): Promise<TwitchState_API> {
   const res = await apiFetch('/api/integrations/twitch/config', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
