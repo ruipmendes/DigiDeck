@@ -463,6 +463,18 @@ export async function putTwitchConfig(c: { enabled: boolean; clientId: string; c
   return res.json();
 }
 
+export async function fireTwitchNotificationTest(event: TwitchNotificationEventType): Promise<void> {
+  const res = await apiFetch('/api/integrations/twitch/notifications/test', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ event }),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(body || `test alert failed: ${res.status}`);
+  }
+}
+
 export async function getTwitchAuthorize(): Promise<{ url: string }> {
   const res = await apiFetch('/api/integrations/twitch/authorize');
   if (!res.ok) {

@@ -332,15 +332,17 @@ function NotificationsSection({
         <em> push</em> sends a notification to any paired phone that's opted in (phone opts in via its own menu).
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(130px, auto) auto auto 1fr 1fr', columnGap: 10, rowGap: 6, alignItems: 'center', fontSize: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(130px, auto) auto auto 1fr 1fr auto', columnGap: 10, rowGap: 6, alignItems: 'center', fontSize: 12 }}>
         <span style={{ color: '#6b7280' }}>Event</span>
         <span style={{ color: '#6b7280', textAlign: 'center' }}>Toast</span>
         <span style={{ color: '#6b7280', textAlign: 'center' }}>Push</span>
         <span style={{ color: '#6b7280' }}>Amount</span>
         <span style={{ color: '#6b7280' }}>Cooldown (s)</span>
+        <span />
         {NOTIFICATION_EVENTS.map(({ type, label, amountLabel, amountPlaceholder }) => {
           const ev = draft.events[type] ?? {};
           const disabled = !draft.enabled;
+          const canTest = !disabled && !dirty && (ev.toast || ev.push);
           return (
             <Fragment key={type}>
               <span style={{ color: disabled ? '#4b5563' : '#e5e7eb' }}>{label}</span>
@@ -383,6 +385,19 @@ function NotificationsSection({
                 }}
                 style={notifInp}
               />
+              <button
+                type="button"
+                onClick={() => void api.fireTwitchNotificationTest(type)}
+                disabled={!canTest}
+                title={
+                  dirty ? 'Save first, then test' :
+                  !ev.toast && !ev.push ? 'Enable toast or push to test' :
+                  'Fire a mock event'
+                }
+                style={notifTestBtn}
+              >
+                Test
+              </button>
             </Fragment>
           );
         })}
@@ -410,6 +425,10 @@ const notifInp: React.CSSProperties = {
 const notifSaveBtn: React.CSSProperties = {
   padding: '6px 12px', background: '#a78bfa', color: '#fff',
   border: 0, borderRadius: 6, fontSize: 13, cursor: 'pointer',
+};
+const notifTestBtn: React.CSSProperties = {
+  padding: '3px 8px', background: '#1f2937', color: '#e5e7eb',
+  border: '1px solid #374151', borderRadius: 4, fontSize: 11, cursor: 'pointer',
 };
 
 function StatusBadge({ state }: { state?: string }) {

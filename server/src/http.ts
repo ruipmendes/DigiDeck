@@ -8,6 +8,8 @@ import { findIntegration } from './integrations/base.js';
 import { getDiscord } from './integrations/discord.js';
 import { getSpotify } from './integrations/spotify.js';
 import { getHue } from './integrations/hue.js';
+import { getTwitch, TWITCH_NOTIFICATION_EVENT_TYPES, type TwitchNotificationEventType } from './integrations/twitch.js';
+import { getAlerts, type AlertEvent } from './alerts.js';
 import { getAppAudio } from './actions/appAudio.js';
 import { listIconPacks, readIcon, ICON_PACKS_DIR, invalidateIconPacksCache, installPackFromZip, setPackTint, type TintMode } from './icon-packs.js';
 import {
@@ -570,6 +572,29 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse, c
     return;
   }
 
+  // ─── Twitch-specific: fire a mock alert for UI testing ──────
+  // Lets the user flip a toggle and immediately verify the toast rendering
+  // without waiting for a real raid/sub/cheer. Respects the per-event
+  // config, so a disabled toast flag yields no toast — that's by design;
+  // the point is to validate the user's config, not bypass it.
+  if (pathname === '/api/integrations/twitch/notifications/test' && req.method === 'POST') {
+    if (!authorize(req, token())) return unauthorized(res);
+    try {
+      const body = await readJsonBody(req) as { event?: string };
+      const type = body.event;
+      if (typeof type !== 'string' || !TWITCH_NOTIFICATION_EVENT_TYPES.includes(type as TwitchNotificationEventType)) {
+        throw new Error(`unknown event type: ${type}`);
+      }
+      const mock = mockAlertEvent(type as TwitchNotificationEventType);
+      const cfg = getTwitch().publicConfig().notifications.events[type as TwitchNotificationEventType];
+      getAlerts().fire(mock, cfg);
+      json(res, 200, { ok: true, fired: mock });
+    } catch (err) {
+      json(res, 400, { error: (err as Error).message });
+    }
+    return;
+  }
+
   // ─── Spotify-specific: re-check subscription tier ────────────
   // Sits above the auto-router so it wins over the fallthrough. Cheap
   // one-shot /me refetch — used by the panel's "Recheck" button after a
@@ -945,6 +970,26 @@ async function readJsonBody(req: IncomingMessage): Promise<unknown> {
     chunks.push(b);
   }
   return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+}
+
+/** Representative mock payload per supported Twitch notification event. Used
+ *  by the Notifications panel's per-event Test button so the user can verify
+ *  their toggles + the toast rendering without waiting for a real sub/raid. */
+function mockAlertEvent(type: TwitchNotificationEventType): AlertEvent {
+  switch (type) {
+    case 'twitch.raid':
+      return { type, title: 'TestRaider raided with 42 viewers', amount: 42 };
+    case 'twitch.subscribe':
+      return { type, title: 'TestUser subscribed', body: 'Tier 1', amount: 1 };
+    case 'twitch.cheer':
+      return { type, title: 'TestUser cheered 500 bits', amount: 500 };
+    case 'twitch.follow':
+      return { type, title: 'TestUser followed' };
+    case 'twitch.stream-online':
+      return { type, title: 'Stream started' };
+    case 'twitch.stream-offline':
+      return { type, title: 'Stream ended' };
+  }
 }
 
 async function readBinaryBody(req: IncomingMessage, maxBytes: number): Promise<Buffer> {
