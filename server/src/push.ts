@@ -73,8 +73,44 @@ export async function getVapidPublicKey(): Promise<string> {
   return v.publicKey;
 }
 
+/** Hostnames whose push endpoints we'll relay to. Anything else is rejected
+ *  so an authenticated phone can't plant a crafted endpoint that steers
+ *  web-push requests at an internal LAN host (defense in depth — the phone
+ *  can already hit the LAN directly, but there's no legitimate reason for a
+ *  push endpoint to point anywhere but a real push provider). */
+const ALLOWED_PUSH_HOSTS = [
+  // Chrome / Edge / anything FCM-backed
+  'fcm.googleapis.com',
+  'fcm.google.com',
+  // Mozilla Firefox
+  'updates.push.services.mozilla.com',
+  'autopush.services.mozilla.com',
+  // Windows / Edge (WNS)
+  'wns2-par02p.notify.windows.com',
+  'wns2.notify.windows.com',
+  // Safari / APNS
+  'web.push.apple.com',
+];
+function isAllowedPushEndpoint(endpoint: string): boolean {
+  try {
+    const u = new URL(endpoint);
+    if (u.protocol !== 'https:') return false;
+    const host = u.hostname.toLowerCase();
+    // Allow exact match OR known-provider suffix (push providers rotate
+    // regional subdomains).
+    return ALLOWED_PUSH_HOSTS.some((h) => host === h || host.endsWith(`.${h}`))
+      || host.endsWith('.push.services.mozilla.com')
+      || host.endsWith('.notify.windows.com')
+      || host.endsWith('.push.apple.com')
+      || host.endsWith('.googleapis.com');
+  } catch { return false; }
+}
+
 /** Idempotently add a subscription (keyed by endpoint URL). */
 export async function addSubscription(sub: PushSubscriptionObject): Promise<void> {
+  if (!isAllowedPushEndpoint(sub.endpoint)) {
+    throw new Error('push endpoint is not a recognized push provider');
+  }
   await loadSubs();
   const existing = _subs.findIndex((s) => s.endpoint === sub.endpoint);
   if (existing >= 0) _subs[existing] = sub;

@@ -626,6 +626,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse, c
   // config, so a disabled toast flag yields no toast — that's by design;
   // the point is to validate the user's config, not bypass it.
   if (pathname === '/api/integrations/twitch/notifications/test' && req.method === 'POST') {
+    // Deliberately `authorize` (any paired token) rather than `authorizeLocalhost`:
+    // the Test button is the primary way to verify the push pipeline from an
+    // actual phone (OS notification + lock-screen behavior can't be checked
+    // from the PC). Impact of abuse by a paired phone is nuisance-only — the
+    // payload is server-generated, no secrets leak, no privilege escalation.
     if (!authorize(req, token())) return unauthorized(res);
     try {
       const body = await readJsonBody(req) as { event?: string };

@@ -360,6 +360,13 @@ class NanoleafClient implements IntegrationLifecycle {
         const reader = res.body.getReader();
         const decoder = new TextDecoder('utf-8');
         let buf = '';
+        // Hard cap on how much raw SSE text we buffer between blank-line
+        // delimiters. Real Nanoleaf events are a few hundred bytes; anything
+        // bigger means either the controller is misbehaving or (threat model)
+        // an attacker has taken over the controller IP on the LAN and is
+        // streaming bytes without ever delivering a blank line to force an
+        // OOM. We throw out of the read loop and let the backoff reconnect.
+        const MAX_SSE_BUF_BYTES = 64 * 1024;
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
@@ -370,6 +377,9 @@ class NanoleafClient implements IntegrationLifecycle {
           while ((idx = buf.indexOf('\n\n')) >= 0) {
             this.handleSseEvent(buf.slice(0, idx));
             buf = buf.slice(idx + 2);
+          }
+          if (buf.length > MAX_SSE_BUF_BYTES) {
+            throw new Error(`SSE buffer exceeded ${MAX_SSE_BUF_BYTES} bytes without a frame boundary — dropping connection`);
           }
         }
         throw new Error('event stream closed by peer');

@@ -956,9 +956,14 @@ class TwitchClient implements IntegrationLifecycle {
       if (msgType === 'session_keepalive') return;
       if (msgType === 'session_reconnect') {
         // Twitch migrated the session; the payload has a new URL to connect to.
+        // Verify it still points at Twitch's EventSub infrastructure — if TLS
+        // to eventsub.wss.twitch.tv is ever compromised (defense in depth),
+        // the socket could serve an attacker-controlled URL and we'd happily
+        // reconnect our authenticated session there.
         const session = (payload.session ?? {}) as Record<string, unknown>;
         const nextUrl = session.reconnect_url as string | undefined;
-        if (nextUrl) this.openEventSubAt(nextUrl);
+        if (nextUrl && isTrustedEventSubUrl(nextUrl)) this.openEventSubAt(nextUrl);
+        else if (nextUrl) console.warn(`[twitch] EventSub ignored untrusted reconnect url: ${nextUrl}`);
         return;
       }
       if (msgType === 'notification') {
@@ -1106,6 +1111,15 @@ class TwitchClient implements IntegrationLifecycle {
 }
 
 import type { AlertEvent } from '../alerts.js';
+
+/** Only accept EventSub reconnect URLs that still point at Twitch. */
+function isTrustedEventSubUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== 'wss:') return false;
+    return u.hostname === 'eventsub.wss.twitch.tv' || u.hostname.endsWith('.twitch.tv');
+  } catch { return false; }
+}
 
 /** Map a Twitch EventSub notification payload into our generic AlertEvent
  *  shape (type + title + body + amount). Returns undefined for unknown
