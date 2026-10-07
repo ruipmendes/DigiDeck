@@ -413,12 +413,33 @@ export type TwitchStatus = {
   channel?: string;
 };
 
+export type TwitchNotificationEventType =
+  | 'twitch.raid'
+  | 'twitch.subscribe'
+  | 'twitch.cheer'
+  | 'twitch.follow'
+  | 'twitch.stream-online'
+  | 'twitch.stream-offline';
+
+export type TwitchNotificationEventConfig = {
+  push?: boolean;
+  toast?: boolean;
+  cooldownMs?: number;
+  minAmount?: number;
+};
+
+export type TwitchNotificationsConfig = {
+  enabled: boolean;
+  events: Partial<Record<TwitchNotificationEventType, TwitchNotificationEventConfig>>;
+};
+
 export type TwitchPublicConfig = {
   enabled: boolean;
   clientId: string;
   hasSecret: boolean;
   hasRefreshToken: boolean;
   username: string;
+  notifications: TwitchNotificationsConfig;
 };
 
 export type TwitchState_API = { config: TwitchPublicConfig; status: TwitchStatus };

@@ -3,8 +3,35 @@ import { randomBytes } from 'node:crypto';
 import type { IntegrationsConfig, ServerConfig } from '../config.js';
 import { registerIntegration, type CallbackOutcome, type IntegrationLifecycle, type IntegrationManifest } from './base.js';
 
+import type { AlertEventConfig, AlertEventType } from '../alerts.js';
+import { ALL_ALERT_EVENT_TYPES, getAlerts } from '../alerts.js';
+
+/** Per-event notification config lives under `TwitchConfig.notifications.events`.
+ *  Phase 1 surfaces raid / subscribe / cheer / follow / stream-online / -offline
+ *  — all driven off Twitch EventSub subscriptions on the user's OAuth session.
+ *  Only the Twitch-sourced event types are legal keys here; other sources
+ *  (Kick, OBS, …) would get their own `notifications.events` block under
+ *  their respective configs when phase 2 integrations are added. */
+export type TwitchNotificationEventType = Extract<AlertEventType, `twitch.${string}`>;
+
+export const TWITCH_NOTIFICATION_EVENT_TYPES: readonly TwitchNotificationEventType[] =
+  ALL_ALERT_EVENT_TYPES.filter((t): t is TwitchNotificationEventType => t.startsWith('twitch.'));
+
+export type TwitchNotificationsConfig = {
+  /** Master kill — when false, no EventSub subscription is opened and no
+   *  alert fires regardless of per-event config. */
+  enabled: boolean;
+  events: Partial<Record<TwitchNotificationEventType, AlertEventConfig>>;
+};
+
+export const DEFAULT_TWITCH_NOTIFICATIONS: TwitchNotificationsConfig = {
+  enabled: false,
+  events: {},
+};
+
 export type PublicTwitchConfig = {
   enabled: boolean; clientId: string; hasSecret: boolean; hasRefreshToken: boolean; username: string;
+  notifications: TwitchNotificationsConfig;
 };
 
 export function publicTwitchConfig(cfg: TwitchConfig): PublicTwitchConfig {
@@ -14,6 +41,7 @@ export function publicTwitchConfig(cfg: TwitchConfig): PublicTwitchConfig {
     hasSecret: !!cfg.clientSecret,
     hasRefreshToken: !!cfg.refreshToken,
     username: cfg.username,
+    notifications: cfg.notifications,
   };
 }
 
@@ -31,7 +59,31 @@ export function validateTwitchConfig(input: unknown, existing: TwitchConfig): Tw
     refreshToken: existing.refreshToken,
     username: existing.username,
     broadcasterUserId: existing.broadcasterUserId,
+    notifications: validateNotificationsSubconfig(o.notifications, existing.notifications),
   };
+}
+
+function validateNotificationsSubconfig(input: unknown, existing: TwitchNotificationsConfig): TwitchNotificationsConfig {
+  if (!input || typeof input !== 'object') return { ...existing };
+  const o = input as Record<string, unknown>;
+  const events: TwitchNotificationsConfig['events'] = {};
+  const rawEvents = (o.events && typeof o.events === 'object') ? o.events as Record<string, unknown> : {};
+  for (const type of TWITCH_NOTIFICATION_EVENT_TYPES) {
+    const raw = rawEvents[type];
+    if (!raw || typeof raw !== 'object') continue;
+    const r = raw as Record<string, unknown>;
+    const push = r.push !== undefined ? !!r.push : undefined;
+    const toast = r.toast !== undefined ? !!r.toast : undefined;
+    const cooldownMs = typeof r.cooldownMs === 'number' && r.cooldownMs >= 0
+      ? Math.floor(r.cooldownMs) : undefined;
+    const minAmount = typeof r.minAmount === 'number' && r.minAmount >= 0
+      ? Math.floor(r.minAmount) : undefined;
+    // Keep the entry only if it carries at least one meaningful field — avoids
+    // persisting {} stubs on every save.
+    if (push === undefined && toast === undefined && cooldownMs === undefined && minAmount === undefined) continue;
+    events[type] = { push, toast, cooldownMs, minAmount };
+  }
+  return { enabled: !!o.enabled, events };
 }
 
 export const TWITCH_MANIFEST: IntegrationManifest = {
@@ -48,6 +100,7 @@ export type TwitchConfig = {
   refreshToken: string;
   username: string;
   broadcasterUserId: string;
+  notifications: TwitchNotificationsConfig;
 };
 
 export const DEFAULT_TWITCH_CONFIG: TwitchConfig = {
@@ -57,6 +110,7 @@ export const DEFAULT_TWITCH_CONFIG: TwitchConfig = {
   refreshToken: '',
   username: '',
   broadcasterUserId: '',
+  notifications: { ...DEFAULT_TWITCH_NOTIFICATIONS },
 };
 
 export type TwitchState =
@@ -140,8 +194,52 @@ const SCOPES = [
   'moderator:manage:shoutouts',
   'channel:manage:polls',
   'channel:manage:predictions',
+  // Notification scopes (EventSub reads).
+  'moderator:read:followers',
+  'channel:read:subscriptions',
+  'bits:read',
 ];
 const IRC_URL = 'wss://irc-ws.chat.twitch.tv:443';
+const EVENTSUB_URL = 'wss://eventsub.wss.twitch.tv/ws';
+const EVENTSUB_RECONNECT_MIN_MS = 2_000;
+const EVENTSUB_RECONNECT_MAX_MS = 60_000;
+
+/** EventSub subscription spec per supported Twitch notification event. The
+ *  `type` + `version` are Twitch's enum values; `conditionFor` builds the
+ *  per-session condition object (nearly all are keyed on broadcaster_user_id,
+ *  but channel.follow v2 also needs moderator_user_id, and raid is keyed on
+ *  the TO-broadcaster). */
+type EventSubSpec = {
+  type: string;
+  version: string;
+  conditionFor: (bid: string) => Record<string, string>;
+};
+const EVENTSUB_SPECS: Record<TwitchNotificationEventType, EventSubSpec> = {
+  'twitch.follow': {
+    type: 'channel.follow', version: '2',
+    conditionFor: (bid) => ({ broadcaster_user_id: bid, moderator_user_id: bid }),
+  },
+  'twitch.subscribe': {
+    type: 'channel.subscribe', version: '1',
+    conditionFor: (bid) => ({ broadcaster_user_id: bid }),
+  },
+  'twitch.cheer': {
+    type: 'channel.cheer', version: '1',
+    conditionFor: (bid) => ({ broadcaster_user_id: bid }),
+  },
+  'twitch.raid': {
+    type: 'channel.raid', version: '1',
+    conditionFor: (bid) => ({ to_broadcaster_user_id: bid }),
+  },
+  'twitch.stream-online': {
+    type: 'stream.online', version: '1',
+    conditionFor: (bid) => ({ broadcaster_user_id: bid }),
+  },
+  'twitch.stream-offline': {
+    type: 'stream.offline', version: '1',
+    conditionFor: (bid) => ({ broadcaster_user_id: bid }),
+  },
+};
 
 class TwitchClient implements IntegrationLifecycle {
   readonly manifest = TWITCH_MANIFEST;
@@ -157,6 +255,7 @@ class TwitchClient implements IntegrationLifecycle {
   }
   publicConfig(): PublicTwitchConfig { return publicTwitchConfig(this.cfg); }
   async applyConfigUpdate(input: unknown): Promise<void> {
+    const prev = this.cfg;
     const validated = validateTwitchConfig(input, this.cfg);
     if (!this.serverConfig || !this.saveFn) throw new Error('Twitch integration not attached');
     this.serverConfig.integrations.twitch = validated;
@@ -165,7 +264,18 @@ class TwitchClient implements IntegrationLifecycle {
     // OAuth quirk: only restart when we have credentials + a refresh token; otherwise
     // stop (a config with no auth yet would just spin in retries).
     if (validated.enabled && validated.refreshToken) {
-      await this.restart();
+      // Avoid a full IRC reconnect when only notifications settings changed —
+      // common case is the user flipping a per-event toggle in the UI.
+      const connectionChanged =
+        prev.enabled !== validated.enabled
+        || prev.clientId !== validated.clientId
+        || prev.clientSecret !== validated.clientSecret
+        || prev.refreshToken !== validated.refreshToken;
+      if (connectionChanged || this.internal !== 'connected') {
+        await this.restart();
+      } else {
+        await this.refreshEventSub();
+      }
     } else {
       await this.stop();
     }
@@ -183,6 +293,15 @@ class TwitchClient implements IntegrationLifecycle {
   private pendingStates = new Map<string, number>();
   private saveCb?: (cfg: TwitchConfig) => Promise<void>;
   private onChangeCb: (() => void) | null = null;
+
+  // ─── EventSub (notifications) ──────────────────────────────────
+  private eventsubWs: WebSocket | null = null;
+  private eventsubSessionId: string | null = null;
+  private eventsubReconnectTimer: NodeJS.Timeout | null = null;
+  private eventsubReconnectDelayMs = 0;
+  /** Track which types we've subscribed to in the current session so a
+   *  config edit mid-session can diff and only (un)subscribe deltas. */
+  private eventsubActiveTypes = new Set<TwitchNotificationEventType>();
 
   setConfig(cfg: TwitchConfig): void {
     this.cfg = { ...cfg };
@@ -310,6 +429,12 @@ class TwitchClient implements IntegrationLifecycle {
         await this.persistCfg();
       }
       await this.connectIrc();
+      // EventSub (notifications) is a separate WS — only opened when the user
+      // has flipped notifications on. Failure here is non-fatal (we still have
+      // chat), so just log and let the backoff loop take over.
+      if (this.cfg.notifications.enabled) {
+        this.openEventSub();
+      }
       this.emitChange();
     } catch (err) {
       this.err = (err as Error).message;
@@ -322,6 +447,7 @@ class TwitchClient implements IntegrationLifecycle {
 
   async stop(): Promise<void> {
     if (this.retryTimer) { clearTimeout(this.retryTimer); this.retryTimer = null; }
+    this.closeEventSub();
     if (this.ws) {
       try { this.ws.close(); } catch { /* ignore */ }
       this.ws = null;
@@ -333,6 +459,19 @@ class TwitchClient implements IntegrationLifecycle {
   async restart(): Promise<void> {
     await this.stop();
     await this.start();
+  }
+
+  /** Reconcile EventSub (dis)connection to current notifications config. The
+   *  config update path calls this directly so toggling notifications on/off
+   *  from the UI doesn't require a full chat reconnect. */
+  async refreshEventSub(): Promise<void> {
+    if (!this.isReady() || !this.cfg.broadcasterUserId) return;
+    if (this.cfg.notifications.enabled) {
+      if (!this.eventsubWs) this.openEventSub();
+      else void this.syncEventSubSubscriptions();
+    } else {
+      this.closeEventSub();
+    }
   }
 
   /** True when we have credentials and a refresh token — enough for Helix calls. IRC state is separate. */
@@ -781,6 +920,177 @@ class TwitchClient implements IntegrationLifecycle {
     });
   }
 
+  // ─── EventSub (notifications) implementation ───────────────────
+
+  private openEventSub(): void {
+    if (this.eventsubWs) return;
+    if (!this.cfg.notifications.enabled) return;
+    const configuredTypes = TWITCH_NOTIFICATION_EVENT_TYPES.filter((t) => {
+      const cfg = this.cfg.notifications.events[t];
+      return cfg?.push || cfg?.toast;
+    });
+    if (configuredTypes.length === 0) {
+      // Nothing to subscribe to — stay dormant until the user flips a toggle.
+      return;
+    }
+    const ws = new WebSocket(EVENTSUB_URL);
+    this.eventsubWs = ws;
+    this.eventsubSessionId = null;
+    this.eventsubActiveTypes.clear();
+
+    ws.on('message', (data: Buffer) => {
+      let msg: Record<string, unknown>;
+      try { msg = JSON.parse(data.toString()) as Record<string, unknown>; }
+      catch { return; }
+      const metadata = (msg.metadata ?? {}) as Record<string, unknown>;
+      const payload = (msg.payload ?? {}) as Record<string, unknown>;
+      const msgType = metadata.message_type as string | undefined;
+      if (msgType === 'session_welcome') {
+        const session = (payload.session ?? {}) as Record<string, unknown>;
+        this.eventsubSessionId = (session.id as string) ?? null;
+        this.eventsubReconnectDelayMs = 0;
+        console.log(`[twitch] EventSub welcome: session ${this.eventsubSessionId?.slice(0, 8)}…`);
+        void this.syncEventSubSubscriptions();
+        return;
+      }
+      if (msgType === 'session_keepalive') return;
+      if (msgType === 'session_reconnect') {
+        // Twitch migrated the session; the payload has a new URL to connect to.
+        const session = (payload.session ?? {}) as Record<string, unknown>;
+        const nextUrl = session.reconnect_url as string | undefined;
+        if (nextUrl) this.openEventSubAt(nextUrl);
+        return;
+      }
+      if (msgType === 'notification') {
+        this.handleEventSubNotification(payload);
+        return;
+      }
+      // revocation / unknown — just log for diagnosis.
+      if (msgType === 'revocation') {
+        console.warn('[twitch] EventSub subscription revoked:', JSON.stringify(payload));
+      }
+    });
+
+    ws.on('close', () => {
+      if (this.eventsubWs !== ws) return; // we migrated, this one's stale
+      this.eventsubWs = null;
+      this.eventsubSessionId = null;
+      this.eventsubActiveTypes.clear();
+      if (!this.cfg.notifications.enabled) return; // intentional close
+      this.scheduleEventSubReconnect();
+    });
+
+    ws.on('error', (err) => {
+      console.warn('[twitch] EventSub error:', (err as Error).message);
+    });
+  }
+
+  /** Switch EventSub to the URL Twitch handed us in a `session_reconnect`. */
+  private openEventSubAt(url: string): void {
+    // Close the old socket after the new one is confirmed welcome, per Twitch
+    // docs; but a lazy swap works fine for us too since we re-subscribe on
+    // the new session anyway.
+    const prev = this.eventsubWs;
+    const ws = new WebSocket(url);
+    this.eventsubWs = ws;
+    this.eventsubSessionId = null;
+    this.eventsubActiveTypes.clear();
+    ws.on('open', () => {
+      if (prev) { try { prev.close(); } catch { /* ignore */ } }
+    });
+    ws.on('message', (data) => { // reuse same handler as fresh connect
+      this.eventsubWs = ws; // ensure handler closures use the current socket
+      // Delegate to a tiny inline re-dispatch — identical semantics.
+      let msg: Record<string, unknown>;
+      try { msg = JSON.parse(data.toString()) as Record<string, unknown>; } catch { return; }
+      const metadata = (msg.metadata ?? {}) as Record<string, unknown>;
+      const payload = (msg.payload ?? {}) as Record<string, unknown>;
+      const msgType = metadata.message_type as string | undefined;
+      if (msgType === 'session_welcome') {
+        const session = (payload.session ?? {}) as Record<string, unknown>;
+        this.eventsubSessionId = (session.id as string) ?? null;
+        this.eventsubReconnectDelayMs = 0;
+        void this.syncEventSubSubscriptions();
+      } else if (msgType === 'notification') {
+        this.handleEventSubNotification(payload);
+      }
+    });
+    ws.on('close', () => {
+      if (this.eventsubWs !== ws) return;
+      this.eventsubWs = null;
+      this.eventsubSessionId = null;
+      this.eventsubActiveTypes.clear();
+      if (!this.cfg.notifications.enabled) return;
+      this.scheduleEventSubReconnect();
+    });
+  }
+
+  private closeEventSub(): void {
+    if (this.eventsubReconnectTimer) { clearTimeout(this.eventsubReconnectTimer); this.eventsubReconnectTimer = null; }
+    if (this.eventsubWs) {
+      try { this.eventsubWs.close(); } catch { /* ignore */ }
+      this.eventsubWs = null;
+    }
+    this.eventsubSessionId = null;
+    this.eventsubActiveTypes.clear();
+    this.eventsubReconnectDelayMs = 0;
+  }
+
+  private scheduleEventSubReconnect(): void {
+    if (this.eventsubReconnectTimer) return;
+    this.eventsubReconnectDelayMs = this.eventsubReconnectDelayMs === 0
+      ? EVENTSUB_RECONNECT_MIN_MS
+      : Math.min(EVENTSUB_RECONNECT_MAX_MS, this.eventsubReconnectDelayMs * 2);
+    this.eventsubReconnectTimer = setTimeout(() => {
+      this.eventsubReconnectTimer = null;
+      if (!this.cfg.notifications.enabled) return;
+      this.openEventSub();
+    }, this.eventsubReconnectDelayMs);
+  }
+
+  /** Diff current subscriptions against desired-set and (un)subscribe deltas
+   *  via Helix. Called on session_welcome and whenever notifications config
+   *  changes. */
+  private async syncEventSubSubscriptions(): Promise<void> {
+    if (!this.eventsubSessionId || !this.cfg.broadcasterUserId) return;
+    const desired = new Set<TwitchNotificationEventType>();
+    for (const t of TWITCH_NOTIFICATION_EVENT_TYPES) {
+      const cfg = this.cfg.notifications.events[t];
+      if (cfg?.push || cfg?.toast) desired.add(t);
+    }
+    // Add missing subscriptions. (We don't DELETE revoked ones here — the
+    // session restarts if desired set changes materially; stale subs on the
+    // old session are torn down when the socket closes.)
+    for (const t of desired) {
+      if (this.eventsubActiveTypes.has(t)) continue;
+      const spec = EVENTSUB_SPECS[t];
+      try {
+        await this.helixWrite('POST', '/eventsub/subscriptions', undefined, {
+          type: spec.type,
+          version: spec.version,
+          condition: spec.conditionFor(this.cfg.broadcasterUserId),
+          transport: { method: 'websocket', session_id: this.eventsubSessionId },
+        });
+        this.eventsubActiveTypes.add(t);
+      } catch (err) {
+        console.warn(`[twitch] EventSub subscribe ${spec.type} failed: ${(err as Error).message}`);
+      }
+    }
+  }
+
+  /** Map a Twitch EventSub notification into our generic AlertEvent shape and
+   *  push it to the dispatcher with the matching per-event config applied. */
+  private handleEventSubNotification(payload: Record<string, unknown>): void {
+    const subscription = (payload.subscription ?? {}) as Record<string, unknown>;
+    const event = (payload.event ?? {}) as Record<string, unknown>;
+    const subType = subscription.type as string | undefined;
+    const alerts = getAlerts();
+    const mapped = mapEventSubEvent(subType, event);
+    if (!mapped) return;
+    const cfg = this.cfg.notifications.events[mapped.type];
+    alerts.fire(mapped, cfg);
+  }
+
   private scheduleRetry(): void {
     if (!this.cfg.enabled || !this.cfg.refreshToken) return;
     if (this.retryTimer) return;
@@ -792,6 +1102,50 @@ class TwitchClient implements IntegrationLifecycle {
 
   private async persistCfg(): Promise<void> {
     if (this.saveCb) await this.saveCb({ ...this.cfg });
+  }
+}
+
+import type { AlertEvent } from '../alerts.js';
+
+/** Map a Twitch EventSub notification payload into our generic AlertEvent
+ *  shape (type + title + body + amount). Returns undefined for unknown
+ *  subscription types or malformed events; the caller silently drops those. */
+function mapEventSubEvent(
+  subType: string | undefined,
+  event: Record<string, unknown>,
+): AlertEvent | undefined {
+  if (!subType) return undefined;
+  const str = (v: unknown): string | undefined => (typeof v === 'string' && v ? v : undefined);
+  const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+  switch (subType) {
+    case 'channel.follow': {
+      const name = str(event.user_name) ?? str(event.user_login) ?? 'someone';
+      return { type: 'twitch.follow', title: `${name} followed` };
+    }
+    case 'channel.subscribe': {
+      const name = str(event.user_name) ?? str(event.user_login) ?? 'someone';
+      const tierStr = str(event.tier);
+      const tier = tierStr ? Math.floor(Number(tierStr) / 1000) || 1 : 1;
+      const isGift = event.is_gift === true;
+      const title = isGift ? `${name} got a gift sub` : `${name} subscribed`;
+      return { type: 'twitch.subscribe', title, body: `Tier ${tier}`, amount: tier };
+    }
+    case 'channel.cheer': {
+      const name = str(event.user_name) ?? (event.is_anonymous ? 'Anonymous' : 'someone');
+      const bits = num(event.bits) ?? 0;
+      return { type: 'twitch.cheer', title: `${name} cheered ${bits} bits`, amount: bits };
+    }
+    case 'channel.raid': {
+      const name = str(event.from_broadcaster_user_name) ?? 'a raider';
+      const viewers = num(event.viewers) ?? 0;
+      return { type: 'twitch.raid', title: `${name} raided with ${viewers} viewers`, amount: viewers };
+    }
+    case 'stream.online':
+      return { type: 'twitch.stream-online', title: 'Stream started' };
+    case 'stream.offline':
+      return { type: 'twitch.stream-offline', title: 'Stream ended' };
+    default:
+      return undefined;
   }
 }
 
