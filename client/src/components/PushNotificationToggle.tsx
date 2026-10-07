@@ -78,24 +78,41 @@ export function PushNotificationToggle() {
 
   const on = state === 'on';
   return (
-    <button
-      onClick={() => { void (on ? disable() : enable()); }}
-      disabled={busy}
-      style={{
-        fontSize: 12,
-        color: on ? '#22c55e' : '#9ca3af',
-        background: 'transparent',
-        border: 0,
-        padding: 0,
-        cursor: busy ? 'wait' : 'pointer',
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 4,
-      }}
-      title={error ?? (on ? 'click to turn off push notifications on this phone' : 'click to receive push notifications for Twitch events on this phone')}
-    >
-      <Bell size={14} />
-      {on ? 'notify ✓' : 'notify'}
-    </button>
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+      <button
+        onClick={() => { void (on ? disable() : enable()); }}
+        disabled={busy}
+        style={{
+          fontSize: 12,
+          color: on ? '#22c55e' : '#9ca3af',
+          background: 'transparent',
+          border: 0,
+          padding: 0,
+          cursor: busy ? 'wait' : 'pointer',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 4,
+        }}
+        title={error ?? (on ? 'click to turn off push notifications on this phone' : 'click to receive push notifications for Twitch events on this phone')}
+      >
+        <Bell size={14} />
+        {busy ? '…' : on ? 'notify ✓' : 'notify'}
+      </button>
+      {error && (
+        <button
+          type="button"
+          onClick={() => setError(null)}
+          style={{
+            fontSize: 11, color: '#fca5a5',
+            background: '#7f1d1d', padding: '2px 6px', borderRadius: 4,
+            border: 0, cursor: 'pointer', maxWidth: 240,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}
+          title={error}
+        >
+          {error}
+        </button>
+      )}
+    </span>
   );
 }
