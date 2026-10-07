@@ -35,6 +35,8 @@ import { ensureSoundsDir } from './sounds.js';
 import { getSystemMetrics } from './system-metrics.js';
 // scaffold-integration: additional integration imports inserted above this line
 import { getIntegrations } from './integrations/base.js';
+import { getAlerts } from './alerts.js';
+import type { AlertEvent } from './alerts.js';
 import { getMic } from './actions/mic.js';
 import { computeButtonStates, type ButtonState } from './states.js';
 import { startTray, stopTray, updateTrayMenu, type TrayMenu } from './tray.js';
@@ -57,7 +59,8 @@ type ServerMsg =
   | { type: 'layout'; layout: PublicLayout; preview?: { name: string; title: string } }
   | { type: 'ack'; id: number }
   | { type: 'nack'; id: number; error: string }
-  | { type: 'states'; states: ButtonState[]; meta?: LiveMeta };
+  | { type: 'states'; states: ButtonState[]; meta?: LiveMeta }
+  | { type: 'alert'; event: string; title: string; body?: string; at: number };
 
 /** Global integration state used for dynamic tile labels (e.g. "REC 01:23:45").
  *  Sent alongside per-tile ButtonState so the phone has everything it needs to
@@ -447,6 +450,17 @@ function scheduleStateBroadcast() {
 
 // Base wiring: every integration triggers a state broadcast on change.
 for (const i of getIntegrations()) i.onChange(scheduleStateBroadcast);
+
+// Fan the alert dispatcher's events out to every connected WS client as a
+// one-off 'alert' message so the deck can render its toast banner.
+// (Push-notification delivery lands in phase 4; this covers the in-deck surface.)
+getAlerts().on('alert', ({ event, cfg }: { event: AlertEvent; cfg: { toast?: boolean } }) => {
+  if (!cfg.toast) return;
+  const msg = JSON.stringify({ type: 'alert', event: event.type, title: event.title, body: event.body, at: Date.now() } satisfies ServerMsg);
+  for (const ws of wss.clients) {
+    if (ws.readyState === ws.OPEN) ws.send(msg);
+  }
+});
 
 // Extra: when Twitch or Kick just went to connected, refresh streamer thumbnails
 // so tiles pop within seconds instead of waiting for the next poll.

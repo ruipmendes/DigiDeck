@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useMacroWS } from './ws';
 import { ButtonGrid } from './components/ButtonGrid';
+import { AlertToastStack } from './components/AlertToast';
 import { PreviewBanner, usePreviewHeartbeat } from './components/PreviewBanner';
 import { readUrlTokenAndStore, getStoredToken, clearToken } from './lib/token';
 import { setPackTints } from './lib/icons';
@@ -33,7 +34,7 @@ export function GridApp() {
     return defaultUrl();
   });
   const [draft, setDraft] = useState<string | null>(null);
-  const { status, layout, preview, lastAck, lastNack, buttonStates, liveMeta, press, sliderValue, sliderMute, voicePanelVolume, voicePanelMute } = useMacroWS(url, token);
+  const { status, layout, preview, lastAck, lastNack, buttonStates, liveMeta, alerts, dismissAlert, press, sliderValue, sliderMute, voicePanelVolume, voicePanelMute } = useMacroWS(url, token);
   const [previewError, setPreviewError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -175,6 +176,7 @@ export function GridApp() {
         onVoicePanelVolume={voicePanelVolume}
         onVoicePanelMute={voicePanelMute}
       />
+      <AlertToastStack alerts={alerts} onDismiss={dismissAlert} />
     </div>
   );
 }

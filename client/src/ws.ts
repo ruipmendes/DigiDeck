@@ -187,11 +187,24 @@ export type LiveMeta = {
   };
 };
 
+export type AlertMessage = {
+  /** Unique id generated on arrival (server doesn't produce one). Lets the
+   *  renderer key its list without burning cycles comparing payloads. */
+  id: number;
+  /** `twitch.raid` / `twitch.subscribe` etc. — kept as string on the wire so
+   *  older/newer clients tolerate unknown event types. */
+  event: string;
+  title: string;
+  body?: string;
+  at: number;
+};
+
 type ServerMsg =
   | { type: 'layout'; layout: Layout; preview?: PreviewInfo }
   | { type: 'ack'; id: number }
   | { type: 'nack'; id: number; error: string }
-  | { type: 'states'; states: ButtonState[]; meta?: LiveMeta };
+  | { type: 'states'; states: ButtonState[]; meta?: LiveMeta }
+  | { type: 'alert'; event: string; title: string; body?: string; at: number };
 
 export type WSStatus = 'connecting' | 'open' | 'closed';
 
@@ -209,7 +222,9 @@ export function useMacroWS(url: string, token: string | null) {
   const [lastNack, setLastNack] = useState<{ id: number; error: string; at: number } | null>(null);
   const [buttonStates, setButtonStates] = useState<Map<number, ButtonState>>(new Map());
   const [liveMeta, setLiveMeta] = useState<LiveMeta>({});
+  const [alerts, setAlerts] = useState<AlertMessage[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
+  const alertIdRef = useRef(1);
 
   useEffect(() => {
     let cancelled = false;
@@ -241,6 +256,17 @@ export function useMacroWS(url: string, token: string | null) {
             for (const s of msg.states) m.set(s.id, s);
             setButtonStates(m);
             if (msg.meta) setLiveMeta(msg.meta);
+          }
+          else if (msg.type === 'alert') {
+            const entry: AlertMessage = {
+              id: alertIdRef.current++,
+              event: msg.event,
+              title: msg.title,
+              body: msg.body,
+              at: msg.at,
+            };
+            // Cap the backlog so a burst of 50 cheers can't balloon the UI.
+            setAlerts((prev) => [...prev, entry].slice(-10));
           }
         } catch {
           /* ignore malformed */
@@ -274,5 +300,9 @@ export function useMacroWS(url: string, token: string | null) {
   function voicePanelVolume(id: number, userId: string, value: number) { send({ type: 'voice-panel-volume', id, userId, value }); }
   function voicePanelMute(id: number, userId: string) { send({ type: 'voice-panel-mute', id, userId }); }
 
-  return { status, layout, preview, lastAck, lastNack, buttonStates, liveMeta, press, sliderValue, sliderMute, voicePanelVolume, voicePanelMute };
+  function dismissAlert(id: number): void {
+    setAlerts((prev) => prev.filter((a) => a.id !== id));
+  }
+
+  return { status, layout, preview, lastAck, lastNack, buttonStates, liveMeta, alerts, dismissAlert, press, sliderValue, sliderMute, voicePanelVolume, voicePanelMute };
 }
