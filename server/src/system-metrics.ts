@@ -1,5 +1,6 @@
 import * as os from 'node:os';
 import { spawn } from 'node:child_process';
+import { isWindows } from './platform.js';
 
 /**
  * System metrics — CPU %, RAM %, GPU %. Piped into LiveMeta so chart tiles
@@ -77,7 +78,10 @@ class SystemMetricsSampler {
       this.cpuPercent = undefined;
       this.ramPercent = undefined;
     }
-    if (needed.gpu && !this.gpuTimer) {
+    // GPU utilization comes from a Windows perf counter; nothing on macOS /
+    // Linux maps to the same number cheaply, so we leave `gpuPercent`
+    // undefined there and let chart tiles render an empty trace.
+    if (needed.gpu && isWindows && !this.gpuTimer) {
       this.gpuTimer = setInterval(() => { void this.sampleGpu(); }, GPU_INTERVAL_MS);
       void this.sampleGpu();
     } else if (!needed.gpu && this.gpuTimer) {

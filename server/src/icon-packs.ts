@@ -1,6 +1,7 @@
 import { promises as fs } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
 import AdmZip from 'adm-zip';
+import { appDataDir } from './platform.js';
 
 /**
  * Icon-pack discovery + serving.
@@ -22,10 +23,7 @@ import AdmZip from 'adm-zip';
  * A 5-second in-memory cache absorbs the icon-picker's chatty polls.
  */
 
-const APP_DIR = join(
-  process.env.APPDATA ?? join(process.env.USERPROFILE ?? '.', 'AppData', 'Roaming'),
-  'digi-deck',
-);
+const APP_DIR = join(appDataDir(), 'digi-deck');
 export const ICON_PACKS_DIR = join(APP_DIR, 'icon-packs');
 /** Sidecar for per-pack settings (tint mode today; room for more later).
  *  Kept OUTSIDE the packs folder so users can sync `icon-packs/` externally

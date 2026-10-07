@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { resolve as resolvePath } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { extractLibraryId, resolveSoundPath } from '../sounds.js';
+import { isWindows, isMacOS } from '../platform.js';
 
 /**
  * Sound action — plays a local audio file on the PC running Digi Deck.
@@ -68,10 +69,28 @@ export async function execSound(opts: SoundActionOpts): Promise<void> {
   }
 
   const volume = clamp01(opts.volume ?? 1);
+  console.log(`[sound] playing ${abs} at ${Math.round(volume * 100)}%`);
+
+  // Non-Windows: skip the WPF MediaPlayer path and hand the clip to the
+  // native CLI player. macOS has `afplay` in /usr/bin by default; Linux's
+  // most-common player is `paplay` (PulseAudio) with `aplay` (ALSA) as a
+  // fallback. Volume is a 0..1 multiplier on both.
+  if (!isWindows) {
+    const cmd = isMacOS ? 'afplay' : 'paplay';
+    const args = isMacOS
+      ? ['-v', volume.toFixed(4), abs]
+      : [`--volume=${Math.round(volume * 65536)}`, abs];
+    const child = spawn(cmd, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+    child.stderr?.on('data', (buf: Buffer) => {
+      const t = buf.toString().trim();
+      if (t) console.warn(`[sound stderr] ${t}`);
+    });
+    child.on('error', (err) => console.error(`sound "${abs}" (${cmd}) failed:`, err.message));
+    return;
+  }
+
   const fileUri = pathToFileURL(abs).href;
   const script = buildScript(fileUri, volume);
-
-  console.log(`[sound] playing ${abs} at ${Math.round(volume * 100)}%`);
 
   // Encode as UTF-16LE base64 so multi-line scripts and non-ASCII paths pass
   // through PowerShell's parser unchanged (same trick the tray dialog uses).

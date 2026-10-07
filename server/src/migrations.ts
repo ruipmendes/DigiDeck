@@ -1,7 +1,8 @@
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
+import { appDataDir } from './platform.js';
 
-const APPDATA = process.env.APPDATA ?? join(process.env.USERPROFILE ?? '.', 'AppData', 'Roaming');
+const APPDATA = appDataDir();
 const NEW_DIR = join(APPDATA, 'digi-deck');
 const OLD_DIR = join(APPDATA, 'ancient-crown');
 

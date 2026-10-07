@@ -1,6 +1,7 @@
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
+import { appDataDir } from './platform.js';
 import { DEFAULT_OBS_CONFIG, type ObsConfig } from './integrations/obs.js';
 import { DEFAULT_TWITCH_CONFIG, type TwitchConfig } from './integrations/twitch.js';
 import { DEFAULT_STREAMLABS_CONFIG, type StreamlabsConfig } from './integrations/streamlabs.js';
@@ -18,7 +19,7 @@ import { DEFAULT_ELITE_DANGEROUS_CONFIG, type EliteDangerousConfig } from './int
 // scaffold-integration: additional imports inserted above this line
 
 const APP_DIR = join(
-  process.env.APPDATA ?? join(process.env.USERPROFILE ?? '.', 'AppData', 'Roaming'),
+  appDataDir(),
   'digi-deck',
 );
 export const CONFIG_FILE = join(APP_DIR, 'config.json');

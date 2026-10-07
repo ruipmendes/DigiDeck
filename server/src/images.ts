@@ -1,11 +1,9 @@
 import { promises as fs } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join, resolve } from 'node:path';
+import { appDataDir } from './platform.js';
 
-const APP_DIR = join(
-  process.env.APPDATA ?? join(process.env.USERPROFILE ?? '.', 'AppData', 'Roaming'),
-  'digi-deck',
-);
+const APP_DIR = join(appDataDir(), 'digi-deck');
 const IMAGE_DIR = join(APP_DIR, 'images');
 
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB

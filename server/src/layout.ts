@@ -1,6 +1,7 @@
 import { promises as fs, watch } from 'node:fs';
 import { join } from 'node:path';
 import type { Action, ButtonAction } from './actions/types.js';
+import { appDataDir } from './platform.js';
 
 export type ImageFit = 'cover' | 'fill' | 'contain';
 
@@ -206,10 +207,7 @@ export type PublicTile = PublicButton | PublicSlider | PublicBlank | PublicDisco
 export type PublicPage = { id: number; name: string; icon?: string; image?: string; cols?: number; background?: string; backgroundImage?: string; buttons: PublicTile[] };
 export type PublicLayout = { navigation?: NavigationMode; pages: PublicPage[] };
 
-const APP_DIR = join(
-  process.env.APPDATA ?? join(process.env.USERPROFILE ?? '.', 'AppData', 'Roaming'),
-  'digi-deck',
-);
+const APP_DIR = join(appDataDir(), 'digi-deck');
 export const LAYOUT_FILE = join(APP_DIR, 'layout.json');
 
 const DEFAULT_LAYOUT: Layout = {

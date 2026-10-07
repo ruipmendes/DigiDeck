@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { isWindows, windowsOnlyError } from '../platform.js';
 
 /**
  * Per-app audio control — mute / volume for a specific running program
@@ -287,6 +288,7 @@ class AppAudioController {
   }
 
   async execute(op: AppAudioOp, params: AppAudioActionParams | undefined): Promise<void> {
+    if (!isWindows) throw windowsOnlyError('Per-app audio control');
     const appName = (params?.appName ?? '').trim();
     if (!appName) throw new Error('app-audio: missing appName');
 
@@ -331,6 +333,10 @@ class AppAudioController {
   }
 
   private start(): void {
+    // Core-Audio session enumeration is Windows-only — polling on other OSes
+    // just burns CPU for no gain. Leave sessions as [] and let the UI show
+    // the standard "no sessions" placeholder.
+    if (!isWindows) return;
     if (this.timer) return;
     void this.poll();
     this.timer = setInterval(() => { void this.poll(); }, POLL_INTERVAL_MS);

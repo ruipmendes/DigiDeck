@@ -12,6 +12,7 @@ import { loadOrInitConfig, saveConfig, CONFIG_FILE } from './config.js';
 import { authorize, isAllowedHost, isAllowedOrigin } from './auth.js';
 import { startMdns, stopMdns } from './mdns.js';
 import { migrateAppData } from './migrations.js';
+import { openExternal } from './platform.js';
 import { getObs } from './integrations/obs.js';
 import { getStreamlabs } from './integrations/streamlabs.js';
 import { getTwitch } from './integrations/twitch.js';
@@ -653,7 +654,7 @@ httpServer.listen(PORT, () => {
 startMdns(PORT);
 
 function openInDefaultBrowser(url: string): void {
-  spawn('cmd', ['/c', 'start', '""', url], { detached: true, stdio: 'ignore' }).unref();
+  openExternal(url);
 }
 
 function configUrl(): string {
@@ -717,6 +718,17 @@ function readServerVersion(): string {
 function showUpdateDialog(result: UpdateCheck, applyAvailable: boolean, applyScript: string): void {
   const rendered = renderUpdateDialog(result, applyAvailable);
   const { title, body, mode, icon } = rendered;
+
+  // Non-Windows: no WinForms MessageBox. Log the content so the user still
+  // sees the result, and open the release page in the browser when one's
+  // available (which is every UpdateCheck variant we care about here).
+  if (process.platform !== 'win32') {
+    console.log(`\n[update] ${title}\n${body}\n`);
+    if (mode !== 'info' && 'url' in result && result.url) {
+      openExternal(result.url);
+    }
+    return;
+  }
 
   // Button mapping per mode:
   //   'apply-or-open' (three buttons):  Yes = Apply now, No = Open GitHub, Cancel = Later

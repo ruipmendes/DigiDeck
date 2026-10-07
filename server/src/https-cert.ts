@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { networkInterfaces } from 'node:os';
 import { createHash, randomBytes } from 'node:crypto';
+import { appDataDir, isWindows, osLabel } from './platform.js';
 
 /**
  * Self-signed cert used when the user opts into HTTPS. Generated via
@@ -14,10 +15,7 @@ import { createHash, randomBytes } from 'node:crypto';
  * actually connect through.
  */
 
-const APP_DIR = join(
-  process.env.APPDATA ?? join(process.env.USERPROFILE ?? '.', 'AppData', 'Roaming'),
-  'digi-deck',
-);
+const APP_DIR = join(appDataDir(), 'digi-deck');
 const CERT_DIR = join(APP_DIR, 'https');
 const CERT_PFX = join(CERT_DIR, 'cert.pfx');
 const CERT_CER = join(CERT_DIR, 'cert.cer');
@@ -108,6 +106,14 @@ ${sanBuilderLines}
 }
 
 async function generateCert(): Promise<void> {
+  if (!isWindows) {
+    // Non-Windows: no `New-SelfSignedCertificate` + `CertificateRequest` on
+    // offer, and we don't want to pull in OpenSSL as a hard dep. For now the
+    // user runs over HTTP (dev PWA still works for most of the flow — only
+    // service workers / clipboard etc. need HTTPS). A follow-up with the
+    // `selfsigned` npm package would close this gap cross-platform.
+    throw new Error(`HTTPS cert generation is Windows-only right now; running over HTTP on ${osLabel}.`);
+  }
   await fs.mkdir(CERT_DIR, { recursive: true });
   const ips = currentSans();
   // The PFX passphrase gates access to the private key at rest. Not a real
@@ -142,6 +148,9 @@ async function generateCert(): Promise<void> {
  * (Firefox has its own store — it's unaffected.)
  */
 export async function installCertTrust(): Promise<{ output: string }> {
+  if (!isWindows) {
+    throw new Error(`One-click cert trust is Windows-only; on ${osLabel}, trust the cert in your OS keychain manually.`);
+  }
   const cerPath = await ensureCert();
   return new Promise((resolve, reject) => {
     const p = spawn('certutil.exe', ['-user', '-addstore', 'Root', cerPath], {

@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { isWindows, windowsOnlyError } from '../platform.js';
 
 export type MicOp = 'toggle-mute' | 'mute' | 'unmute';
 
@@ -87,6 +88,7 @@ class MicController {
   onChange(cb: () => void): void { this.onChangeCb = cb; }
 
   async execute(op: MicOp): Promise<void> {
+    if (!isWindows) throw windowsOnlyError('Mic mute');
     const setStmt =
       op === 'toggle-mute' ? '[Audio]::Mute = ![Audio]::Mute'
       : op === 'mute'      ? '[Audio]::Mute = $true'
@@ -103,6 +105,9 @@ class MicController {
   }
 
   start(): void {
+    // Core-Audio only exists on Windows — on other OSes we stay silent (no
+    // poll, no timer) and surface as unavailable so UI tiles reflect that.
+    if (!isWindows) { this.available = false; this.emitChange(); return; }
     if (this.timer) return;
     void this.poll();
     this.timer = setInterval(() => { void this.poll(); }, POLL_INTERVAL_MS);

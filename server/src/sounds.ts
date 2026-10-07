@@ -1,5 +1,6 @@
 import { promises as fs } from 'node:fs';
 import { join, resolve, sep, dirname, basename } from 'node:path';
+import { appDataDir } from './platform.js';
 
 /**
  * Sound library — folder discovery + per-clip metadata sidecar.
@@ -24,10 +25,7 @@ import { join, resolve, sep, dirname, basename } from 'node:path';
  * icon-packs.
  */
 
-const APP_DIR = join(
-  process.env.APPDATA ?? join(process.env.USERPROFILE ?? '.', 'AppData', 'Roaming'),
-  'digi-deck',
-);
+const APP_DIR = join(appDataDir(), 'digi-deck');
 export const SOUNDS_DIR = join(APP_DIR, 'sounds');
 export const SOUNDS_METADATA_FILE = join(APP_DIR, 'sounds.json');
 
