@@ -19,6 +19,11 @@ export type Button = {
   action: ButtonAction;
   /** Optional secondary action triggered when the user holds the button (~500ms). */
   longPressAction?: ButtonAction;
+  /** Opt-in flag for OBS scene-preview thumbnails. Only meaningful when the
+   *  action targets an OBS scene via `obs` / `set-scene`. Driven by
+   *  `collectObsSceneNames` so scenes without a tile asking for a preview
+   *  cost zero `GetSourceScreenshot` calls. */
+  obsPreview?: boolean;
 };
 
 /** OBS / Streamlabs sliders drive a named audio input; Discord sliders drive
@@ -376,14 +381,17 @@ export function collectStreamerLogins(layout: Layout): string[] {
   return [...set];
 }
 
-/** Collect every OBS scene name referenced by a set-scene action anywhere in
- *  the layout — the OBS integration polls these for live preview thumbnails.
- *  Walks both tap and long-press actions since either can target a scene. */
+/** Collect every OBS scene name a tile has opted-in to live-preview — the OBS
+ *  integration polls these for `GetSourceScreenshot` thumbnails. Opt-in via
+ *  `button.obsPreview === true`; scene-targeting tiles without the flag cost
+ *  zero screenshot calls. Walks both tap and long-press actions since either
+ *  can target a scene. */
 export function collectObsSceneNames(layout: Layout): string[] {
   const set = new Set<string>();
   for (const page of layout.pages) {
     for (const t of page.buttons) {
       if (t.kind !== 'button') continue;
+      if (!t.obsPreview) continue;
       const all: Action[] = [];
       const push = (act: ButtonAction | undefined) => {
         if (!act) return;
@@ -615,6 +623,11 @@ function validateButtons(input: unknown[], seenIds: Set<number>): Tile[] {
         // Drop nulls so the persisted shape is clean.
         delete (tile as Record<string, unknown>).longPressAction;
       }
+      if (tile.obsPreview !== undefined && typeof tile.obsPreview !== 'boolean') {
+        throw new Error(`tile ${tile.id}: obsPreview must be a boolean`);
+      }
+      // Drop a persisted `false` so the saved shape matches "not opted in".
+      if (tile.obsPreview === false) delete (tile as Record<string, unknown>).obsPreview;
     } else if (kind === 'discord-voice-panel') {
       // Voice-panel tiles are fully content-driven — no action, no inputName,
       // no per-tile config beyond label + cosmetics (which are validated above).

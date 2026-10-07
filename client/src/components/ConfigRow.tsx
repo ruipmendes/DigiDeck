@@ -121,6 +121,18 @@ function NonBlankConfigRow({ button, pages, currentPageId, layout, integrationSt
               label="accent"
             />
           </AppearanceSection>
+          {button.kind === 'button' && buttonTargetsObsScene(button.action, button.longPressAction) && (
+            <AppearanceSection label="OBS scene preview">
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#9ca3af', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={!!button.obsPreview}
+                  onChange={(e) => onChange({ obsPreview: e.target.checked || undefined } as Partial<Tile>)}
+                />
+                <span>Show live thumbnail as background</span>
+              </label>
+            </AppearanceSection>
+          )}
         </AppearancePopover>
 
         <input
@@ -372,6 +384,19 @@ function SummaryChip({ text, onClick }: { text: string; onClick: () => void }) {
       {text}
     </button>
   );
+}
+
+/** True when any step of the tap or long-press action targets an OBS scene
+ *  via `obs` / `set-scene` (i.e. a tile the OBS integration *could* fetch a
+ *  live preview thumbnail for). Drives whether the "OBS scene preview"
+ *  toggle shows up in the appearance popover. */
+function buttonTargetsObsScene(action: ButtonAction, longPress: ButtonAction | undefined): boolean {
+  const touches = (a: ButtonAction | undefined): boolean => {
+    if (!a) return false;
+    const steps = Array.isArray(a) ? a : [a];
+    return steps.some((s) => s.type === 'obs' && s.op === 'set-scene');
+  };
+  return touches(action) || touches(longPress);
 }
 
 function summarizeTile(tile: Tile): string {

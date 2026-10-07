@@ -252,6 +252,11 @@ export type Button = {
   action: ButtonAction;
   /** Optional action fired on hold (~500ms). When absent, holding still triggers the primary action. */
   longPressAction?: ButtonAction;
+  /** Only meaningful on tiles whose action targets an OBS scene (`obs` /
+   *  `set-scene`): when true, the OBS integration polls that scene via
+   *  `GetSourceScreenshot` and the thumbnail renders as the tile background.
+   *  Opt-in — defaults to off. */
+  obsPreview?: boolean;
 };
 
 export type SliderProvider = 'obs' | 'streamlabs' | 'discord' | 'spotify' | 'app-audio' | 'hue' | 'homeassistant' | 'nanoleaf' | 'voicemeeter';
