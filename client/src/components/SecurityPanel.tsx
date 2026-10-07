@@ -114,6 +114,18 @@ export function SecurityPanel() {
               iconRight={<Lock size={12} />}
             />
 
+            {cfg && cfg.httpsActive !== undefined && cfg.httpsActive !== cfg.httpsEnabled && (
+              <div style={{
+                marginTop: 10, marginLeft: 28, padding: '8px 10px',
+                background: '#422006', border: '1px solid #a16207', borderRadius: 6,
+                color: '#fde68a', fontSize: 12, lineHeight: 1.5,
+              }}>
+                <strong>Restart required.</strong>{' '}
+                HTTPS is {cfg.httpsEnabled ? 'enabled in config but not running' : 'running but disabled in config'}.
+                The listener is created at server boot — right-click the tray icon → <em>Quit</em>, then re-launch for the new setting to take effect.
+              </div>
+            )}
+
             {httpsOn && (
               <div style={{ marginTop: 10, marginLeft: 28, display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>

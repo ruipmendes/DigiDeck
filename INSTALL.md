@@ -124,6 +124,33 @@ You should now see a **Digi Deck** icon on your desktop.
 
 ---
 
+## Push notifications on the phone (Twitch alerts)
+
+The deck's "notify" toggle in the header enables OS-level push alerts for Twitch events (sub / raid / cheer / follow / stream online). It depends on three things being true on the phone:
+
+1. The connection is treated as a **secure context** (HTTPS or an allow-listed origin).
+2. **Service Workers + Push** are supported by the browser.
+3. The deck is paired (you have an auth token).
+
+If the toggle is missing or does nothing:
+
+**Toggle doesn't appear** → secure-context failure. Paste `javascript:alert('secure=' + window.isSecureContext)` into the URL bar; if it says `secure=false`, HTTPS isn't live. See below.
+
+**Toggle shows "service worker registration failed"** → the TLS cert isn't trusted by the browser. Common on Android Chrome with the self-signed cert — accepting the browser's "Advanced → Proceed" warning lets pages load but blocks SW registration. Two fixes:
+
+- **Easiest (dev-mode flag — recommended for one tablet)**: on the device, visit `chrome://flags/#unsafely-treat-insecure-origin-as-secure`. Enable it and add `http://<pc-ip>:8765` (your PC's LAN IP). Relaunch Chrome. The deck now runs over plain HTTP but Chrome treats that one origin as "secure" so SW + Push work. Scope: only that one Chrome install.
+- **Proper path (works for every device without per-browser setup)**: use a tunnel like [Tailscale](https://tailscale.com/) that gives Digi Deck a real cert chain devices natively trust. Install Tailscale on both PC and phone, point the deck at your `.ts.net` hostname, done.
+
+**Toggle says "blocked"** → you tapped Deny on the browser's permission prompt. Clear site data in browser settings, or long-press the deck's address bar → Site settings → Notifications → Allow, then try again.
+
+**iPad / iOS Safari** → Push works only when the deck is installed as a PWA. Open the deck in Safari → Share → *Add to Home Screen* → open from the home-screen icon. The toggle should appear.
+
+### Enabling HTTPS on the server
+
+HTTPS is opt-in and off by default. Enable it in the config UI's **Security** panel. **Restart the server after flipping the toggle** — the HTTPS listener is created at server boot, so toggling the setting doesn't swap the live listener. Right-click tray → Quit → re-launch. Look for `[https] listening with self-signed cert` in the console.
+
+---
+
 That's it. For customizing buttons, integrations, or technical details, see `README.md` in the project folder.
 
 ---

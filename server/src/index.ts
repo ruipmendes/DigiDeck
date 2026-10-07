@@ -267,10 +267,15 @@ function currentTrayMenu(): TrayMenu {
   return items;
 }
 
+// Tracks whether the running listener is actually HTTPS. Set once in
+// createServerForConfig() below based on whether cert loading succeeded.
+let httpsActive = false;
+
 const requestHandler = (req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse) => {
   handleRequest(req, res, {
     getLayout: () => layout,
     getServerConfig: () => serverConfig,
+    isHttpsActive: () => httpsActive,
     onLayoutChanged: async () => {
       broadcastLayout();
       scheduleStateBroadcast();
@@ -299,11 +304,13 @@ async function createServerForConfig() {
     try {
       const material = await loadOrGenerateCert();
       console.log('[https] listening with self-signed cert');
+      httpsActive = true;
       return createHttpsServer(material, requestHandler);
     } catch (err) {
       console.error('[https] cert setup failed, falling back to HTTP:', (err as Error).message);
     }
   }
+  httpsActive = false;
   return createHttpServer(requestHandler);
 }
 

@@ -68,6 +68,12 @@ type Ctx = {
   onLayoutChanged: () => Promise<void>;
   /** Called when an integration's `enabled` flag may have changed — lets the tray refresh its menu. */
   onIntegrationsChanged: () => void;
+  /** True when the running listener is HTTPS. Decoupled from
+   *  `security.httpsEnabled`: the toggle changes the saved config, but the
+   *  listener is created once at boot — so a toggled-but-not-restarted
+   *  server has config saying "on" and runtime saying "off" (or vice versa).
+   *  Surfaced in the GET /api/security response so the UI can nag. */
+  isHttpsActive: () => boolean;
 };
 
 export async function handleRequest(req: IncomingMessage, res: ServerResponse, ctx: Ctx): Promise<void> {
@@ -672,7 +678,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse, c
   // ─── Security ─────────────────────────────────────────────────
   if (pathname === '/api/security' && req.method === 'GET') {
     if (!authorize(req, token())) return unauthorized(res);
-    json(res, 200, { config: ctx.getServerConfig().security });
+    json(res, 200, { config: { ...ctx.getServerConfig().security, httpsActive: ctx.isHttpsActive() } });
     return;
   }
   if (pathname === '/api/security/config' && req.method === 'PUT') {
@@ -687,7 +693,7 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse, c
       if (typeof o.allowShellActions === 'boolean') cfg.security.allowShellActions = o.allowShellActions;
       if (typeof o.httpsEnabled === 'boolean') cfg.security.httpsEnabled = o.httpsEnabled;
       await saveConfig(cfg);
-      json(res, 200, { config: cfg.security });
+      json(res, 200, { config: { ...cfg.security, httpsActive: ctx.isHttpsActive() } });
     } catch (err) {
       json(res, 400, { error: (err as Error).message });
     }

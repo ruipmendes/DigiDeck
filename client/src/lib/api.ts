@@ -1430,7 +1430,14 @@ export async function fetchPromptChoices(
 
 // ─── Security ───────────────────────────────────────────────────
 
-export type SecurityConfig = { allowShellActions: boolean | null; httpsEnabled: boolean };
+export type SecurityConfig = {
+  allowShellActions: boolean | null;
+  httpsEnabled: boolean;
+  /** What the running listener is actually serving. Diverges from
+   *  `httpsEnabled` when the toggle has been flipped but the server hasn't
+   *  been restarted. The UI uses this to nag the user into restarting. */
+  httpsActive?: boolean;
+};
 
 export function certDownloadUrl(): string {
   const t = getStoredToken();
