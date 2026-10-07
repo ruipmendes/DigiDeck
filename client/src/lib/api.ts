@@ -463,6 +463,30 @@ export async function putTwitchConfig(c: { enabled: boolean; clientId: string; c
   return res.json();
 }
 
+export async function pushPublicKey(): Promise<{ publicKey: string }> {
+  const res = await apiFetch('/api/push/public-key');
+  if (!res.ok) throw new Error(`GET push public-key failed: ${res.status}`);
+  return res.json();
+}
+
+export async function pushSubscribe(subscription: { endpoint: string; keys: { p256dh: string; auth: string } }): Promise<void> {
+  const res = await apiFetch('/api/push/subscribe', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ subscription }),
+  });
+  if (!res.ok) throw new Error(`POST push subscribe failed: ${res.status}`);
+}
+
+export async function pushUnsubscribe(endpoint: string): Promise<void> {
+  const res = await apiFetch('/api/push/unsubscribe', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ endpoint }),
+  });
+  if (!res.ok) throw new Error(`POST push unsubscribe failed: ${res.status}`);
+}
+
 export async function fireTwitchNotificationTest(event: TwitchNotificationEventType): Promise<void> {
   const res = await apiFetch('/api/integrations/twitch/notifications/test', {
     method: 'POST',

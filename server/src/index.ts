@@ -37,6 +37,7 @@ import { getSystemMetrics } from './system-metrics.js';
 import { getIntegrations } from './integrations/base.js';
 import { getAlerts } from './alerts.js';
 import type { AlertEvent } from './alerts.js';
+import { wirePushToAlerts } from './push.js';
 import { getMic } from './actions/mic.js';
 import { computeButtonStates, type ButtonState } from './states.js';
 import { startTray, stopTray, updateTrayMenu, type TrayMenu } from './tray.js';
@@ -453,7 +454,7 @@ for (const i of getIntegrations()) i.onChange(scheduleStateBroadcast);
 
 // Fan the alert dispatcher's events out to every connected WS client as a
 // one-off 'alert' message so the deck can render its toast banner.
-// (Push-notification delivery lands in phase 4; this covers the in-deck surface.)
+wirePushToAlerts();
 getAlerts().on('alert', ({ event, cfg }: { event: AlertEvent; cfg: { toast?: boolean } }) => {
   if (!cfg.toast) return;
   const msg = JSON.stringify({ type: 'alert', event: event.type, title: event.title, body: event.body, at: Date.now() } satisfies ServerMsg);

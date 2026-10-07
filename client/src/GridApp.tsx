@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useMacroWS } from './ws';
 import { ButtonGrid } from './components/ButtonGrid';
 import { AlertToastStack } from './components/AlertToast';
+import { PushNotificationToggle } from './components/PushNotificationToggle';
 import { PreviewBanner, usePreviewHeartbeat } from './components/PreviewBanner';
 import { readUrlTokenAndStore, getStoredToken, clearToken } from './lib/token';
 import { setPackTints } from './lib/icons';
@@ -116,6 +117,7 @@ export function GridApp() {
           {localPreview && <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 8, fontWeight: 400 }}>preview</span>}
         </strong>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          {token && <PushNotificationToggle />}
           {token && (
             <button
               onClick={unpair}

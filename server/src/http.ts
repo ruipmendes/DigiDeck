@@ -10,6 +10,7 @@ import { getSpotify } from './integrations/spotify.js';
 import { getHue } from './integrations/hue.js';
 import { getTwitch, TWITCH_NOTIFICATION_EVENT_TYPES, type TwitchNotificationEventType } from './integrations/twitch.js';
 import { getAlerts, type AlertEvent } from './alerts.js';
+import { getVapidPublicKey, addSubscription, removeSubscription, type PushSubscriptionObject } from './push.js';
 import { getAppAudio } from './actions/appAudio.js';
 import { listIconPacks, readIcon, ICON_PACKS_DIR, invalidateIconPacksCache, installPackFromZip, setPackTint, type TintMode } from './icon-packs.js';
 import {
@@ -566,6 +567,47 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse, c
     try {
       const bridges = await getHue().discoverBridges();
       json(res, 200, { bridges });
+    } catch (err) {
+      json(res, 400, { error: (err as Error).message });
+    }
+    return;
+  }
+
+  // ─── Push notifications (Web Push) ──────────────────────────
+  // The VAPID public key is handed to the phone's service worker so it can
+  // subscribe. The private half stays server-side.
+  if (pathname === '/api/push/public-key' && req.method === 'GET') {
+    if (!authorize(req, token())) return unauthorized(res);
+    try {
+      const publicKey = await getVapidPublicKey();
+      json(res, 200, { publicKey });
+    } catch (err) {
+      json(res, 500, { error: (err as Error).message });
+    }
+    return;
+  }
+  if (pathname === '/api/push/subscribe' && req.method === 'POST') {
+    if (!authorize(req, token())) return unauthorized(res);
+    try {
+      const body = await readJsonBody(req) as { subscription?: PushSubscriptionObject };
+      const sub = body.subscription;
+      if (!sub?.endpoint || !sub.keys?.p256dh || !sub.keys?.auth) {
+        throw new Error('invalid subscription payload');
+      }
+      await addSubscription(sub);
+      json(res, 200, { ok: true });
+    } catch (err) {
+      json(res, 400, { error: (err as Error).message });
+    }
+    return;
+  }
+  if (pathname === '/api/push/unsubscribe' && req.method === 'POST') {
+    if (!authorize(req, token())) return unauthorized(res);
+    try {
+      const body = await readJsonBody(req) as { endpoint?: string };
+      if (!body.endpoint) throw new Error('endpoint required');
+      await removeSubscription(body.endpoint);
+      json(res, 200, { ok: true });
     } catch (err) {
       json(res, 400, { error: (err as Error).message });
     }
