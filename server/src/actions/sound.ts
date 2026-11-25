@@ -72,20 +72,17 @@ export async function execSound(opts: SoundActionOpts): Promise<void> {
   console.log(`[sound] playing ${abs} at ${Math.round(volume * 100)}%`);
 
   // Non-Windows: skip the WPF MediaPlayer path and hand the clip to the
-  // native CLI player. macOS has `afplay` in /usr/bin by default; Linux's
-  // most-common player is `paplay` (PulseAudio) with `aplay` (ALSA) as a
-  // fallback. Volume is a 0..1 multiplier on both.
+  // native CLI player. macOS has `afplay` in /usr/bin by default; Linux
+  // tries `paplay` (PulseAudio / PipeWire-pulse) first, falls back to
+  // `aplay` (ALSA) on distros that don't ship pulse. Volume is a 0..1
+  // multiplier on afplay + paplay; aplay has no volume knob so the clip
+  // plays at system volume (logged so users don't think it's a bug).
   if (!isWindows) {
-    const cmd = isMacOS ? 'afplay' : 'paplay';
-    const args = isMacOS
-      ? ['-v', volume.toFixed(4), abs]
-      : [`--volume=${Math.round(volume * 65536)}`, abs];
-    const child = spawn(cmd, args, { stdio: ['ignore', 'ignore', 'pipe'] });
-    child.stderr?.on('data', (buf: Buffer) => {
-      const t = buf.toString().trim();
-      if (t) console.warn(`[sound stderr] ${t}`);
-    });
-    child.on('error', (err) => console.error(`sound "${abs}" (${cmd}) failed:`, err.message));
+    if (isMacOS) {
+      spawnPlayer('afplay', ['-v', volume.toFixed(4), abs], abs);
+    } else {
+      spawnLinuxPlayer(abs, volume);
+    }
     return;
   }
 
@@ -124,6 +121,33 @@ export async function execSound(opts: SoundActionOpts): Promise<void> {
   child.on('error', (err) => console.error(`sound "${abs}" failed to spawn:`, err.message));
   child.on('exit', (code) => {
     console.log(`[sound] powershell exited with code ${code}`);
+  });
+}
+
+function spawnPlayer(cmd: string, args: string[], abs: string): ReturnType<typeof spawn> {
+  const child = spawn(cmd, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+  child.stderr?.on('data', (buf: Buffer) => {
+    const t = buf.toString().trim();
+    if (t) console.warn(`[sound stderr] ${t}`);
+  });
+  return child;
+}
+
+/** Try paplay first (the common case — PulseAudio or PipeWire-pulse); on
+ *  ENOENT fall back to aplay. aplay can't control volume, so a non-100 %
+ *  setting is lost but the clip still plays rather than silently failing. */
+function spawnLinuxPlayer(abs: string, volume: number): void {
+  const paplayArgs = [`--volume=${Math.round(volume * 65536)}`, abs];
+  const child = spawnPlayer('paplay', paplayArgs, abs);
+  child.on('error', (err: NodeJS.ErrnoException) => {
+    if (err.code === 'ENOENT') {
+      if (volume < 0.99) console.warn(`[sound] paplay not found — falling back to aplay (volume control unavailable, clip plays at system volume)`);
+      else console.log('[sound] paplay not found — falling back to aplay');
+      const fallback = spawnPlayer('aplay', [abs], abs);
+      fallback.on('error', (err2: Error) => console.error(`sound "${abs}" (aplay) failed:`, err2.message));
+      return;
+    }
+    console.error(`sound "${abs}" (paplay) failed:`, err.message);
   });
 }
 
