@@ -174,12 +174,20 @@ cd DigiDeck
 
 Config page opens automatically at `http://localhost:8765/config` (or `https://` if you flip the HTTPS switch — `selfsigned` ships the cert pure-JS, no OpenSSL needed).
 
-**What works everywhere:** the full deck UI, every integration (OBS, Streamlabs Desktop, Twitch, Kick, Discord, Spotify, Hue, Home Assistant, OpenRGB, Nanoleaf, Mix It Up, Voicemod, Elite Dangerous), hotkey / text / launch / url / script actions, sound playback (`afplay` on macOS, `paplay` on Linux), HTTPS, CPU + RAM chart sources, pairing + QR, mDNS discovery.
+**What works everywhere:** the full deck UI, every integration (OBS, Streamlabs Desktop, Twitch, Kick, Discord, Spotify, Hue, Home Assistant, OpenRGB, Nanoleaf, Mix It Up, Voicemod, Elite Dangerous), hotkey / text / launch / url / script actions, sound playback, HTTPS, CPU + RAM chart sources, pairing + QR, mDNS discovery.
+
+**Sound playback per OS:**
+- **macOS**: `afplay`.
+- **Linux**: `paplay` (PulseAudio / PipeWire-pulse) — falls back to `aplay` (ALSA) when paplay isn't installed; aplay plays at system volume because it has no volume knob.
+
+**Mic mute per OS:**
+- **macOS**: works via `osascript` — sets the system input volume to 0 on mute and restores the last non-zero level on unmute. Toggles show up in deck tiles and poll back whenever you change it from the menu bar.
+- **Linux**: not wired yet. Workaround: a hotkey tile bound to your DE's mute shortcut, or `pactl set-source-mute @DEFAULT_SOURCE@ toggle` via a script action.
 
 **Windows-only features** (degrade cleanly on other OSes):
-- **Tray icon** — no tray; keep a browser tab on the config page or `ps`/`pkill` to stop.
+- **Tray icon** — no tray on macOS / Linux by design. Use **Ctrl+C** in the terminal running `./start.sh` to quit, keep a browser tab on the config page for everything else. The server log says so on boot.
 - **Native file-browse dialog** — type paths manually in the Launch / Sound editors.
 - **One-click HTTPS cert trust** — HTTPS still works via `selfsigned`; trust the cert in your OS keychain manually (macOS: Keychain Access → System → Trust; Linux: distro-specific).
-- **Mic mute, per-app audio, Voicemeeter** — Windows Core Audio only. Use OS-equivalent hotkeys (e.g. macOS: `osascript -e 'set volume input volume 0'`).
+- **Per-app audio, Voicemeeter** — Windows Core Audio only.
 - **GPU utilization chart source** — Windows perf counter only; CPU / RAM still work.
 - **Update MessageBox** — results print to the server log instead; the release page opens in your browser.

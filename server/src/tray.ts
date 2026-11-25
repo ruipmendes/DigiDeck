@@ -241,6 +241,13 @@ export function startTray(actions: TrayActions, menu: TrayMenu, version: string)
   currentActions = actions;
   currentMenu = menu;
   currentVersion = version;
+  if (process.platform !== 'win32') {
+    // No tray on macOS / Linux — spawnTray early-returns silently on those.
+    // Say so once at boot so users know the surface they expect isn't there
+    // by design, and point at the equivalents.
+    console.log(`[tray] no tray on ${process.platform} (Windows-only) — Ctrl+C in this terminal to quit; open the config UI via the printed URL`);
+    return;
+  }
   spawnTray(actions, menu, version);
   console.log(`[tray] system tray icon installed for v${version} (restart items: ${menuLabel(menu)})`);
 }
