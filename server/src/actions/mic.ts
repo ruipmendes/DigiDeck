@@ -1,7 +1,12 @@
 import { spawn } from 'node:child_process';
-import { isWindows, windowsOnlyError } from '../platform.js';
+import { isWindows, isMacOS, windowsOnlyError } from '../platform.js';
 
 export type MicOp = 'toggle-mute' | 'mute' | 'unmute';
+
+/** Fallback restore level for the first mute → unmute cycle on macOS, before
+ *  we've observed the user's own preferred setting. 75 is a reasonable
+ *  middle-ground — mic apps usually sit between 50 and 100. */
+const MACOS_DEFAULT_INPUT_VOLUME = 75;
 
 /**
  * PowerShell + .NET COM definition for the Windows Core Audio API.
@@ -81,6 +86,10 @@ class MicController {
   private timer: NodeJS.Timeout | null = null;
   private polling = false;
   private onChangeCb: (() => void) | null = null;
+  /** macOS-only: last non-zero input volume we observed, so a toggle-mute
+   *  that started by muting can restore the user's real setting on unmute
+   *  instead of just slamming it to a hardcoded default. */
+  private macOsLastNonZeroLevel = MACOS_DEFAULT_INPUT_VOLUME;
 
   isMuted(): boolean | undefined { return this.muted; }
   isAvailable(): boolean { return this.available; }
@@ -88,26 +97,28 @@ class MicController {
   onChange(cb: () => void): void { this.onChangeCb = cb; }
 
   async execute(op: MicOp): Promise<void> {
-    if (!isWindows) throw windowsOnlyError('Mic mute');
-    const setStmt =
-      op === 'toggle-mute' ? '[Audio]::Mute = ![Audio]::Mute'
-      : op === 'mute'      ? '[Audio]::Mute = $true'
-      :                      '[Audio]::Mute = $false';
-    // Set, then print the resulting state so we can cache it without an extra spawn.
-    const script = `${AUDIO_TYPE_SCRIPT}\n${setStmt}\nif ([Audio]::Mute) { 'true' } else { 'false' }`;
-    const result = (await runPs(script)).trim();
-    const muted = result === 'true';
-    this.available = true;
-    if (muted !== this.muted) {
-      this.muted = muted;
-      this.emitChange();
+    if (isWindows) {
+      const setStmt =
+        op === 'toggle-mute' ? '[Audio]::Mute = ![Audio]::Mute'
+        : op === 'mute'      ? '[Audio]::Mute = $true'
+        :                      '[Audio]::Mute = $false';
+      // Set, then print the resulting state so we can cache it without an extra spawn.
+      const script = `${AUDIO_TYPE_SCRIPT}\n${setStmt}\nif ([Audio]::Mute) { 'true' } else { 'false' }`;
+      const result = (await runPs(script)).trim();
+      this.applyMutedState(result === 'true');
+      return;
     }
+    if (isMacOS) {
+      await this.executeMacOs(op);
+      return;
+    }
+    throw windowsOnlyError('Mic mute');
   }
 
   start(): void {
-    // Core-Audio only exists on Windows — on other OSes we stay silent (no
-    // poll, no timer) and surface as unavailable so UI tiles reflect that.
-    if (!isWindows) { this.available = false; this.emitChange(); return; }
+    // Linux has no portable Core-Audio equivalent (per-distro pactl / wpctl
+    // work but differ by setup). Stay dormant and surface as unavailable.
+    if (!isWindows && !isMacOS) { this.available = false; this.emitChange(); return; }
     if (this.timer) return;
     void this.poll();
     this.timer = setInterval(() => { void this.poll(); }, POLL_INTERVAL_MS);
@@ -124,9 +135,17 @@ class MicController {
     if (this.polling) return;
     this.polling = true;
     try {
-      const script = `${AUDIO_TYPE_SCRIPT}\nif ([Audio]::Mute) { 'true' } else { 'false' }`;
-      const result = (await runPs(script)).trim();
-      const muted = result === 'true';
+      let muted: boolean;
+      if (isWindows) {
+        const script = `${AUDIO_TYPE_SCRIPT}\nif ([Audio]::Mute) { 'true' } else { 'false' }`;
+        muted = (await runPs(script)).trim() === 'true';
+      } else {
+        // macOS: "muted" ⟺ system input volume is 0. Remember the last real
+        // level so `unmute` later can restore it.
+        const level = await queryMacOsInputVolume();
+        if (level > 0) this.macOsLastNonZeroLevel = level;
+        muted = level === 0;
+      }
       const wasUnavailable = !this.available;
       this.available = true;
       if (muted !== this.muted || wasUnavailable) {
@@ -145,7 +164,58 @@ class MicController {
     }
   }
 
+  private async executeMacOs(op: MicOp): Promise<void> {
+    // macOS has no distinct mute flag — "muted" is really "input volume = 0".
+    // So we keep a client-side memory of the last non-zero level and
+    // restore it on unmute. Falls back to a sensible default (75) before
+    // we've ever observed a non-zero level.
+    const current = await queryMacOsInputVolume();
+    if (current > 0) this.macOsLastNonZeroLevel = current;
+    const currentlyMuted = current === 0;
+    const wantMuted =
+      op === 'toggle-mute' ? !currentlyMuted
+      : op === 'mute'      ? true
+      :                      false;
+    if (wantMuted && !currentlyMuted) {
+      await runOsa('set volume input volume 0');
+    } else if (!wantMuted && currentlyMuted) {
+      await runOsa(`set volume input volume ${this.macOsLastNonZeroLevel}`);
+    }
+    this.applyMutedState(wantMuted);
+  }
+
+  private applyMutedState(muted: boolean): void {
+    this.available = true;
+    if (muted !== this.muted) {
+      this.muted = muted;
+      this.emitChange();
+    }
+  }
+
   private emitChange(): void { this.onChangeCb?.(); }
+}
+
+/** Query the current macOS system input volume (0..100). */
+async function queryMacOsInputVolume(): Promise<number> {
+  const out = (await runOsa('input volume of (get volume settings)')).trim();
+  const n = Number(out);
+  if (!Number.isFinite(n)) throw new Error(`unexpected osascript output: "${out}"`);
+  return n;
+}
+
+async function runOsa(script: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn('osascript', ['-e', script], { stdio: ['ignore', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+    proc.stdout?.on('data', (d: Buffer) => { stdout += d.toString(); });
+    proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString(); });
+    proc.on('error', reject);
+    proc.on('exit', (code) => {
+      if (code === 0) resolve(stdout);
+      else reject(new Error(`osascript failed (exit ${code}): ${stderr.trim() || stdout.trim()}`));
+    });
+  });
 }
 
 async function runPs(script: string): Promise<string> {
